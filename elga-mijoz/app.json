@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "ELGA Mijoz",
+    "slug": "elga-mijoz",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "uz.elga.mijoz",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "ELGA taksini chaqirish uchun joylashuvingizdan foydalanadi."
+        }
+      ],
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e5561b58-380f-45f6-9cc4-c6af58eaec84"
+      }
+    }
+  }
+}
