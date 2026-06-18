@@ -7,31 +7,45 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Modal, Linking, FlatList,
-  Animated,
+  Animated, Easing, Image,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
+// expo-updates: Expo Go muhitida ishlatilmaydi (OTA faqat standalone APK uchun)
 import { WebView } from 'react-native-webview';
 import { io } from 'socket.io-client';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
 
 const BASE = 'https://api.elga.uz';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false,
+    shouldShowAlert: true, shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false,
   }),
 });
 
-async function api(path, method = 'GET', body = null, token = null) {
+async function api(path, method = 'GET', body = null, token = null, timeoutMs = 15000) {
   const headers = { 'Content-Type': 'application/json' };
   if (token) headers.Authorization = 'Bearer ' + token;
-  const res = await fetch(BASE + path, {
-    method, headers, body: body ? JSON.stringify(body) : undefined,
-  });
+  // Sekin/uzilgan internetda so'rov cheksiz osilib qolmasin — timeout (ilova qotmaydi)
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(BASE + path, {
+      method, headers, body: body ? JSON.stringify(body) : undefined, signal: ctrl.signal,
+    });
+  } catch (e) {
+    clearTimeout(timer);
+    const err = new Error(e.name === 'AbortError' ? "Internet sekin — qayta urinib ko'ring" : "Ulanish yo'q — internetni tekshiring");
+    err.network = true;
+    throw err;
+  }
+  clearTimeout(timer);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const err = new Error(data.error || 'Xato: ' + res.status);
@@ -63,11 +77,41 @@ const HIDE_BALANCE_IF_NONPOSITIVE = true;
 
 // Mashina klasslari (backend config bilan mos)
 const CAR_CLASSES = [
-  { id: 'ekonom',   label: 'Tejamkor', icon: '🚗', seats: 4 },
-  { id: 'komfort',  label: 'Comfort',  icon: '🚙', seats: 4 },
-  { id: 'oila',     label: 'Oila',     icon: '🚐', seats: 6 },
-  { id: 'ekspress', label: 'Ekspress', icon: '⚡', seats: 4 },
-  { id: 'yuk',      label: 'Yuk',      icon: '🚚', seats: 2 },
+  {
+    id: 'ekonom', label: 'Tejamkor', seats: 4,
+    color: '#3B82F6', badge: 'Mashhur',
+    models: 'Cobalt · Spark · Gentra',
+    features: ['A/C', 'Arzon narx'],
+    icon: '🚗',
+  },
+  {
+    id: 'komfort', label: 'Comfort', seats: 4,
+    color: '#22C55E', badge: null,
+    models: 'Nexia 3 · Lacetti · Tracker',
+    features: ['A/C', 'USB', 'Keng salon'],
+    icon: '🚙',
+  },
+  {
+    id: 'oila', label: 'Oila', seats: 6,
+    color: '#A855F7', badge: null,
+    models: 'Damas · Orlando · Zafira',
+    features: ['6 o\'rinli', 'Katta yuk'],
+    icon: '🚐',
+  },
+  {
+    id: 'ekspress', label: 'Ekspress', seats: 4,
+    color: '#FFC700', badge: 'Premium',
+    models: 'Malibu · Camry · Sonata',
+    features: ['Tez topish', 'VIP'],
+    icon: '⚡',
+  },
+  {
+    id: 'yuk', label: 'Yuk tashish', seats: 2,
+    color: '#F97316', badge: null,
+    models: 'GAZelle · Porter · Sprinter',
+    features: ['Katta yuk', 'Ko\'chirish'],
+    icon: '🚚',
+  },
 ];
 
 // Bekor qilish sabablari
@@ -96,25 +140,11 @@ async function reverseGeocode(lat, lng) {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
 
-function mapHTML(lat, lng, destLat, destLng, driverLat, driverLng, nearby, pickupMode) {
-  const markers = [];
-  // Pickup marker (always shown)
-  markers.push(`
-    var pickupMarker = L.marker([${lat}, ${lng}], {draggable:${pickupMode ? 'true' : 'false'}, icon: blueIcon}).addTo(map).bindPopup('Olib ketish');
-    ${pickupMode ? `pickupMarker.on('dragend', function(e){ var ll = e.target.getLatLng(); window.ReactNativeWebView.postMessage(JSON.stringify({type:'pickupDrag',lat:ll.lat,lng:ll.lng})); });` : ''}
-  `);
-  if (destLat && destLng)
-    markers.push(`L.marker([${destLat}, ${destLng}], {icon: redIcon}).addTo(map).bindPopup('Manzil');`);
-  if (driverLat && driverLng)
-    markers.push(`L.marker([${driverLat}, ${driverLng}], {icon: yellowIcon}).addTo(map).bindPopup('Haydovchi');`);
-  (nearby || []).forEach((c) => {
-    if (c.lat && c.lng) markers.push(`L.marker([${c.lat}, ${c.lng}], {icon: carIcon}).addTo(map);`);
-  });
-
-  const center = (destLat && destLng)
-    ? `map.fitBounds([[${lat},${lng}],[${destLat},${destLng}]], {padding:[40,40]});`
-    : `map.setView([${lat},${lng}],15);`;
-
+// Xarita BIR MARTA yuklanadi (barqaror HTML). Markerlar/joylashuv
+// injectJavaScript -> window.updateMap(...) orqali yangilanadi — WebView qayta
+// yuklanmaydi (avval har joylashuv/haydovchi yangilanishida butun xarita qayta
+// yuklanib, ilova qotib qolardi).
+function mapHTML() {
   return `<!DOCTYPE html><html><head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -124,15 +154,30 @@ function mapHTML(lat, lng, destLat, destLng, driverLat, driverLng, nearby, picku
 </head><body><div id="map"></div><script>
 function colorIcon(c){return L.icon({iconUrl:'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-'+c+'.png',shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',iconSize:[25,41],iconAnchor:[12,41],popupAnchor:[1,-34],shadowSize:[41,41]});}
 var blueIcon=colorIcon('blue'),redIcon=colorIcon('red'),yellowIcon=colorIcon('gold');
-// Mashina ikonkasi (sariq taksi emoji)
 var carIcon=L.divIcon({className:'',html:'<div style="font-size:26px;line-height:26px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))">🚕</div>',iconSize:[26,26],iconAnchor:[13,13]});
-// Zoom tugmalarini o'ngga ko'chiramiz — yuqori-chap banner berkitmasin
 var map=L.map('map',{zoomControl:false});
 L.control.zoom({position:'topright'}).addTo(map);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-${center}
-${markers.join('\n')}
+map.setView([41.31,69.24],13);
+var pickupMarker=null,destMarker=null,driverMarker=null,carMarkers=[],fitted=false,centeredOnce=false;
+function postPickupDrag(e){var ll=e.target.getLatLng();window.ReactNativeWebView.postMessage(JSON.stringify({type:'pickupDrag',lat:ll.lat,lng:ll.lng}));}
+window.updateMap=function(d){
+  try{
+    if(d.lat!=null){
+      if(!pickupMarker){pickupMarker=L.marker([d.lat,d.lng],{draggable:!!d.pickupMode,icon:blueIcon}).addTo(map).bindPopup('Olib ketish'); if(d.pickupMode)pickupMarker.on('dragend',postPickupDrag);}
+      else{pickupMarker.setLatLng([d.lat,d.lng]); if(pickupMarker.dragging){d.pickupMode?pickupMarker.dragging.enable():pickupMarker.dragging.disable();}}
+    }
+    if(d.destLat!=null){ if(!destMarker){destMarker=L.marker([d.destLat,d.destLng],{icon:redIcon}).addTo(map).bindPopup('Manzil');}else{destMarker.setLatLng([d.destLat,d.destLng]);} } else if(destMarker){map.removeLayer(destMarker);destMarker=null;}
+    if(d.driverLat!=null){ if(!driverMarker){driverMarker=L.marker([d.driverLat,d.driverLng],{icon:yellowIcon}).addTo(map).bindPopup('Haydovchi');}else{driverMarker.setLatLng([d.driverLat,d.driverLng]);} } else if(driverMarker){map.removeLayer(driverMarker);driverMarker=null;}
+    for(var i=0;i<carMarkers.length;i++){map.removeLayer(carMarkers[i]);}
+    carMarkers=[];
+    (d.nearby||[]).forEach(function(c){if(c.lat&&c.lng){carMarkers.push(L.marker([c.lat,c.lng],{icon:carIcon}).addTo(map));}});
+    if(d.destLat!=null&&d.lat!=null&&!fitted){map.fitBounds([[d.lat,d.lng],[d.destLat,d.destLng]],{padding:[40,40]});fitted=true;centeredOnce=true;}
+    else if(d.lat!=null&&!centeredOnce){map.setView([d.lat,d.lng],15);centeredOnce=true;}
+  }catch(e){}
+};
 map.on('click',function(e){window.ReactNativeWebView.postMessage(JSON.stringify({type:'mapClick',lat:e.latlng.lat,lng:e.latlng.lng}));});
+window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'mapReady'}));
 </script></body></html>`;
 }
 
@@ -141,6 +186,83 @@ export default function App() {
     <SafeAreaProvider>
       <AppInner />
     </SafeAreaProvider>
+  );
+}
+
+// ===== ELGA brend wordmark (matn asosida — qo'shimcha paketsiz) =====
+// EL → sariq, GA → oq, TAXI → sariq (brend spetsifikatsiyasi)
+const CAR_CLASS_ICONS = {
+  ekonom: 'car-outline',
+  komfort: 'car-sport-outline',
+  oila: 'bus-outline',
+  ekspress: 'flash-outline',
+  yuk: 'cube-outline',
+};
+function CarClassIcon({ c, size = 56, active, image }) {
+  const color = active ? c.color : (c.color + 'BB');
+  // Admin paneldan rasm yuklangan bo'lsa — haqiqiy mashina rasmini ko'rsatamiz
+  if (image) {
+    return (
+      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color + '22', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderWidth: active ? 2 : 0, borderColor: color }}>
+          <Image source={{ uri: image }} style={{ width: size * 0.86, height: size * 0.86, borderRadius: size / 2 }} resizeMode="cover" />
+        </View>
+      </View>
+    );
+  }
+  const iconName = active
+    ? (CAR_CLASS_ICONS[c.id] || 'car-outline').replace('-outline', '')
+    : (CAR_CLASS_ICONS[c.id] || 'car-outline');
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color + '22', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={iconName} size={Math.round(size * 0.48)} color={color} />
+      </View>
+    </View>
+  );
+}
+
+function ElgaLogo({ size = 56, tagline = false }) {
+  const tx = Math.round(size * 0.32);
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Text style={{ fontSize: size, fontWeight: '800', letterSpacing: -size * 0.02, lineHeight: size * 1.05 }}>
+        <Text style={{ color: YELLOW }}>EL</Text>
+        <Text style={{ color: WHITE }}>GA</Text>
+      </Text>
+      <Text style={{ color: YELLOW, fontSize: tx, fontWeight: '800', letterSpacing: tx * 0.5, marginTop: -size * 0.08 }}>
+        TAXI
+      </Text>
+      {tagline && (
+        <Text style={{ color: GRAY1, fontSize: Math.max(10, size * 0.18), fontWeight: '600', letterSpacing: 2, marginTop: 8 }}>
+          XIZMAT OLIY HIMMAT
+        </Text>
+      )}
+    </View>
+  );
+}
+
+// Boot ekrani uchun: logo yumshoq paydo bo'lib, sekin nafas oladi (juda yengil).
+function BootLogo() {
+  const a = useRef(new Animated.Value(0)).current;
+  const breathe = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(a, { toValue: 1, duration: 650, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(breathe, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      Animated.timing(breathe, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  const scale = Animated.add(
+    a.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] }),
+    breathe.interpolate({ inputRange: [0, 1], outputRange: [0, 0.025] }),
+  );
+  return (
+    <Animated.View style={{ opacity: a, transform: [{ scale }] }}>
+      <ElgaLogo size={72} tagline />
+    </Animated.View>
   );
 }
 
@@ -173,6 +295,11 @@ function AppInner() {
   const [dest, setDest] = useState(null);        // { lat, lng, address }
   const [searchOpen, setSearchOpen] = useState(false); // "Qayerga?" qidiruv oynasi ochiqmi
 
+  // Safar davomida manzilni o'zgartirish (narx qayta hisoblanadi)
+  const [changeDestModal, setChangeDestModal] = useState(false);
+  const [cdQ, setCdQ] = useState('');
+  const [cdResults, setCdResults] = useState([]);
+
   // Tez kirish joylari
   const [homePlace, setHomePlace] = useState(null); // { lat, lng, address }
   const [workPlace, setWorkPlace] = useState(null);
@@ -187,12 +314,15 @@ function AppInner() {
   const [carClass, setCarClass] = useState('ekonom');
   const [payMethod, setPayMethod] = useState('cash');
   const [payMethods, setPayMethods] = useState([{ id: 'cash', name: 'Naqd', active: true }]);
+  // Admin paneldan boshqariladigan tarif rasmlari: { ekonom: 'data:image/...', ... }
+  const [carImages, setCarImages] = useState({});
 
   // Modallar
   const [cancelModal, setCancelModal] = useState(false);
   const [customReason, setCustomReason] = useState('');
   const [rateModal, setRateModal] = useState(false);
   const [rateOrderId, setRateOrderId] = useState(null);
+  const [completedOrder, setCompletedOrder] = useState(null); // yakunlangan safar tafsiloti
   const [stars, setStars] = useState(5);
   const [tipAmount, setTipAmount] = useState(0);
 
@@ -203,6 +333,14 @@ function AppInner() {
 
   // SOS modal
   const [sosModal, setSosModal] = useState(false);
+
+  // 🎙 Ovozli buyurtma (AI/hisoblagich) — mijoz manzilni gapirib aytadi, haydovchi eshitadi
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [voiceModal, setVoiceModal] = useState(false); // ovoz yozish oynasi ochiqmi
+  const [recording, setRecording] = useState(false);   // hozir yozilyaptimi
+  const [voiceSec, setVoiceSec] = useState(0);          // yozilgan soniya (taymer)
+  const voiceTimer = useRef(null);
+  const recordingRef = useRef(false);                   // tez bosishda holat poygasiga qarshi
 
   // Arrived bildirishnomasi bir marta chiqsin
   const arrivedNotified = useRef(false);
@@ -224,8 +362,25 @@ function AppInner() {
   const [placeEst, setPlaceEst] = useState({}); // qidiruv qatorlari uchun narx: "lat,lng" -> { price, duration_min }
   const pinAnim = useRef(new Animated.Value(0)).current;
 
+  // 🔴 Jonli taximetr (hisoblagich/metered buyurtmalar)
+  const [liveKm, setLiveKm] = useState(0);
+  const [liveFare, setLiveFare] = useState(0);
+  const [liveMin, setLiveMin] = useState(0);
+  // 🔴 Jonli kutish haqi (arrived holat)
+  const [liveWait, setLiveWait] = useState({ sec: 0, fee: 0, freeLeft: 0 });
+
   const socketRef = useRef(null);
   const webviewRef = useRef(null);
+  const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
+  const mapDataRef = useRef({});                          // joriy xarita ma'lumoti (so'nggi)
+  const [mapReady, setMapReady] = useState(false);
+
+  // Xarita tayyor bo'lgach va joylashuv/haydovchi/manzil o'zgarganda — markerlarni
+  // qayta yuklamasdan inject orqali yangilaymiz (lag bo'lmaydi).
+  useEffect(() => {
+    if (mapReady) pushMap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, pickup, myLoc, dest, driverLoc, nearby, order, orderStep]);
   const tokenRef = useRef(null);
   const nearbyTimer = useRef(null);
 
@@ -234,6 +389,8 @@ function AppInner() {
   // ---- Boot ----
   useEffect(() => {
     (async () => {
+      // OTA yangilanish: faqat standalone APK da ishlaydi, Expo Go da o'tkazib yuboriladi
+
       try {
         const t = await AsyncStorage.getItem('token');
         const u = await AsyncStorage.getItem('user');
@@ -269,6 +426,7 @@ function AppInner() {
       connectSocket();
       resumeActiveOrder();
       loadPayMethods();
+      loadCarImages();
       loadRecentPlaces();
       loadFavorites();
       loadPopularPlaces();
@@ -317,6 +475,17 @@ function AppInner() {
         if (!methods.some((m) => m.id === 'card'))
           methods.push({ id: 'card', name: 'Karta', active: false });
         setPayMethods(methods);
+      }
+    } catch (e) {}
+  }
+
+  async function loadCarImages() {
+    try {
+      const r = await api('/api/config/classes', 'GET');
+      if (r && Array.isArray(r.classes)) {
+        const map = {};
+        for (const c of r.classes) if (c.image) map[c.id] = c.image;
+        setCarImages(map);
       }
     } catch (e) {}
   }
@@ -399,8 +568,11 @@ function AppInner() {
   }
 
   function connectSocket() {
-    const s = io(BASE, { auth: { token }, transports: ['websocket'] });
+    const s = io(BASE, { auth: { token }, transports: ['websocket', 'polling'], reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 2000 });
     socketRef.current = s;
+    // Qayta ulanganda faol buyurtma holatini serverdan qayta tiklaymiz (#40 — internet uzilsa holat yo'qolmaydi)
+    s.on('reconnect', () => { resumeActiveOrder(); });
+    s.on('connect', () => { resumeActiveOrder(); });
     s.on('order_update', (o) => {
       setOrder((prev) => prev ? { ...prev, ...o } : o);
       if (o.status === 'accepted') {
@@ -415,6 +587,7 @@ function AppInner() {
       }
       if (o.status === 'completed') {
         notify('Safar yakunlandi 🏁', 'Rahmat! Haydovchini baholang');
+        setCompletedOrder(o);          // hisob-kitob ko'rsatish uchun saqlayмиз
         setRateOrderId(o.id); setStars(5); setTipAmount(0); setRateModal(true);
         resetOrder();
       }
@@ -436,6 +609,16 @@ function AppInner() {
     s.on('chat_message', (msg) => {
       setTripChat((prev) => [...prev, msg]);
       if (!tripChatModal) notify('💬 Haydovchi xabar yubordi', msg.text || '');
+    });
+    // Jonli kutish haqi (arrived) — backend har 5 sekunda yuboradi
+    s.on('wait_update', (d) => {
+      setLiveWait({ sec: d.waitSec || 0, fee: d.waitFee || 0, freeLeft: d.freeLeft || 0 });
+      setOrder((prev) => prev ? { ...prev, wait_fee: d.waitFee || 0, price: d.totalFare || prev.price } : prev);
+    });
+    // Jonli taximetr (in_progress, hisoblagich) — backend har 5 sekunda yuboradi
+    s.on('meter', (d) => {
+      setLiveKm(d.km || 0); setLiveFare(d.fare || 0); setLiveMin(d.minutes || 0);
+      setOrder((prev) => prev ? { ...prev, price: d.fare || prev.price } : prev);
     });
   }
 
@@ -484,9 +667,16 @@ function AppInner() {
   }
 
   // ---- Xarita hodisalari ----
+  // Xaritaga joriy ma'lumotni yuborish (qayta yuklamasdan)
+  function pushMap() {
+    if (!webviewRef.current) return;
+    webviewRef.current.injectJavaScript(`window.updateMap(${JSON.stringify(mapDataRef.current)});true;`);
+  }
+
   async function onWebViewMessage(e) {
     try {
       const msg = JSON.parse(e.nativeEvent.data);
+      if (msg.type === 'mapReady') { setMapReady(true); pushMap(); return; }
       if (msg.type === 'mapClick') {
         if (orderStep === 'confirm') {
           const addr = await reverseGeocode(msg.lat, msg.lng);
@@ -517,6 +707,38 @@ function AppInner() {
     setSearchResults([]); setSearchQ(''); setSearchOpen(false);
     setEstimates({}); estCacheKey.current = null;
     setOrderStep('confirm');
+  }
+
+  // ---- Safar davomida manzilni o'zgartirish ----
+  async function cdSearch(q) {
+    setCdQ(q);
+    if (q.trim().length < 2) { setCdResults([]); return; }
+    try {
+      const loc = pickup || myLoc;
+      const ll = loc ? `&lat=${loc.lat}&lng=${loc.lng}` : '';
+      const r = await api(`/api/places/search?q=${encodeURIComponent(q)}${ll}`, 'GET');
+      setCdResults(r.places || []);
+    } catch (e) {}
+  }
+
+  async function applyChangeDest(place) {
+    if (!order) return;
+    setLoading(true);
+    try {
+      const r = await api(`/api/orders/${order.id}/destination`, 'POST', {
+        to_lat: place.lat, to_lng: place.lng,
+        to_address: place.address || place.name,
+      }, token);
+      if (r.order) {
+        setOrder(r.order);
+        setDest({ lat: place.lat, lng: place.lng, address: place.address || place.name });
+      }
+      setChangeDestModal(false); setCdQ(''); setCdResults([]);
+      Alert.alert('✅ Manzil o\'zgartirildi', r.recalculated
+        ? `Yangi narx: ${fmt(r.order?.price || 0)} so'm`
+        : 'Manzil yangilandi');
+    } catch (e) { Alert.alert('Xato', e.message); }
+    setLoading(false);
   }
 
   // ---- Uy/Ish saqlash ----
@@ -586,6 +808,73 @@ function AppInner() {
     setLoading(false);
   }
 
+  // ---- 🎙 Ovozli buyurtma ----
+  // Mijoz manzilni ovozda aytadi → hisoblagich (manzilsiz) buyurtma yaratiladi,
+  // haydovchi ovozni eshitadi. Narx safar oxirida km+vaqt bo'yicha.
+  function openVoiceOrder() {
+    if (order) { Alert.alert('Faol buyurtma', 'Avval joriy buyurtmani yakunlang yoki bekor qiling'); return; }
+    setVoiceSec(0); setRecording(false); setVoiceModal(true);
+  }
+  function closeVoiceOrder() {
+    if (voiceTimer.current) { clearInterval(voiceTimer.current); voiceTimer.current = null; }
+    if (recordingRef.current) { recordingRef.current = false; audioRecorder.stop().catch(() => {}); }
+    setRecording(false); setVoiceSec(0); setVoiceModal(false);
+  }
+  async function startVoiceRecording() {
+    if (recordingRef.current) return;
+    try {
+      const perm = await AudioModule.requestRecordingPermissionsAsync();
+      if (!perm.granted) { Alert.alert('Mikrofon', 'Ovozli buyurtma uchun mikrofon ruxsati kerak'); return; }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      recordingRef.current = true;
+      setRecording(true); setVoiceSec(0);
+      voiceTimer.current = setInterval(() => setVoiceSec(v => {
+        if (v >= 60) { stopVoiceRecording(); return v; } // 60s cheklov
+        return v + 1;
+      }), 1000);
+    } catch (e) { Alert.alert('Xato', "Ovoz yozib bo'lmadi: " + e.message); }
+  }
+  async function stopVoiceRecording() {
+    if (voiceTimer.current) { clearInterval(voiceTimer.current); voiceTimer.current = null; }
+    if (!recordingRef.current) return;
+    recordingRef.current = false;
+    setRecording(false);
+    try {
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
+      if (!uri || voiceSec < 1) { Alert.alert('Qisqa', 'Manzilni biroz uzunroq gapiring'); return; }
+      await sendVoiceOrder(uri);
+    } catch (e) { Alert.alert('Xato', e.message); }
+  }
+  // Lokal audio faylni base64 data-URL ga aylantiradi (backend order_voice formati)
+  async function fileToDataUrl(uri) {
+    const resp = await fetch(uri);
+    const blob = await resp.blob();
+    return await new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onerror = rej;
+      fr.onload = () => res(fr.result);
+      fr.readAsDataURL(blob);
+    });
+  }
+  async function sendVoiceOrder(uri) {
+    const from = pickup || myLoc;
+    if (!from) { Alert.alert('Joylashuv', 'Olib ketish joyi aniqlanmadi'); return; }
+    setLoading(true);
+    try {
+      const voice = await fileToDataUrl(uri);
+      const r = await api('/api/orders', 'POST', {
+        from, metered: true, voice, payment_method: payMethod,
+      }, token, 45000); // ovoz katta — sekin internetga uzunroq timeout
+      const o = r.order || r;
+      setOrder(o); setOrderStep(null); setVoiceModal(false); setVoiceSec(0);
+      notify('Ovozli buyurtma berildi 🎙', 'Haydovchi qidirilmoqda...');
+    } catch (e) { Alert.alert('Xato', e.message); }
+    setLoading(false);
+  }
+
   async function openPayment(orderId, provider) {
     try {
       const r = await api('/api/pay/create', 'POST', { order_id: orderId, provider }, token);
@@ -614,7 +903,7 @@ function AppInner() {
       if (tipAmount > 0)
         await api(`/api/orders/${rateOrderId}/tip`, 'POST', { amount: tipAmount }, token).catch(() => {});
     } catch (e) {}
-    setRateModal(false); setLoading(false);
+    setRateModal(false); setCompletedOrder(null); setLoading(false);
   }
 
   function callDriver() {
@@ -655,7 +944,7 @@ function AppInner() {
     const next = [...chat, { role: 'user', text }];
     setChat(next); setChatInput(''); setChatLoading(true);
     try {
-      const r = await api('/api/ai/chat', 'POST', { messages: next, order_id: order?.id }, token);
+      const r = await api('/api/ai/chat', 'POST', { messages: next, order_id: order?.id, context_role: 'customer' }, token);
       const reply = r.reply + (r.ticket ? `\n\n📋 Murojaat raqami: ${r.ticket}` : '');
       setChat([...next, { role: 'assistant', text: reply }]);
     } catch (e) {
@@ -672,9 +961,10 @@ function AppInner() {
       <View style={s.fill}>
         <StatusBar style="light" />
         <View style={s.bootScreen}>
-          <Text style={{ color: YELLOW, fontSize: 72, fontWeight: '800', letterSpacing: 4 }}>ELGA</Text>
-          <Text style={{ color: GRAY1, fontSize: 14, fontWeight: '500', letterSpacing: 2, marginTop: 8 }}>Premium Mobility</Text>
-          <ActivityIndicator color={YELLOW} style={{ marginTop: 32 }} />
+          <BootLogo />
+          <FadeInView delay={350} from={8}>
+            <ActivityIndicator color={YELLOW} style={{ marginTop: 36 }} />
+          </FadeInView>
         </View>
       </View>
     );
@@ -685,7 +975,8 @@ function AppInner() {
     return (
       <View style={s.loginWrap}>
         <StatusBar style="light" />
-        <Text style={{ color: YELLOW, fontSize: 56, fontWeight: '800', textAlign: 'center', letterSpacing: 3 }}>ELGA</Text>
+        <FadeInView delay={0} from={20}>
+        <View style={{ alignItems: 'center' }}><ElgaLogo size={56} /></View>
         <Text style={{ color: WHITE, fontSize: 24, fontWeight: '600', textAlign: 'center', marginTop: 8 }}>
           {isSetup ? "PIN o'rnating" : 'PIN kiriting'}
         </Text>
@@ -705,9 +996,8 @@ function AppInner() {
           onChangeText={setPinInput}
           autoFocus
         />
-        <TouchableOpacity
+        <PressableScale
           style={s.ctaBtn}
-          activeOpacity={0.8}
           onPress={isSetup
             ? async () => {
                 if (pinInput.length !== 4) { Alert.alert('Xato', '4 ta raqam kiriting'); return; }
@@ -721,7 +1011,7 @@ function AppInner() {
           }
         >
           <Text style={s.ctaBtnTxt}>DAVOM ETISH</Text>
-        </TouchableOpacity>
+        </PressableScale>
         {isSetup
           ? <TouchableOpacity onPress={() => setPinStep(null)} activeOpacity={0.7}>
               <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 16 }}>O'tkazib yuborish</Text>
@@ -734,6 +1024,7 @@ function AppInner() {
               <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 16 }}>SMS orqali kirish</Text>
             </TouchableOpacity>
         }
+        </FadeInView>
       </View>
     );
   }
@@ -743,11 +1034,13 @@ function AppInner() {
     return (
       <View style={s.loginWrap}>
         <StatusBar style="light" />
-        <Text style={{ color: YELLOW, fontSize: 56, fontWeight: '800', textAlign: 'center', letterSpacing: 3 }}>ELGA</Text>
-        <Text style={{ color: GRAY1, fontSize: 15, textAlign: 'center', marginTop: 6 }}>Mijoz ilovasi</Text>
+        <FadeInView delay={0} from={24} duration={500}>
+          <View style={{ alignItems: 'center' }}><ElgaLogo size={56} /></View>
+          <Text style={{ color: GRAY1, fontSize: 15, textAlign: 'center', marginTop: 6 }}>Mijoz ilovasi</Text>
+        </FadeInView>
 
         {step === 'phone' && (
-          <>
+          <FadeInView key="phone" delay={120} from={20}>
             <TextInput
               style={[s.input, { marginTop: 32 }]}
               placeholder="+998..."
@@ -756,7 +1049,7 @@ function AppInner() {
               value={phone}
               onChangeText={setPhone}
             />
-            <TouchableOpacity style={s.ctaBtn} activeOpacity={0.8} onPress={async () => {
+            <PressableScale style={s.ctaBtn} onPress={async () => {
               if (phone.replace(/\D/g, '').length < 9) { Alert.alert('Xato', "To'g'ri telefon raqam kiriting"); return; }
               setLoading(true);
               try { await api('/api/auth/send-code', 'POST', { phone }); setStep('code'); Alert.alert('Yuborildi', 'SMS kod yuborildi'); }
@@ -764,12 +1057,12 @@ function AppInner() {
               setLoading(false);
             }} disabled={loading}>
               {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>SMS KOD OLISH</Text>}
-            </TouchableOpacity>
-          </>
+            </PressableScale>
+          </FadeInView>
         )}
 
         {step === 'code' && (
-          <>
+          <FadeInView key="code" delay={60} from={20}>
             <TextInput
               style={[s.input, { marginTop: 32 }]}
               placeholder="SMS kod"
@@ -778,7 +1071,7 @@ function AppInner() {
               value={code}
               onChangeText={setCode}
             />
-            <TouchableOpacity style={s.ctaBtn} activeOpacity={0.8} onPress={async () => {
+            <PressableScale style={s.ctaBtn} onPress={async () => {
               if (code.length < 4) { Alert.alert('Xato', 'Kodni kiriting'); return; }
               setLoading(true);
               try {
@@ -795,15 +1088,15 @@ function AppInner() {
               setLoading(false);
             }} disabled={loading}>
               {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>TASDIQLASH</Text>}
-            </TouchableOpacity>
+            </PressableScale>
             <TouchableOpacity onPress={() => setStep('phone')} activeOpacity={0.7}>
               <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 12 }}>← Raqamni o'zgartirish</Text>
             </TouchableOpacity>
-          </>
+          </FadeInView>
         )}
 
         {step === 'name' && (
-          <>
+          <FadeInView key="name" delay={60} from={20}>
             <TextInput
               style={[s.input, { marginTop: 32 }]}
               placeholder="Ismingiz"
@@ -811,7 +1104,7 @@ function AppInner() {
               value={name}
               onChangeText={setName}
             />
-            <TouchableOpacity style={s.ctaBtn} activeOpacity={0.8} onPress={async () => {
+            <PressableScale style={s.ctaBtn} onPress={async () => {
               if (name.trim().length < 2) { Alert.alert('Xato', 'Ismingizni kiriting'); return; }
               setLoading(true);
               try {
@@ -825,8 +1118,8 @@ function AppInner() {
               setLoading(false);
             }} disabled={loading}>
               {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>DAVOM ETISH</Text>}
-            </TouchableOpacity>
-          </>
+            </PressableScale>
+          </FadeInView>
         )}
       </View>
     );
@@ -834,27 +1127,26 @@ function AppInner() {
 
   // ====================== ASOSIY INTERFEYS ======================
 
-  // Map HTML helpers
-  const mapSrcDest = (pickup || myLoc) ? mapHTML(
-    (pickup || myLoc).lat, (pickup || myLoc).lng,
-    dest?.lat, dest?.lng,
-    driverLoc?.lat, driverLoc?.lng,
-    nearby, false
-  ) : null;
-
-  const mapSrcConfirm = (pickup || myLoc) ? mapHTML(
-    (pickup || myLoc).lat, (pickup || myLoc).lng,
-    dest?.lat, dest?.lng,
-    null, null, [], true
-  ) : null;
-
-  const mapSrcActive = order ? mapHTML(
-    (pickup || myLoc || { lat: 0, lng: 0 }).lat,
-    (pickup || myLoc || { lat: 0, lng: 0 }).lng,
-    dest?.lat, dest?.lng,
-    driverLoc?.lat, driverLoc?.lng,
-    [], false
-  ) : null;
+  // Xarita: bitta barqaror WebView, ma'lumot inject orqali yangilanadi (qayta yuklanmaydi).
+  const mapBase = pickup || myLoc;
+  const hasMap = !!mapBase;       // dest/tariff/confirm ekranlari uchun
+  const hasMapActive = !!order;   // faol buyurtma ekrani uchun
+  // Joriy holatga qarab xarita ma'lumotini tayyorlaymiz (so'nggi qiymat ref'da turadi).
+  mapDataRef.current = order ? {
+    lat: mapBase?.lat ?? 0, lng: mapBase?.lng ?? 0,
+    destLat: dest?.lat ?? null, destLng: dest?.lng ?? null,
+    driverLat: driverLoc?.lat ?? null, driverLng: driverLoc?.lng ?? null,
+    nearby: [], pickupMode: false,
+  } : orderStep === 'confirm' ? {
+    lat: mapBase?.lat ?? null, lng: mapBase?.lng ?? null,
+    destLat: null, destLng: null, driverLat: null, driverLng: null,
+    nearby: [], pickupMode: true,
+  } : {
+    lat: mapBase?.lat ?? null, lng: mapBase?.lng ?? null,
+    destLat: dest?.lat ?? null, destLng: dest?.lng ?? null,
+    driverLat: driverLoc?.lat ?? null, driverLng: driverLoc?.lng ?? null,
+    nearby, pickupMode: false,
+  };
 
   return (
     <View style={s.fill}>
@@ -866,12 +1158,12 @@ function AppInner() {
         /* ── ACTIVE ORDER ── */
         order ? (
           <View style={s.fill}>
-            {mapSrcActive ? (
+            {hasMapActive ? (
               <WebView
                 ref={webviewRef}
                 style={s.mapFull}
                 originWhitelist={['*']}
-                source={{ html: mapSrcActive }}
+                source={mapSource}
                 onMessage={onWebViewMessage}
                 javaScriptEnabled
                 domStorageEnabled
@@ -883,6 +1175,9 @@ function AppInner() {
             )}
 
             <AnimatedSheet style={[s.activeSheet, { bottom: TABBAR_H + insets.bottom }]}>
+            <View style={{ alignItems: 'center', paddingTop: 8 }}>
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: BORDER }} />
+            </View>
             <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
               <Text style={s.activeStatusTxt}>{statusText(order.status)}</Text>
 
@@ -932,6 +1227,64 @@ function AppInner() {
                 </Text>
               )}
 
+              {['accepted', 'arrived', 'in_progress'].includes(order.status) && (
+                <TouchableOpacity
+                  style={[s.outlineBtn, { marginTop: 12, marginHorizontal: 16, justifyContent: 'center' }]}
+                  onPress={() => { setChangeDestModal(true); setCdQ(''); setCdResults([]); }}>
+                  <Ionicons name="location" size={16} color={YELLOW} style={{ marginRight: 6 }} />
+                  <Text style={{ color: YELLOW, fontSize: 14, fontWeight: '600' }}>Manzilni o'zgartirish</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* ====== JONLI TAXIMETR (in_progress) ====== */}
+              {order.status === 'in_progress' && (
+                <View style={s.taxiMeterBox}>
+                  {/* Asosiy narx */}
+                  <View style={{ alignItems: 'center', paddingBottom: 12, borderBottomWidth: 1, borderColor: BORDER }}>
+                    <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 1 }}>
+                      {order.metered ? 'HISOBLAGICH' : 'SAFAR NARXI'}
+                    </Text>
+                    <Text style={{ color: YELLOW, fontSize: 44, fontWeight: '800', lineHeight: 52, marginTop: 4 }}>
+                      {fmt(order.metered ? (liveFare || order.price || 0) : (order.price || 0))}
+                    </Text>
+                    <Text style={{ color: GRAY1, fontSize: 14 }}>so'm</Text>
+                  </View>
+                  {/* Km · Daqiqa · Kutish */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingTop: 10 }}>
+                    {!!order.metered && (
+                      <View style={{ alignItems: 'center' }}>
+                        <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700' }}>
+                          {liveKm > 0 ? liveKm.toFixed(1) : (order.distance_km || 0).toFixed(1)}
+                        </Text>
+                        <Text style={{ color: GRAY1, fontSize: 11 }}>km</Text>
+                      </View>
+                    )}
+                    {!!order.metered && (
+                      <View style={{ alignItems: 'center' }}>
+                        <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700' }}>
+                          {liveMin > 0 ? Math.round(liveMin) : '—'}
+                        </Text>
+                        <Text style={{ color: GRAY1, fontSize: 11 }}>daqiqa</Text>
+                      </View>
+                    )}
+                    {(order.wait_fee > 0 || liveWait.fee > 0) && (
+                      <View style={{ alignItems: 'center' }}>
+                        <Text style={{ color: RED, fontSize: 18, fontWeight: '700' }}>
+                          +{fmt(Math.max(order.wait_fee || 0, liveWait.fee))}
+                        </Text>
+                        <Text style={{ color: GRAY1, fontSize: 11 }}>kutish</Text>
+                      </View>
+                    )}
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '600' }}>
+                        {order.payment_method === 'cash' ? '💵 Naqd' : '💳 Karta'}
+                      </Text>
+                      <Text style={{ color: GRAY2, fontSize: 11 }}>to'lov</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
               {order.status === 'in_progress' && (
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 12, paddingHorizontal: 16 }}>
                   <TouchableOpacity style={s.outlineBtn} onPress={shareTrip}>
@@ -952,10 +1305,6 @@ function AppInner() {
                   <Text style={{ color: RED, fontSize: 14, fontWeight: '600' }}>Buyurtmani bekor qilish</Text>
                 </TouchableOpacity>
               )}
-
-              {order.status === 'in_progress' && (
-                <Text style={{ color: GREEN, fontSize: 13, textAlign: 'center', marginTop: 12 }}>🛣️ Yaxshi safar!</Text>
-              )}
             </ScrollView>
             </AnimatedSheet>
           </View>
@@ -963,12 +1312,12 @@ function AppInner() {
         ) : orderStep === 'dest' ? (
           /* ── DEST STEP ── */
           <View style={s.fill}>
-            {mapSrcDest ? (
+            {hasMap ? (
               <WebView
                 ref={webviewRef}
                 style={s.mapFull}
                 originWhitelist={['*']}
-                source={{ html: mapSrcDest }}
+                source={mapSource}
                 onMessage={onWebViewMessage}
                 javaScriptEnabled
                 domStorageEnabled
@@ -1014,9 +1363,26 @@ function AppInner() {
 
             {/* Bottom sheet */}
             <AnimatedSheet style={[s.homeSheet, { bottom: TABBAR_H + insets.bottom }]}>
+              {/* Drag handle */}
+              <View style={{ alignItems: 'center', paddingTop: 8, paddingBottom: 4 }}>
+                <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: BORDER }} />
+              </View>
               <View style={{ marginBottom: 8 }}>
-                <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '500' }}>Salom, {user?.name?.split(' ')[0] || 'Foydalanuvchi'}</Text>
-                <Text style={{ color: WHITE, fontSize: 26, fontWeight: '700', marginTop: 2 }}>Qayerga boramiz?</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View>
+                    <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500', letterSpacing: 0.3 }}>
+                      Salom, {user?.name?.split(' ')[0] || 'Foydalanuvchi'} 👋
+                    </Text>
+                    <Text style={{ color: WHITE, fontSize: 24, fontWeight: '800', marginTop: 1, letterSpacing: -0.5 }}>
+                      Qayerga boramiz?
+                    </Text>
+                  </View>
+                  {balance != null && balance > 0 && (
+                    <View style={{ backgroundColor: YELLOW + '20', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: YELLOW + '50' }}>
+                      <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '700' }}>💰 {fmt(balance)}</Text>
+                    </View>
+                  )}
+                </View>
               </View>
 
               {nearby.length > 0 && (
@@ -1035,22 +1401,27 @@ function AppInner() {
               </TouchableOpacity>
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                <TouchableOpacity style={s.shortBtn} activeOpacity={0.75}
-                  onPress={() => homePlace ? pickDest(homePlace) : setSearchOpen(true)}
-                  onLongPress={() => pickup && saveHomeWork('home', pickup)}>
-                  <View style={s.shortBtnIconWrap}><Ionicons name="home" size={18} color={YELLOW} /></View>
+                {/* Chap tomon: Uy va Ish (ixcham, yonma-yon) */}
+                <View style={{ flex: 1, flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity style={s.shortBtnSm} activeOpacity={0.75}
+                    onPress={() => homePlace ? pickDest(homePlace) : setSearchOpen(true)}
+                    onLongPress={() => pickup && saveHomeWork('home', pickup)}>
+                    <View style={s.shortBtnIconWrap}><Ionicons name="home" size={18} color={YELLOW} /></View>
+                    <Text style={{ color: WHITE, fontSize: 13, fontWeight: '600', marginTop: 4 }}>Uy</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.shortBtnSm} activeOpacity={0.75}
+                    onPress={() => workPlace ? pickDest(workPlace) : setSearchOpen(true)}
+                    onLongPress={() => pickup && saveHomeWork('work', pickup)}>
+                    <View style={s.shortBtnIconWrap}><Ionicons name="briefcase" size={18} color={YELLOW} /></View>
+                    <Text style={{ color: WHITE, fontSize: 13, fontWeight: '600', marginTop: 4 }}>Ish</Text>
+                  </TouchableOpacity>
+                </View>
+                {/* O'ng tomon: 🎙 Ovozli buyurtma (eski "Ish" tugmasi o'rnida) */}
+                <TouchableOpacity style={s.voiceBtn} activeOpacity={0.85} onPress={openVoiceOrder}>
+                  <View style={s.voiceBtnIconWrap}><Ionicons name="mic" size={20} color="#1A1A1A" /></View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: WHITE, fontSize: 13, fontWeight: '600' }}>Uy</Text>
-                    {homePlace && <Text style={{ color: GRAY1, fontSize: 11, marginTop: 1 }} numberOfLines={1}>{homePlace.address}</Text>}
-                  </View>
-                </TouchableOpacity>
-                <TouchableOpacity style={s.shortBtn} activeOpacity={0.75}
-                  onPress={() => workPlace ? pickDest(workPlace) : setSearchOpen(true)}
-                  onLongPress={() => pickup && saveHomeWork('work', pickup)}>
-                  <View style={s.shortBtnIconWrap}><Ionicons name="briefcase" size={18} color={YELLOW} /></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: WHITE, fontSize: 13, fontWeight: '600' }}>Ish</Text>
-                    {workPlace && <Text style={{ color: GRAY1, fontSize: 11, marginTop: 1 }} numberOfLines={1}>{workPlace.address}</Text>}
+                    <Text style={{ color: '#1A1A1A', fontSize: 14, fontWeight: '700' }}>Ovozli buyurtma</Text>
+                    <Text style={{ color: '#1A1A1A', fontSize: 11, marginTop: 1, opacity: 0.7 }}>Manzilni gapiring 🎙</Text>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -1172,12 +1543,12 @@ function AppInner() {
         ) : orderStep === 'confirm' ? (
           /* ── CONFIRM STEP ── */
           <View style={s.fill}>
-            {mapSrcConfirm ? (
+            {hasMap ? (
               <WebView
                 ref={webviewRef}
                 style={s.mapFull}
                 originWhitelist={['*']}
-                source={{ html: mapSrcConfirm }}
+                source={mapSource}
                 onMessage={onWebViewMessage}
                 javaScriptEnabled
                 domStorageEnabled
@@ -1217,12 +1588,12 @@ function AppInner() {
         ) : orderStep === 'tariff' ? (
           /* ── TARIFF STEP ── */
           <View style={s.fill}>
-            {mapSrcDest ? (
+            {hasMap ? (
               <WebView
                 ref={webviewRef}
                 style={s.mapFull}
                 originWhitelist={['*']}
-                source={{ html: mapSrcDest }}
+                source={mapSource}
                 onMessage={onWebViewMessage}
                 javaScriptEnabled
                 domStorageEnabled
@@ -1254,38 +1625,61 @@ function AppInner() {
               {estLoading && Object.keys(estimates).length === 0 ? (
                 CAR_CLASSES.map((c) => (
                   <View key={c.id} style={s.tariffCard}>
-                    <Skeleton width={32} height={32} radius={8} />
-                    <View style={{ flex: 1, marginLeft: 12, gap: 8 }}>
-                      <Skeleton width={90} height={14} />
-                      <Skeleton width={150} height={11} />
+                    <Skeleton width={56} height={56} radius={28} />
+                    <View style={{ flex: 1, marginLeft: 14, gap: 8 }}>
+                      <Skeleton width={100} height={15} />
+                      <Skeleton width={160} height={11} />
+                      <Skeleton width={120} height={10} />
                     </View>
-                    <Skeleton width={72} height={18} />
+                    <Skeleton width={80} height={20} />
                   </View>
                 ))
               ) : CAR_CLASSES.map((c) => {
                 const est = estimates[c.id];
                 const active = carClass === c.id;
                 return (
-                  <TouchableOpacity key={c.id} style={[s.tariffCard, active && s.tariffCardActive]} activeOpacity={0.8} onPress={() => setCarClass(c.id)}>
-                    <Text style={{ fontSize: 32 }}>{c.icon}</Text>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={[{ color: WHITE, fontSize: 16, fontWeight: '700' }, active && { color: YELLOW }]}>{c.label}</Text>
-                      {est
-                        ? <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>
-                            👤{c.seats} · {est.distance_km} km · {est.duration_min || '?'} daq
-                            {est.surge > 1 ? ' ⚡' : ''}{est.is_night ? ' 🌙' : ''}
-                          </Text>
-                        : <Text style={{ color: GRAY2, fontSize: 12 }}>👤{c.seats} o'rin</Text>}
+                  <TouchableOpacity key={c.id}
+                    style={[s.tariffCard, active && s.tariffCardActive, active && { borderColor: c.color }]}
+                    activeOpacity={0.8}
+                    onPress={() => setCarClass(c.id)}>
+                    {/* Left color accent bar */}
+                    <View style={{ position: 'absolute', left: 0, top: 10, bottom: 10, width: 3, borderRadius: 2, backgroundColor: active ? c.color : 'transparent' }} />
+                    <CarClassIcon c={c} size={56} active={active} image={carImages[c.id]} />
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ color: active ? c.color : WHITE, fontSize: 16, fontWeight: '700' }}>{c.label}</Text>
+                        {c.badge && (
+                          <View style={{ backgroundColor: c.color + '33', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                            <Text style={{ color: c.color, fontSize: 10, fontWeight: '700' }}>{c.badge}</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>{c.models}</Text>
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <Text style={{ fontSize: 10 }}>👤</Text>
+                          <Text style={{ color: GRAY2, fontSize: 11 }}>{c.seats} o'rin</Text>
+                        </View>
+                        {c.features.map((f) => (
+                          <View key={f} style={{ backgroundColor: CARD, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>
+                            <Text style={{ color: GRAY1, fontSize: 10 }}>{f}</Text>
+                          </View>
+                        ))}
+                        {est?.surge > 1 && <View style={{ backgroundColor: '#FF6B0022', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}><Text style={{ color: '#FF6B00', fontSize: 10 }}>⚡ Talabga qarab</Text></View>}
+                        {est?.is_night && <View style={{ backgroundColor: '#1E3A5F', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}><Text style={{ color: '#93C5FD', fontSize: 10 }}>🌙 Tungi</Text></View>}
+                      </View>
                     </View>
-                    <View style={{ alignItems: 'flex-end' }}>
+                    <View style={{ alignItems: 'flex-end', minWidth: 88 }}>
                       {est ? (
                         <>
-                          {est.discount_percent > 0 && <Text style={{ color: GRAY2, fontSize: 12, textDecorationLine: 'line-through' }}>{fmt(est.base_price)}</Text>}
-                          <Text style={[{ color: WHITE, fontSize: 18, fontWeight: '700' }, active && { color: YELLOW, fontSize: 20 }]}>
-                            {fmt(est.price)} so'm
+                          {est.discount_percent > 0 && <Text style={{ color: GRAY2, fontSize: 11, textDecorationLine: 'line-through' }}>{fmt(est.base_price)}</Text>}
+                          <Text style={{ color: active ? c.color : WHITE, fontSize: active ? 20 : 17, fontWeight: '800' }}>
+                            {fmt(est.price)}
                           </Text>
+                          <Text style={{ color: GRAY2, fontSize: 10 }}>so'm</Text>
+                          {est.duration_min && <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>~{est.duration_min} daq</Text>}
                         </>
-                      ) : <ActivityIndicator color={GRAY2} size="small" />}
+                      ) : estLoading ? <ActivityIndicator color={c.color} size="small" /> : <Text style={{ color: GRAY2, fontSize: 12 }}>—</Text>}
                     </View>
                   </TouchableOpacity>
                 );
@@ -1436,13 +1830,17 @@ function AppInner() {
             <Text style={[s.listSectionTitle, { paddingHorizontal: 0, marginTop: 20 }]}>MAVZULAR</Text>
             <View style={s.helpTopicsCard}>
               {[
-                { icon: 'document-text', label: 'Tez-tez beriladigan savollar', sub: "FAQ — eng ko'p so'raladi" },
-                { icon: 'card', label: "To'lov muammolari", sub: 'Karta, balans, cashback' },
-                { icon: 'person', label: 'Safar muammolari', sub: 'Buyurtma, kutish, manzil' },
-                { icon: 'flag', label: 'Haydovchi shikoyati', sub: 'Xizmat sifati, xulq' },
+                { icon: 'document-text', label: 'Tez-tez beriladigan savollar', sub: "FAQ — eng ko'p so'raladi",
+                  answer: "❓ Tez-tez beriladigan savollar\n\n🔹 Haydovchi qancha kutadi?\n3 daqiqa bepul, keyin har daqiqaga qo'shimcha haq.\n\n🔹 Bekor qilsam jarima bo'ladimi?\nHaydovchi yetib kelgandan so'ng bekor qilsangiz — ha, kichik jarima.\n\n🔹 Bonus qanday ishlaydi?\nHar safardan % keshbek hisoblanadi, keyingi safarda ishlatiladi.\n\n🔹 Ovozli buyurtma nima?\nManzilni ovozda ayting — haydovchi eshitib keladi. Narx km+vaqt bo'yicha." },
+                { icon: 'card', label: "To'lov muammolari", sub: 'Karta, balans, cashback',
+                  answer: "💳 To'lov bo'yicha yordam\n\n🔹 Naqd to'lov: haydovchiga safar oxirida berasiz.\n\n🔹 Bonus balans: profil bo'limida ko'rinadi. Safar buyurtmasida 'Bonus ishlatish' ni yoqing.\n\n🔹 Karta to'lovi: tez kunda faollashtiriladi.\n\n🔹 Muammo bo'lsa — operator bilan bog'laning (yuqoridagi chat tugmasi)." },
+                { icon: 'person', label: 'Safar muammolari', sub: 'Buyurtma, kutish, manzil',
+                  answer: "🚕 Safar muammolari\n\n🔹 Haydovchi kelmayapti — /holat tugmasini bosing, haydovchi bilan bog'laning.\n\n🔹 Manzilni o'zgartirish — safar davomida 'Manzilni o'zgartirish' tugmasini bosing.\n\n🔹 Narx kutilgandan ko'p — narx km+kutish asosida hisoblanadi, app'dagi taxmin yo'l qisqaligiga bog'liq.\n\n🔹 Muammo davom etsa — operatorga murojaat qiling." },
+                { icon: 'flag', label: 'Haydovchi shikoyati', sub: 'Xizmat sifati, xulq',
+                  answer: "🚩 Haydovchi haqida shikoyat\n\nSafar yakunlangach yulduz bering va izoh qoldiring — bu bizga muhim.\n\nJiddiy muammo bo'lsa:\n• Operatorga chat orqali yozing\n• Yoki +998 XX XXX-XX-XX ga qo'ng'iroq qiling\n\nBarcha shikoyatlar 24 soat ichida ko'rib chiqiladi." },
               ].map((item, idx, arr) => (
                 <View key={idx}>
-                  <TouchableOpacity style={s.helpTopicRow} activeOpacity={0.7} onPress={() => Alert.alert(item.label, "Tez kunda qo'shiladi")}>
+                  <TouchableOpacity style={s.helpTopicRow} activeOpacity={0.7} onPress={() => Alert.alert(item.label, item.answer)}>
                     <View style={s.helpTopicIconWrap}><Ionicons name={item.icon} size={18} color={GRAY1} /></View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: WHITE, fontSize: 15 }}>{item.label}</Text>
@@ -1506,7 +1904,7 @@ function AppInner() {
               <View style={{ flex: 1 }}>
                 <Text style={{ color: WHITE, fontSize: 20, fontWeight: '700' }}>{user?.name || 'Mijoz'}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                  {user?.rating && <Text style={{ color: GRAY1, fontSize: 14 }}>⭐ {user.rating}</Text>}
+                  {!!user?.rating && <Text style={{ color: GRAY1, fontSize: 14 }}>⭐ {user.rating}</Text>}
                   <Text style={{ color: GRAY1, fontSize: 14 }}>{fmtPhone(user?.phone)}</Text>
                 </View>
               </View>
@@ -1554,7 +1952,7 @@ function AppInner() {
             <View style={[s.menuCard, { marginTop: 16 }]}>
               {[
                 { icon: 'heart', label: 'Sevimli joylar', value: favorites.length > 0 ? `${favorites.length}` : null, onPress: () => Alert.alert('Sevimli joylar', favorites.length > 0 ? favorites.map(f => f.name).join('\n') : "Hali yo'q") },
-                { icon: 'card', label: "To'lov usullari", value: '2 ta karta', onPress: () => Alert.alert("To'lov usullari", 'Tez kunda') },
+                { icon: 'card', label: "To'lov usullari", value: null, onPress: () => Alert.alert("To'lov usullari", "💵 Naqd — haydovchiga to'laysiz\n\n💰 Bonus balans — har safardan keshbek, keyingi safarda ishlatiladi\n\n💳 Karta — tez kunda. Payme, Click, Uzcard qo'shiladi") },
                 { icon: 'time', label: 'Safarlar tarixi', value: null, onPress: () => { setTab('trips'); loadTrips(); } },
                 { icon: 'shield-checkmark', label: 'Xavfsizlik va SOS', value: null, onPress: () => setSosModal(true) },
                 { icon: 'headset', label: 'Yordam markazi', value: null, onPress: () => setTab('help') },
@@ -1634,6 +2032,36 @@ function AppInner() {
       </Modal>
 
       {/* SOS Modal */}
+      {/* 🎙 Ovozli buyurtma modali */}
+      <Modal visible={voiceModal} transparent animationType="slide" onRequestClose={closeVoiceOrder}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16, alignItems: 'center' }]}>
+            <Text style={[s.modalTitle, { color: WHITE }]}>🎙 Ovozli buyurtma</Text>
+            <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 }}>
+              Tugmani bosib ushlab turing va qayerga borishingizni gapirib ayting.
+              Haydovchi ovozingizni eshitadi. Narx hisoblagich (km + vaqt) bo'yicha.
+            </Text>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPressIn={startVoiceRecording}
+              onPressOut={stopVoiceRecording}
+              style={[s.voiceRecBtn, recording && { backgroundColor: RED, transform: [{ scale: 1.08 }] }]}>
+              <Ionicons name={recording ? 'radio' : 'mic'} size={48} color="#1A1A1A" />
+            </TouchableOpacity>
+
+            <Text style={{ color: recording ? RED : GRAY1, fontSize: 15, fontWeight: '600', marginTop: 18 }}>
+              {recording ? `● Yozilmoqda… ${voiceSec}s` : 'Bosib ushlab turing'}
+            </Text>
+            {loading && <ActivityIndicator color={YELLOW} style={{ marginTop: 12 }} />}
+
+            <TouchableOpacity onPress={closeVoiceOrder} style={{ marginTop: 20, alignItems: 'center' }}>
+              <Text style={{ color: GRAY1, fontSize: 15 }}>Yopish</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={sosModal} transparent animationType="slide" onRequestClose={() => setSosModal(false)}>
         <View style={s.modalOverlay}>
           <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
@@ -1649,6 +2077,54 @@ function AppInner() {
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setSosModal(false)} style={{ marginTop: 16, alignItems: 'center' }}>
               <Text style={{ color: GRAY1, fontSize: 15 }}>Bekor qilish</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Manzilni o'zgartirish modali */}
+      <Modal visible={changeDestModal} transparent animationType="slide" onRequestClose={() => setChangeDestModal(false)}>
+        <View style={s.modalOverlay}>
+          <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16, maxHeight: '75%' }]}>
+            <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700', marginBottom: 4 }}>Yangi manzil</Text>
+            <Text style={{ color: GRAY1, fontSize: 12, marginBottom: 12 }}>
+              Manzil o'zgarsa, narx yangi masofa bo'yicha qayta hisoblanadi.
+            </Text>
+            <TextInput
+              style={s.searchBigInput}
+              placeholder="Manzilni qidiring..."
+              placeholderTextColor="#555"
+              value={cdQ}
+              onChangeText={cdSearch}
+              autoFocus
+            />
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ marginTop: 8 }}>
+              {cdResults.map((p, i) => (
+                <TouchableOpacity
+                  key={p.id || i}
+                  style={s.placeRow}
+                  activeOpacity={0.7}
+                  onPress={() => applyChangeDest(p)}
+                  disabled={loading}
+                >
+                  <View style={[s.placeIconCircle, { backgroundColor: '#1A1400' }]}>
+                    <Ionicons name="location" size={18} color={YELLOW} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.placeName}>{p.name}</Text>
+                    {p.district && <Text style={s.placeSub}>{p.district}</Text>}
+                  </View>
+                </TouchableOpacity>
+              ))}
+              {cdQ.length >= 2 && cdResults.length === 0 && (
+                <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 16 }}>Topilmadi</Text>
+              )}
+            </ScrollView>
+            <TouchableOpacity
+              style={[s.outlineBtn, { justifyContent: 'center', marginTop: 12 }]}
+              onPress={() => setChangeDestModal(false)}
+            >
+              <Text style={{ color: GRAY1, fontSize: 14 }}>Bekor</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1693,16 +2169,62 @@ function AppInner() {
       <Modal visible={rateModal} transparent animationType="slide" onRequestClose={() => setRateModal(false)}>
         <View style={s.modalOverlay}>
           <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
-            <Text style={s.modalTitle}>Safarni baholang</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 20 }}>
+            {/* Safar yakuni sarlavhasi */}
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: GREEN + '22', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                <Ionicons name="checkmark-circle" size={30} color={GREEN} />
+              </View>
+              <Text style={s.modalTitle}>Safar yakunlandi</Text>
+            </View>
+
+            {/* Hisob-kitob (wait_fee bo'lsa qatorlar bilan) */}
+            {completedOrder && (() => {
+              const waitFee = Number(completedOrder.wait_fee || 0);
+              const total   = Number(completedOrder.price || 0);
+              const base    = waitFee > 0 ? total - waitFee : total;
+              return (
+                <View style={{ backgroundColor: CARD2, borderRadius: 14, borderWidth: 1, borderColor: BORDER, padding: 14, marginBottom: 16 }}>
+                  {waitFee > 0 && (
+                    <>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <Text style={{ color: GRAY1, fontSize: 13 }}>Safar narxi</Text>
+                        <Text style={{ color: WHITE, fontSize: 13, fontWeight: '500' }}>{fmt(base)} so'm</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <Ionicons name="time" size={13} color={RED} />
+                          <Text style={{ color: RED, fontSize: 13 }}>Kutish haqi</Text>
+                        </View>
+                        <Text style={{ color: RED, fontSize: 13, fontWeight: '600' }}>+{fmt(waitFee)} so'm</Text>
+                      </View>
+                      <View style={{ height: 1, backgroundColor: BORDER, marginBottom: 10 }} />
+                    </>
+                  )}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <Text style={{ color: WHITE, fontSize: 15, fontWeight: '600' }}>Jami to'lov</Text>
+                    <Text style={{ color: YELLOW, fontSize: 22, fontWeight: '800' }}>{fmt(total)} so'm</Text>
+                  </View>
+                  <Text style={{ color: GRAY1, fontSize: 12, marginTop: 4 }}>
+                    {completedOrder.payment_method === 'cash' ? '💵 Naqd to\'lov' : '💳 Karta orqali'}
+                    {completedOrder.distance_km ? ` · ${completedOrder.distance_km} km` : ''}
+                  </Text>
+                </View>
+              );
+            })()}
+
+            {/* Yulduzli baho */}
+            <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginBottom: 10 }}>Haydovchini baholang</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
               {[1, 2, 3, 4, 5].map(n => (
                 <TouchableOpacity key={n} onPress={() => setStars(n)}>
-                  <Ionicons name={n <= stars ? 'star' : 'star-outline'} size={40} color={YELLOW} />
+                  <Ionicons name={n <= stars ? 'star' : 'star-outline'} size={38} color={YELLOW} />
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 10 }}>Choychaqa (ixtiyoriy)</Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 20 }}>
+
+            {/* Choychaqa */}
+            <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 8 }}>Choychaqa (ixtiyoriy)</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 18 }}>
               {[0, 2000, 5000, 10000].map(a => (
                 <TouchableOpacity key={a} style={[s.payChip, tipAmount === a && s.payChipActive]}
                   onPress={() => setTipAmount(a)}>
@@ -1811,13 +2333,53 @@ function AnimatedSheet({ style, children, ...rest }) {
   );
 }
 
+// Yengil fade + yumshoq ko'tarilish. delay bilan ketma-ket (stagger) ishlaydi.
+// useNativeDriver: true — UI thread'da, telefonni qiynamaydi.
+function FadeInView({ children, delay = 0, from = 16, duration = 420, style }) {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const t = setTimeout(() => {
+      Animated.timing(a, { toValue: 1, duration, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    }, delay);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <Animated.View style={[style, {
+      opacity: a,
+      transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [from, 0] }) }],
+    }]}>
+      {children}
+    </Animated.View>
+  );
+}
+
+// Bosilganda yumshoq kichrayadigan tugma — premium his, lekin yengil.
+function PressableScale({ children, onPress, disabled, style, scaleTo = 0.96, ...rest }) {
+  const sc = useRef(new Animated.Value(1)).current;
+  const to = (v) => Animated.spring(sc, { toValue: v, useNativeDriver: true, damping: 15, stiffness: 320, mass: 0.5 }).start();
+  return (
+    <TouchableOpacity
+      activeOpacity={0.9}
+      onPress={onPress}
+      disabled={disabled}
+      onPressIn={() => !disabled && to(scaleTo)}
+      onPressOut={() => to(1)}
+      {...rest}
+    >
+      <Animated.View style={[style, { transform: [{ scale: sc }] }]}>
+        {children}
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
+
 // Design tokens (also available in styles)
 const BG = '#0A0A0A';
 const CARD = '#141414';
 const CARD2 = '#1E1E1E';
 const BORDER = '#282828';
-const YELLOW = '#FFCC00';
-const GREEN = '#30D158';
+const YELLOW = '#FFC700';
+const GREEN = '#22C55E';
 const RED = '#FF453A';
 const WHITE = '#FFFFFF';
 const GRAY1 = '#8E8E93';
@@ -1930,6 +2492,16 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     gap: 10,
   },
+  shortBtnSm: {
+    flex: 1,
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: CARD2,
+    borderRadius: 14,
+    height: 68,
+    paddingHorizontal: 6,
+  },
   shortBtnIconWrap: {
     width: 36,
     height: 36,
@@ -1937,6 +2509,33 @@ const s = StyleSheet.create({
     backgroundColor: CARD,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  voiceBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: YELLOW,
+    borderRadius: 14,
+    height: 68,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  voiceBtnIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(0,0,0,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceRecBtn: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+    backgroundColor: YELLOW,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
   },
 
   // Search overlay
@@ -2023,14 +2622,16 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: CARD2,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 14,
+    paddingLeft: 18,
     marginHorizontal: 16,
     marginBottom: 10,
     borderWidth: 1.5,
     borderColor: 'transparent',
+    overflow: 'hidden',
   },
-  tariffCardActive: { borderColor: YELLOW, backgroundColor: '#1A1500' },
+  tariffCardActive: { backgroundColor: '#111' },
   payChip: { backgroundColor: CARD2, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginRight: 8 },
   payChipActive: { backgroundColor: YELLOW },
   payChipTxt: { color: WHITE, fontSize: 14 },
@@ -2053,7 +2654,16 @@ const s = StyleSheet.create({
     backgroundColor: CARD,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: '55%',
+    maxHeight: '65%',
+  },
+  taxiMeterBox: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    backgroundColor: CARD2,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: YELLOW + '40',
   },
   activeStatusTxt: {
     color: WHITE,

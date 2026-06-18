@@ -1,7 +1,22 @@
 {
-  "cli": { "version": ">= 5.0.0" },
+  "cli": {
+    "version": ">= 10.0.0",
+    "appVersionSource": "local"
+  },
   "build": {
-    "preview": { "android": { "buildType": "apk" } },
-    "production": { "android": { "buildType": "apk" } }
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": { "buildType": "apk" }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "channel": "preview"
+    },
+    "production": {
+      "android": { "buildType": "apk" },
+      "channel": "production"
+    }
   }
 }

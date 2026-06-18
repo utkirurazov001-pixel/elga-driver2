@@ -2,34 +2,83 @@
   "expo": {
     "name": "ELGA Haydovchi",
     "slug": "elga-taxi",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A0A"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/71afad6c-99e7-4ca2-9f6d-915f1cd27166",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 3000
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "uz.elga.haydovchi",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ],
+        "NSLocationWhenInUseUsageDescription": "ELGA haydovchi ilovasi buyurtmalarni topish uchun joylashuvdan foydalanadi.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ELGA haydovchi ilovasi fonda ishlaganda ham buyurtmalarni qabul qilish uchun joylashuvdan foydalanadi.",
+        "NSLocationAlwaysUsageDescription": "ELGA haydovchi ilovasi fonda ham joylashuvdan foydalanadi."
+      }
+    },
     "android": {
       "package": "uz.elga.driver",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A0A0A"
+      },
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
-        "FOREGROUND_SERVICE",
         "POST_NOTIFICATIONS",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_BACKGROUND_LOCATION",
-        "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION"
-      ]
+        "WAKE_LOCK",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
+      ],
+      "foregroundService": {
+        "notificationTitle": "ELGA Haydovchi",
+        "notificationBody": "Buyurtma kutilmoqda..."
+      }
     },
     "plugins": [
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "ELGA haydovchi joylashuvini buyurtmalar uchun kuzatadi.",
-          "isAndroidBackgroundLocationEnabled": true
+          "locationWhenInUsePermission": "ELGA haydovchi ilovasi buyurtmalarni topish uchun joylashuvdan foydalanadi.",
+          "locationAlwaysAndWhenInUsePermission": "ELGA fonda ham ishlashi uchun joylashuv kerak.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
-      "expo-notifications"
+      [
+        "expo-notifications",
+        {
+          "color": "#FFCC00",
+          "sounds": []
+        }
+      ],
+      "expo-audio",
+      "expo-font",
+      "expo-asset"
     ],
     "extra": {
       "eas": {
