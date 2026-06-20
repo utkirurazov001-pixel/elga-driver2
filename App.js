@@ -3,7 +3,7 @@
 //  Xarita: OpenStreetMap (Leaflet WebView)
 //  Server: https://api.elga.uz
 // ============================================================
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Linking, Platform,
@@ -1623,17 +1623,23 @@ function TripComplete({ trip, insets, onRate, onDone }) {
 }
 
 // ---- Tarix ekrani (yakunlangan safarlar, kunlar bo'yicha) ----
-function DriverHistory({ trips, insets }) {
+// React.memo: ota komponent (AppInner) GPS/meter yangilanishlarida har 5 sek
+// qayta render bo'lganda ham, bu ekran faqat trips/insets o'zgarsa render bo'ladi.
+const DriverHistory = React.memo(function DriverHistory({ trips, insets }) {
   const top = (insets?.top || 0) + 16;
   const bottom = TABBAR_H + (insets?.bottom || 0) + 20;
-  const groups = {};
-  (trips || []).forEach((t) => {
-    const d = new Date(t.created_at || t.completed_at || Date.now());
-    const today = new Date().toDateString();
-    const yest = new Date(Date.now() - 86400000).toDateString();
-    const key = d.toDateString() === today ? 'Bugun' : d.toDateString() === yest ? 'Kecha' : d.toLocaleDateString('ru-RU');
-    (groups[key] = groups[key] || []).push(t);
-  });
+  // Guruhlash faqat trips o'zgarganda hisoblanadi.
+  const groups = useMemo(() => {
+    const g = {};
+    (trips || []).forEach((t) => {
+      const d = new Date(t.created_at || t.completed_at || Date.now());
+      const today = new Date().toDateString();
+      const yest = new Date(Date.now() - 86400000).toDateString();
+      const key = d.toDateString() === today ? 'Bugun' : d.toDateString() === yest ? 'Kecha' : d.toLocaleDateString('ru-RU');
+      (g[key] = g[key] || []).push(t);
+    });
+    return g;
+  }, [trips]);
   return (
     <ScrollView style={s.screenWrap} contentContainerStyle={{ paddingTop: top, paddingBottom: bottom, paddingHorizontal: 20 }}>
       <Text style={s.screenSub}>Yakunlangan safarlar</Text>
@@ -1681,7 +1687,7 @@ function DriverHistory({ trips, insets }) {
       ))}
     </ScrollView>
   );
-}
+});
 
 // ---- Profil ekrani ----
 function DriverProfile({ user, earnings, onLogout, insets, token }) {

@@ -3,7 +3,7 @@
 //  Xarita: OpenStreetMap (Leaflet WebView)
 //  Server: https://api.elga.uz
 // ============================================================
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Modal, Linking, FlatList,
@@ -353,6 +353,27 @@ function AppInner() {
 
   // Tarix / profil / chat
   const [trips, setTrips] = useState([]);
+  // Tarix ro'yxatini kunlar bo'yicha guruhlash — faqat trips o'zgarganda
+  // qayta hisoblanadi (avval har render'da, GPS tick'larida ham qayta
+  // hisoblanib ilovani sekinlashtirardi).
+  const groupedTrips = useMemo(() => {
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    let lastDay = null;
+    const result = [];
+    trips.forEach(t => {
+      const d = new Date(t.created_at).toDateString();
+      if (d !== lastDay) {
+        lastDay = d;
+        result.push({
+          type: 'header',
+          label: d === today ? 'BUGUN' : d === yesterday ? 'KECHA' : new Date(t.created_at).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long' })
+        });
+      }
+      result.push({ type: 'trip', item: t });
+    });
+    return result;
+  }, [trips]);
   const [balance, setBalance] = useState(null);
   const [chat, setChat] = useState([]);
   const [chatInput, setChatInput] = useState('');
@@ -1735,24 +1756,11 @@ function AppInner() {
           </View>
 
           <FlatList
-            data={(() => {
-              const today = new Date().toDateString();
-              const yesterday = new Date(Date.now() - 86400000).toDateString();
-              let lastDay = null;
-              const result = [];
-              trips.forEach(t => {
-                const d = new Date(t.created_at).toDateString();
-                if (d !== lastDay) {
-                  lastDay = d;
-                  result.push({
-                    type: 'header',
-                    label: d === today ? 'BUGUN' : d === yesterday ? 'KECHA' : new Date(t.created_at).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long' })
-                  });
-                }
-                result.push({ type: 'trip', item: t });
-              });
-              return result;
-            })()}
+            data={groupedTrips}
+            removeClippedSubviews
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            windowSize={7}
             keyExtractor={(item, i) => item.type === 'header' ? 'h' + i : String(item.item.id)}
             ListEmptyComponent={
               <View style={s.emptyState}>
