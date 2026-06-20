@@ -3,11 +3,11 @@
 //  Xarita: OpenStreetMap (Leaflet WebView)
 //  Server: https://api.elga.uz
 // ============================================================
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Modal, Linking, FlatList,
-  Animated, Easing, Image,
+  Animated, Easing, Image, Dimensions,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -71,6 +71,8 @@ const PAY_ICONS = { cash: '💵', click: '🔵', payme: '🟢', card: '💳' };
 
 // Tab panelining tizim navigatsiyasidan tashqari balandligi (safe-area pastdan qo'shiladi)
 const TABBAR_H = 56;
+// Ekran balandligi — pastdan ko'tariladigan sheet'larni cheklash uchun
+const SCREEN_H = Dimensions.get('window').height;
 
 // Mijoz balansi 0 yoki manfiy bo'lsa "Balans" blokini umuman yashirish
 const HIDE_BALANCE_IF_NONPOSITIVE = true;
@@ -351,6 +353,27 @@ function AppInner() {
 
   // Tarix / profil / chat
   const [trips, setTrips] = useState([]);
+  // Tarix ro'yxatini kunlar bo'yicha guruhlash — faqat trips o'zgarganda
+  // qayta hisoblanadi (avval har render'da, GPS tick'larida ham qayta
+  // hisoblanib ilovani sekinlashtirardi).
+  const groupedTrips = useMemo(() => {
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    let lastDay = null;
+    const result = [];
+    trips.forEach(t => {
+      const d = new Date(t.created_at).toDateString();
+      if (d !== lastDay) {
+        lastDay = d;
+        result.push({
+          type: 'header',
+          label: d === today ? 'BUGUN' : d === yesterday ? 'KECHA' : new Date(t.created_at).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long' })
+        });
+      }
+      result.push({ type: 'trip', item: t });
+    });
+    return result;
+  }, [trips]);
   const [balance, setBalance] = useState(null);
   const [chat, setChat] = useState([]);
   const [chatInput, setChatInput] = useState('');
@@ -1452,7 +1475,12 @@ function AppInner() {
                   </View>
                 )}
 
-                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="on-drag"
+                  showsVerticalScrollIndicator={false}>
                   {searchQ.length === 0 && (
                     <View style={s.listSection}>
                       <Text style={s.listSectionTitle}>SAQLANGAN</Text>
@@ -1728,24 +1756,11 @@ function AppInner() {
           </View>
 
           <FlatList
-            data={(() => {
-              const today = new Date().toDateString();
-              const yesterday = new Date(Date.now() - 86400000).toDateString();
-              let lastDay = null;
-              const result = [];
-              trips.forEach(t => {
-                const d = new Date(t.created_at).toDateString();
-                if (d !== lastDay) {
-                  lastDay = d;
-                  result.push({
-                    type: 'header',
-                    label: d === today ? 'BUGUN' : d === yesterday ? 'KECHA' : new Date(t.created_at).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long' })
-                  });
-                }
-                result.push({ type: 'trip', item: t });
-              });
-              return result;
-            })()}
+            data={groupedTrips}
+            removeClippedSubviews
+            initialNumToRender={10}
+            maxToRenderPerBatch={10}
+            windowSize={7}
             keyExtractor={(item, i) => item.type === 'header' ? 'h' + i : String(item.item.id)}
             ListEmptyComponent={
               <View style={s.emptyState}>
@@ -2614,6 +2629,10 @@ const s = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
+    // Sheet faqat "bottom" bilan ankor edi -> kontent ekrandan baland bo'lsa
+    // yuqoriga cheksiz cho'zilib, birinchi karta ("Tejamkor") ekrandan chiqib
+    // ketardi va ichki ScrollView scroll qilmasdi. maxHeight bilan chegaralaymiz.
+    maxHeight: SCREEN_H * 0.78,
     backgroundColor: CARD,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,

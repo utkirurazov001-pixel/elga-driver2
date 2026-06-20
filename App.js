@@ -3,7 +3,7 @@
 //  Xarita: OpenStreetMap (Leaflet WebView)
 //  Server: https://api.elga.uz
 // ============================================================
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Linking, Platform,
@@ -15,6 +15,7 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as Speech from 'expo-speech';
 import * as KeepAwake from 'expo-keep-awake';
+import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 // expo-updates: Expo Go muhitida ishlatilmaydi (OTA faqat standalone APK uchun)
 import { WebView } from 'react-native-webview';
 import { io } from 'socket.io-client';
@@ -118,12 +119,75 @@ async function api(path, method = 'GET', body = null, token = null, timeoutMs = 
 
 const fmt = (n) => Number(n || 0).toLocaleString('ru-RU');
 
-// O'zbek tilida ovozli e'lon (expo-speech)
+// Matnni xavfsiz string'ga keltirish — obyekt/null kelib qolsa ham React
+// "Objects are not valid as a React child" deb qulamaydi (ayniqsa ovozli
+// buyurtmada manzil maydonlari to'liq bo'lmasligi mumkin).
+const safeStr = (v, fallback = '') => {
+  if (v == null) return fallback;
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number') return String(v);
+  return fallback;
+};
+
+// Ovozli e'lonlar telefon "jim" rejimida ham eshitilsin
+setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+
+// expo-speech ovozini tabiiyroq qilish: qurilmada mavjud o'zbek ovozini
+// tanlaymiz (ko'p qurilmada uz-UZ aniq ko'rsatilmasa robot/aksent bo'lardi).
+// undefined = hali tekshirilmagan, null = topilmadi.
+let _uzVoice = undefined;
+async function loadUzVoice() {
+  if (_uzVoice !== undefined) return _uzVoice;
+  _uzVoice = null;
+  try {
+    const voices = (await Speech.getAvailableVoicesAsync()) || [];
+    const uz = voices.find((v) => /^uz/i.test(v.language || ''))
+            || voices.find((v) => /uzbek/i.test(v.name || ''));
+    if (uz?.identifier) _uzVoice = uz.identifier;
+  } catch (_) {}
+  return _uzVoice;
+}
+loadUzVoice(); // startupda keshlab qo'yamiz
+
+// O'zbek tilida ovozli e'lon (expo-speech) — tabiiyroq sozlamalar bilan
 function speak(text) {
   try {
     Speech.stop();
-    Speech.speak(text, { language: 'uz-UZ', rate: 0.92, pitch: 1.0 });
+    const opts = { language: 'uz-UZ', rate: 0.9, pitch: 1.03 };
+    if (_uzVoice) opts.voice = _uzVoice;
+    Speech.speak(String(text || ''), opts);
   } catch (e) {}
+}
+
+// ---- Backenddan boshqariladigan ovoz ----
+// Server e'lon uchun audio URL bersa (super-admin tabiiy ovoz yozib qo'yadi)
+// — shuni o'ynaymiz; bo'lmasa yoki xato bo'lsa TTS bilan gapiramiz.
+let _annPlayer = null;
+function stopAnnPlayer() {
+  if (_annPlayer) { try { _annPlayer.remove(); } catch (_) {} _annPlayer = null; }
+}
+function playAnnouncementAudio(url) {
+  // true = audio o'ynay boshladi; false = TTS'ga qaytamiz
+  try {
+    if (typeof url !== 'string' || !url.trim()) return false;
+    stopAnnPlayer();
+    const player = createAudioPlayer({ uri: url.trim() });
+    _annPlayer = player;
+    try {
+      player.addListener('playbackStatusUpdate', (st) => {
+        if (st?.didJustFinish) stopAnnPlayer();
+      });
+    } catch (_) {}
+    player.play();
+    return true;
+  } catch (e) {
+    stopAnnPlayer();
+    return false;
+  }
+}
+// Asosiy e'lon funksiyasi: audioUrl bo'lsa audio, bo'lmasa TTS.
+function announce(text, audioUrl) {
+  if (!playAnnouncementAudio(audioUrl)) speak(text);
 }
 
 // Haversine masofasi (km)
@@ -172,10 +236,52 @@ window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify(
 </script></body></html>`;
 }
 
+// ErrorBoundary — render paytida kutilmagan xato bo'lsa (masalan, buyurtma
+// obyektida noto'g'ri maydon), butun ilova OQ EKRANga aylanib qulamasligi uchun.
+// Xato ushlanadi va foydalanuvchiga "Qayta urinish" tugmasi ko'rsatiladi.
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    // Faqat log — ilova qulamaydi
+    console.warn('[ErrorBoundary]', error?.message, info?.componentStack);
+  }
+  reset = () => this.setState({ hasError: false });
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Text style={{ fontSize: 40, marginBottom: 16 }}>⚠️</Text>
+          <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 8 }}>
+            Kutilmagan xatolik
+          </Text>
+          <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginBottom: 24 }}>
+            Ilova qayta ishga tushirilmoqda. Buyurtmalaringiz saqlanib qoladi.
+          </Text>
+          <TouchableOpacity
+            onPress={this.reset}
+            style={{ backgroundColor: YELLOW, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40 }}
+            activeOpacity={0.85}>
+            <Text style={{ color: '#000', fontSize: 16, fontWeight: '700' }}>Qayta urinish</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
     <SafeAreaProvider>
-      <AppInner />
+      <ErrorBoundary>
+        <AppInner />
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }
@@ -383,17 +489,26 @@ function AppInner() {
     s.on('reconnect', () => { resumeActiveOrder(); });
 
     s.on('new_order', (o) => {
-      setOrder(o);
-      setChatMessages([]);
-      // Baland ovozli vibrasiya (3x)
-      Vibration.vibrate([0, 400, 200, 400, 200, 400]);
-      // Ovozli e'lon (o'zbek tilida)
-      speak(`Yangi buyurtma! ${fmt(o.price)} so'm. ${o.from_address || ''}`);
-      notify('🚖 Yangi buyurtma!', `${o.from_address || 'Manzil'} → ${fmt(o.price)} so'm`);
-      // Fon bildirishnomasi — buyurtma tafsiloti
-      updatePersistentNotif(`Yangi buyurtma · ${fmt(o.price)} so'm`);
-      // Buyurtma ekranda ko'rinishi uchun ekranni yoqib qo'yamiz (xavfsiz wrapper)
-      keepAwakeOn();
+      // Butun handler xavfsiz: noto'g'ri/yetishmaydigan maydonli (masalan ovozli)
+      // buyurtma kelsa ham ilova qulamaydi.
+      try {
+        setOrder(o || null);
+        setChatMessages([]);
+        // Baland ovozli vibrasiya (3x)
+        Vibration.vibrate([0, 400, 200, 400, 200, 400]);
+        // Ovozli e'lon (o'zbek tilida)
+        const addr = typeof o?.from_address === 'string' ? o.from_address : '';
+        // Server e'lon audiosi bersa (super-admin sozlaydi) shuni o'ynaymiz,
+        // bo'lmasa TTS. Backend kelishuvi: o.announce_audio yoki o.voice_url.
+        announce(`Yangi buyurtma! ${fmt(o?.price)} so'm. ${addr}`, o?.announce_audio || o?.voice_url);
+        notify('🚖 Yangi buyurtma!', `${addr || 'Manzil'} → ${fmt(o?.price)} so'm`);
+        // Fon bildirishnomasi — buyurtma tafsiloti
+        updatePersistentNotif(`Yangi buyurtma · ${fmt(o?.price)} so'm`);
+        // Buyurtma ekranda ko'rinishi uchun ekranni yoqib qo'yamiz (xavfsiz wrapper)
+        keepAwakeOn();
+      } catch (e) {
+        console.warn('[new_order]', e?.message);
+      }
     });
     s.on('order_cancelled', () => {
       notify('Buyurtma bekor qilindi', '');
@@ -630,7 +745,10 @@ function AppInner() {
     setVoiceLoading(true);
     try {
       const r = await api(`/api/orders/${orderId}/voice`, 'GET', null, token, 45000);
-      if (r && r.voice) setVoiceUri(r.voice);
+      // Faqat haqiqiy (bo'sh bo'lmagan) string URL bo'lsa o'ynatamiz — null/obyekt
+      // kelib qolsa WebView'ni buzmaymiz.
+      const uri = typeof r?.voice === 'string' ? r.voice.trim() : '';
+      if (uri) setVoiceUri(uri);
       else Alert.alert('Ovoz', 'Ovozli xabar topilmadi');
     } catch (e) {
       Alert.alert('Ovoz', "Ovozni yuklab bo'lmadi");
@@ -1020,7 +1138,7 @@ function AppInner() {
               <WebView
                 style={{ height: 70, backgroundColor: 'transparent' }}
                 originWhitelist={['*']}
-                source={{ html: `<body style="margin:0;background:transparent;display:flex;align-items:center"><audio controls autoplay style="width:100%" src="${voiceUri}"></audio></body>` }}
+                source={{ html: `<body style="margin:0;background:transparent;display:flex;align-items:center"><audio controls autoplay style="width:100%" src="${String(voiceUri).replace(/"/g, '&quot;')}"></audio></body>` }}
                 mediaPlaybackRequiresUserAction={false}
                 allowsInlineMediaPlayback
               />
@@ -1191,9 +1309,9 @@ function OrderPanel({ order, loading, meter, onAction, onNavigate, onCall, onCha
               <Ionicons name="square" size={10} color={YELLOW} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 14 }} numberOfLines={1}>{order.from_address || 'Olib ketish nuqtasi'}</Text>
+              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 14 }} numberOfLines={1}>{safeStr(order.from_address, 'Olib ketish nuqtasi')}</Text>
               <Text style={{ color: WHITE, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>
-                {order.to_address || 'Manzil'}
+                {safeStr(order.to_address, 'Manzil')}
                 {order.distance_km ? <Text style={{ color: GRAY1, fontWeight: '400' }}> · {order.distance_km} km</Text> : null}
               </Text>
             </View>
@@ -1219,8 +1337,8 @@ function OrderPanel({ order, loading, meter, onAction, onNavigate, onCall, onCha
         </>
       ) : (
         <>
-          <Text style={s.orderTitle}>📍 {order.from_address || 'Olib ketish nuqtasi'}</Text>
-          <Text style={s.orderSub}>→ {order.to_address || 'Manzil'}</Text>
+          <Text style={s.orderTitle}>📍 {safeStr(order.from_address, 'Olib ketish nuqtasi')}</Text>
+          <Text style={s.orderSub}>→ {safeStr(order.to_address, 'Manzil')}</Text>
           <Text style={s.orderPrice}>{fmt(order.price)} so'm · {order.distance_km || '?'} km</Text>
 
           {/* Mijoz ma'lumoti + qo'ng'iroq + xabar */}
@@ -1561,17 +1679,23 @@ function TripComplete({ trip, insets, onRate, onDone }) {
 }
 
 // ---- Tarix ekrani (yakunlangan safarlar, kunlar bo'yicha) ----
-function DriverHistory({ trips, insets }) {
+// React.memo: ota komponent (AppInner) GPS/meter yangilanishlarida har 5 sek
+// qayta render bo'lganda ham, bu ekran faqat trips/insets o'zgarsa render bo'ladi.
+const DriverHistory = React.memo(function DriverHistory({ trips, insets }) {
   const top = (insets?.top || 0) + 16;
   const bottom = TABBAR_H + (insets?.bottom || 0) + 20;
-  const groups = {};
-  (trips || []).forEach((t) => {
-    const d = new Date(t.created_at || t.completed_at || Date.now());
-    const today = new Date().toDateString();
-    const yest = new Date(Date.now() - 86400000).toDateString();
-    const key = d.toDateString() === today ? 'Bugun' : d.toDateString() === yest ? 'Kecha' : d.toLocaleDateString('ru-RU');
-    (groups[key] = groups[key] || []).push(t);
-  });
+  // Guruhlash faqat trips o'zgarganda hisoblanadi.
+  const groups = useMemo(() => {
+    const g = {};
+    (trips || []).forEach((t) => {
+      const d = new Date(t.created_at || t.completed_at || Date.now());
+      const today = new Date().toDateString();
+      const yest = new Date(Date.now() - 86400000).toDateString();
+      const key = d.toDateString() === today ? 'Bugun' : d.toDateString() === yest ? 'Kecha' : d.toLocaleDateString('ru-RU');
+      (g[key] = g[key] || []).push(t);
+    });
+    return g;
+  }, [trips]);
   return (
     <ScrollView style={s.screenWrap} contentContainerStyle={{ paddingTop: top, paddingBottom: bottom, paddingHorizontal: 20 }}>
       <Text style={s.screenSub}>Yakunlangan safarlar</Text>
@@ -1619,7 +1743,7 @@ function DriverHistory({ trips, insets }) {
       ))}
     </ScrollView>
   );
-}
+});
 
 // ---- Profil ekrani ----
 function DriverProfile({ user, earnings, onLogout, insets, token }) {
