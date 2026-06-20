@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Modal, Linking, FlatList,
-  Animated, Easing, Image,
+  Animated, Easing, Image, Dimensions,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -71,6 +71,8 @@ const PAY_ICONS = { cash: '💵', click: '🔵', payme: '🟢', card: '💳' };
 
 // Tab panelining tizim navigatsiyasidan tashqari balandligi (safe-area pastdan qo'shiladi)
 const TABBAR_H = 56;
+// Ekran balandligi — pastdan ko'tariladigan sheet'larni cheklash uchun
+const SCREEN_H = Dimensions.get('window').height;
 
 // Mijoz balansi 0 yoki manfiy bo'lsa "Balans" blokini umuman yashirish
 const HIDE_BALANCE_IF_NONPOSITIVE = true;
@@ -2619,6 +2621,10 @@ const s = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
+    // Sheet faqat "bottom" bilan ankor edi -> kontent ekrandan baland bo'lsa
+    // yuqoriga cheksiz cho'zilib, birinchi karta ("Tejamkor") ekrandan chiqib
+    // ketardi va ichki ScrollView scroll qilmasdi. maxHeight bilan chegaralaymiz.
+    maxHeight: SCREEN_H * 0.78,
     backgroundColor: CARD,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
