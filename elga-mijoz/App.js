@@ -1452,7 +1452,12 @@ function AppInner() {
                   </View>
                 )}
 
-                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+                  keyboardShouldPersistTaps="handled"
+                  keyboardDismissMode="on-drag"
+                  showsVerticalScrollIndicator={false}>
                   {searchQ.length === 0 && (
                     <View style={s.listSection}>
                       <Text style={s.listSectionTitle}>SAQLANGAN</Text>
