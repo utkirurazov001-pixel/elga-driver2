@@ -15,6 +15,7 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as Speech from 'expo-speech';
 import * as KeepAwake from 'expo-keep-awake';
+import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 // expo-updates: Expo Go muhitida ishlatilmaydi (OTA faqat standalone APK uchun)
 import { WebView } from 'react-native-webview';
 import { io } from 'socket.io-client';
@@ -128,12 +129,65 @@ const safeStr = (v, fallback = '') => {
   return fallback;
 };
 
-// O'zbek tilida ovozli e'lon (expo-speech)
+// Ovozli e'lonlar telefon "jim" rejimida ham eshitilsin
+setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+
+// expo-speech ovozini tabiiyroq qilish: qurilmada mavjud o'zbek ovozini
+// tanlaymiz (ko'p qurilmada uz-UZ aniq ko'rsatilmasa robot/aksent bo'lardi).
+// undefined = hali tekshirilmagan, null = topilmadi.
+let _uzVoice = undefined;
+async function loadUzVoice() {
+  if (_uzVoice !== undefined) return _uzVoice;
+  _uzVoice = null;
+  try {
+    const voices = (await Speech.getAvailableVoicesAsync()) || [];
+    const uz = voices.find((v) => /^uz/i.test(v.language || ''))
+            || voices.find((v) => /uzbek/i.test(v.name || ''));
+    if (uz?.identifier) _uzVoice = uz.identifier;
+  } catch (_) {}
+  return _uzVoice;
+}
+loadUzVoice(); // startupda keshlab qo'yamiz
+
+// O'zbek tilida ovozli e'lon (expo-speech) — tabiiyroq sozlamalar bilan
 function speak(text) {
   try {
     Speech.stop();
-    Speech.speak(text, { language: 'uz-UZ', rate: 0.92, pitch: 1.0 });
+    const opts = { language: 'uz-UZ', rate: 0.9, pitch: 1.03 };
+    if (_uzVoice) opts.voice = _uzVoice;
+    Speech.speak(String(text || ''), opts);
   } catch (e) {}
+}
+
+// ---- Backenddan boshqariladigan ovoz ----
+// Server e'lon uchun audio URL bersa (super-admin tabiiy ovoz yozib qo'yadi)
+// — shuni o'ynaymiz; bo'lmasa yoki xato bo'lsa TTS bilan gapiramiz.
+let _annPlayer = null;
+function stopAnnPlayer() {
+  if (_annPlayer) { try { _annPlayer.remove(); } catch (_) {} _annPlayer = null; }
+}
+function playAnnouncementAudio(url) {
+  // true = audio o'ynay boshladi; false = TTS'ga qaytamiz
+  try {
+    if (typeof url !== 'string' || !url.trim()) return false;
+    stopAnnPlayer();
+    const player = createAudioPlayer({ uri: url.trim() });
+    _annPlayer = player;
+    try {
+      player.addListener('playbackStatusUpdate', (st) => {
+        if (st?.didJustFinish) stopAnnPlayer();
+      });
+    } catch (_) {}
+    player.play();
+    return true;
+  } catch (e) {
+    stopAnnPlayer();
+    return false;
+  }
+}
+// Asosiy e'lon funksiyasi: audioUrl bo'lsa audio, bo'lmasa TTS.
+function announce(text, audioUrl) {
+  if (!playAnnouncementAudio(audioUrl)) speak(text);
 }
 
 // Haversine masofasi (km)
@@ -444,7 +498,9 @@ function AppInner() {
         Vibration.vibrate([0, 400, 200, 400, 200, 400]);
         // Ovozli e'lon (o'zbek tilida)
         const addr = typeof o?.from_address === 'string' ? o.from_address : '';
-        speak(`Yangi buyurtma! ${fmt(o?.price)} so'm. ${addr}`);
+        // Server e'lon audiosi bersa (super-admin sozlaydi) shuni o'ynaymiz,
+        // bo'lmasa TTS. Backend kelishuvi: o.announce_audio yoki o.voice_url.
+        announce(`Yangi buyurtma! ${fmt(o?.price)} so'm. ${addr}`, o?.announce_audio || o?.voice_url);
         notify('🚖 Yangi buyurtma!', `${addr || 'Manzil'} → ${fmt(o?.price)} so'm`);
         // Fon bildirishnomasi — buyurtma tafsiloti
         updatePersistentNotif(`Yangi buyurtma · ${fmt(o?.price)} so'm`);
