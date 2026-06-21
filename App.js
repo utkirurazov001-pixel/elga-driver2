@@ -8,6 +8,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Linking, Platform,
   Modal, KeyboardAvoidingView, FlatList, Animated, Vibration, Easing,
+  AppState,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,6 +27,19 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { Ionicons } from '@expo/vector-icons';
 
 const BASE = 'https://api.elga.uz';
+
+// Faol (tugamagan) buyurtma holatlari — bularda buyurtma "tirik" hisoblanadi.
+// completed/cancelled/paid — yakuniy holatlar (faol emas).
+const ACTIVE_STATUSES = ['searching', 'assigned', 'accepted', 'arrived', 'in_progress'];
+
+// Faol buyurtma lokal saqlanadigan kalit (crash/kill/OS-restart'da yo'qolmaydi).
+const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
+
+// Ixtiyoriy NetInfo — internet qaytishini tez aniqlash uchun. Standalone (EAS) buildda
+// to'liq ishlaydi; Expo Go yoki modul o'rnatilmagan bo'lsa xavfsiz o'tkazib yuboriladi
+// (ilova qulamaydi — AppState + socket reconnect baribir holatni tiklaydi).
+let NetInfo = null;
+try { NetInfo = require('@react-native-community/netinfo').default; } catch (e) { NetInfo = null; }
 
 // Tab panelining tizim navigatsiyasidan tashqari balandligi (safe-area pastdan qo'shiladi)
 const TABBAR_H = 56;
@@ -424,6 +438,7 @@ function AppInner() {
 
   const socketRef = useRef(null);
   const watchRef = useRef(null);
+  const appStateRef = useRef(AppState.currentState);
   const mapRef = useRef(null);
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
   const [mapReady, setMapReady] = useState(false);
@@ -439,6 +454,12 @@ function AppInner() {
         if (t && u) {
           setToken(t); setUser(JSON.parse(u));
           if (p) { setStoredPin(p); setPinStep('enter'); }
+          // Crash recovery: oxirgi faol buyurtmani lokaldan DARHOL ko'rsatamiz
+          // (internet kelguncha bo'sh ekran chiqmaydi). Keyin server bilan sinxron.
+          try {
+            const ao = await AsyncStorage.getItem(ACTIVE_ORDER_KEY);
+            if (ao) { const o = JSON.parse(ao); if (o && ACTIVE_STATUSES.includes(o.status)) setOrder(o); }
+          } catch (e) {}
         }
       } catch (e) {}
       setBooting(false);
@@ -463,6 +484,51 @@ function AppInner() {
       watchRef.current?.remove?.();
       try { if (typeof KeepAwake?.deactivateKeepAwakeAsync === 'function') KeepAwake.deactivateKeepAwakeAsync('driver').catch(() => {}); } catch (e) {}
       hidePersistentNotif();
+    };
+  }, [token, pinStep]);
+
+  // Faol buyurtmani lokal saqlash — app kill / crash / OS restart bo'lsa ham
+  // buyurtma yo'qolmaydi. Status yoki id o'zgarganda yoziladi yoki o'chiriladi.
+  useEffect(() => {
+    if (order && ACTIVE_STATUSES.includes(order.status)) {
+      AsyncStorage.setItem(ACTIVE_ORDER_KEY, JSON.stringify(order)).catch(() => {});
+    } else {
+      AsyncStorage.removeItem(ACTIVE_ORDER_KEY).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id, order?.status]);
+
+  // Ilova foreground'ga qaytganda yoki internet qaytganda — faol buyurtmani tiklash (#40).
+  // Telefon bloklanib ochilsa, boshqa ilovadan qaytilsa, internet uzilib qaytsa ishlaydi.
+  useEffect(() => {
+    if (!token || pinStep) return;
+    const onAppState = (next) => {
+      const prev = appStateRef.current;
+      appStateRef.current = next;
+      // background/inactive -> active: foreground'ga qaytdi
+      if (prev && /inactive|background/.test(prev) && next === 'active') {
+        ensureSocketConnected();
+        resumeActiveOrder();
+      }
+    };
+    const appSub = AppState.addEventListener('change', onAppState);
+
+    let netUnsub = null;
+    if (NetInfo) {
+      try {
+        let wasOffline = false;
+        netUnsub = NetInfo.addEventListener((state) => {
+          const isOnline = !!state.isConnected && state.isInternetReachable !== false;
+          // offline -> online o'tishida tiklash (har bir state'da emas)
+          if (isOnline && wasOffline) { ensureSocketConnected(); resumeActiveOrder(); }
+          wasOffline = !isOnline;
+        });
+      } catch (e) {}
+    }
+
+    return () => {
+      try { appSub.remove(); } catch (e) {}
+      try { netUnsub && netUnsub(); } catch (e) {}
     };
   }, [token, pinStep]);
 
@@ -541,11 +607,29 @@ function AppInner() {
     try { await Notifications.scheduleNotificationAsync({ content: { title, body }, trigger: null }); } catch (e) {}
   }
 
+  // Socket uzilib qolgan bo'lsa qayta ulaymiz (foreground / internet qaytganda).
+  function ensureSocketConnected() {
+    const s = socketRef.current;
+    if (!s) { connectSocket(); return; }
+    if (!s.connected) { try { s.connect(); } catch (e) {} }
+  }
+
+  // Faol buyurtmani serverdan tiklash — server YAGONA haqiqat manbai.
+  // Ilova ochilganda, socket connect/reconnect bo'lganda, internet/foreground
+  // qaytganda chaqiriladi. Tarmoq xatosida lokal holat saqlanadi (tozalanmaydi).
   async function resumeActiveOrder() {
     try {
       const r = await api('/api/me/active-order', 'GET', null, token);
-      if (r && r.order) setOrder(r.order);
-    } catch (e) {}
+      if (r && r.order) {
+        // Bor buyurtma — eski holat bilan birlashtirib yangilaymiz (flicker bo'lmaydi)
+        setOrder((prev) => (prev && prev.id === r.order.id) ? { ...prev, ...r.order } : r.order);
+      } else if (r) {
+        // Server: faol buyurtma yo'q → lokaldagi eskirgan buyurtmani tozalaymiz
+        setOrder((prev) => (prev && ACTIVE_STATUSES.includes(prev.status)) ? null : prev);
+      }
+    } catch (e) {
+      // Tarmoq xatosi — lokal (saqlangan) holatni saqlab qolamiz
+    }
   }
 
   async function loadEarnings() {
@@ -675,7 +759,7 @@ function AppInner() {
   }
 
   async function logout() {
-    await AsyncStorage.multiRemove(['token', 'user', 'pin']);
+    await AsyncStorage.multiRemove(['token', 'user', 'pin', ACTIVE_ORDER_KEY]);
     stopTracking();
     socketRef.current?.disconnect();
     keepAwakeOff();
