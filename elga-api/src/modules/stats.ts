@@ -58,4 +58,23 @@ router.get(
   }),
 );
 
+// GET /stats/heatmap — talab issiqligi (shahar + mo'ljal bo'yicha buyurtmalar)
+router.get(
+  '/heatmap',
+  asyncHandler(async (_req, res) => {
+    const byCity: Record<string, number> = {};
+    const byPlace: Record<string, { city: string; place: string; count: number }> = {};
+    store.orders.forEach((o) => {
+      byCity[o.from_city] = (byCity[o.from_city] ?? 0) + 1;
+      const key = `${o.from_city}|${o.from_place}`;
+      if (!byPlace[key]) byPlace[key] = { city: o.from_city, place: o.from_place, count: 0 };
+      byPlace[key].count++;
+    });
+    return ok(res, {
+      cities: Object.entries(byCity).map(([city, count]) => ({ city, count })),
+      places: Object.values(byPlace).sort((a, b) => b.count - a.count).slice(0, 30),
+    });
+  }),
+);
+
 export default router;

@@ -201,7 +201,8 @@
         {th:'Summa', cls:'sum', render:function(o){return window.money(o.price);}},
         {th:'Kutmoqda', render:function(o){return '<span class="muted">'+o.created_at+'</span>';}},
         {th:'Holat', render:function(o){return U.orderTag(o.status);}},
-        {th:'', cls:'right', render:function(o){return '<button class="btn btn-primary btn-sm" data-assign="'+o.id+'">Tayinlash</button>';}}
+        {th:'', cls:'right', render:function(o){return '<div class="row-actions"><button class="btn btn-success btn-sm" data-auto="'+o.id+'">Avto</button>'+
+          '<button class="btn btn-primary btn-sm" data-assign="'+o.id+'">Tayinlash</button></div>';}}
       ],
       onRowClick:function(o){ window.orderDetail(o); }
     });

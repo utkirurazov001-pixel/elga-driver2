@@ -41,6 +41,16 @@ router.get(
   }),
 );
 
+// GET /clients/:id/orders — safar tarixi
+router.get(
+  '/:id/orders',
+  asyncHandler(async (req, res) => {
+    const c = store.findClient(req.params.id);
+    if (!c) throw ApiError.notFound('Mijoz topilmadi');
+    return ok(res, store.orders.filter((o) => o.client_id === c.id));
+  }),
+);
+
 router.post(
   '/:id/block',
   asyncHandler(async (req, res) => {
