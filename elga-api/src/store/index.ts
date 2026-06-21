@@ -8,12 +8,14 @@
 import bcrypt from 'bcryptjs';
 import { CITIES, TARIFFS, DEFAULT_COMMISSION, type Role } from '../config/constants';
 import { env } from '../config/env';
+import { haversineKm } from '../utils/geo';
 
 // ---------- Tiplar ----------
 export interface AdminUser {
   id: string; login: string; password_hash: string; full_name: string;
   phone: string; role: Role; is_active: boolean; last_login_at: string | null;
 }
+export interface DriverDoc { type: string; status: string; expires_at: string; }
 export interface Driver {
   id: string; park_number: number; full_name: string; phone: string;
   status: 'free' | 'busy' | 'offline' | 'blocked';
@@ -21,7 +23,16 @@ export interface Driver {
   tariff: string; rating: number; orders_count: number; balance: number;
   kyc_status: 'pending' | 'approved' | 'rejected'; city: string;
   lat: number; lng: number;
+  online: boolean; online_since: string | null; online_minutes: number;
+  commission_override: number | null;
+  docs: DriverDoc[];
 }
+export interface Review { id: string; order_id: string; driver_id: string; client: string; rating: number; tags: string[]; comment: string; created_at: string; }
+export interface Shift { id: string; driver_id: string; started_at: string; ended_at: string | null; minutes: number; }
+export interface Campaign { id: string; title: string; channel: string; segment: { tier?: string; city?: string; status?: string }; body: string; status: string; recipients: number; created_at: string; }
+export interface Corporate { id: string; name: string; contact: string; phone: string; balance: number; employees: number; rides: number; is_active: boolean; }
+export interface Zone { id: string; name: string; city: string; polygon: Array<[number, number]>; surge: number; is_active: boolean; }
+export interface LedgerEntry { id: string; driver_id: string; type: string; amount: number; balance_after: number; note: string; created_at: string; }
 export interface Client {
   id: string; full_name: string; phone: string; is_blocked: boolean;
   orders_count: number; total_spent: number; tier: 'bronze' | 'silver' | 'gold';
@@ -86,6 +97,12 @@ class MemoryStore {
   rewards: Reward[] = [];
   promos: Promo[] = [];
   audit: AuditLog[] = [];
+  reviews: Review[] = [];
+  shifts: Shift[] = [];
+  campaigns: Campaign[] = [];
+  corporate: Corporate[] = [];
+  zones: Zone[] = [];
+  ledger: LedgerEntry[] = [];
   tariffs = [
     { id: 'TF1', name: 'ekonom', base_fare: 8000, per_km: 1500, per_min: 300, min_fare: 12000, surge_multiplier: 1.0, commission_percent: 15, is_active: true },
     { id: 'TF2', name: 'komfort', base_fare: 12000, per_km: 2200, per_min: 450, min_fare: 18000, surge_multiplier: 1.0, commission_percent: 15, is_active: true },
@@ -123,7 +140,50 @@ class MemoryStore {
         orders_count: 120 + Math.floor(seeded(i + 5) * 1800), balance: Math.floor(seeded(i + 2) * 1500) * 1000,
         kyc_status: i < 6 ? 'approved' : pick(['approved', 'approved', 'pending', 'rejected'] as const, i),
         city, lat: c[0] + (seeded(i) - 0.5) * 0.14, lng: c[1] + (seeded(i + 1) - 0.5) * 0.18,
+        online: status === 'free' || status === 'busy', online_since: null, online_minutes: 120 + Math.floor(seeded(i + 9) * 360),
+        commission_override: null,
+        docs: [
+          { type: 'license', status: 'approved', expires_at: this.dateAgo(-(30 + Math.floor(seeded(i) * 700))) },
+          { type: 'tech_passport', status: i % 7 === 0 ? 'pending' : 'approved', expires_at: this.dateAgo(-(10 + Math.floor(seeded(i + 1) * 400))) },
+          { type: 'insurance', status: 'approved', expires_at: this.dateAgo(-(Math.floor(seeded(i + 2) * 60) - 15)) },
+        ],
       });
+    }
+
+    // Smenalar (haydovchilarga bog'liq — drivers tayyor)
+    for (let i = 0; i < 30; i++) {
+      const dr = pick(this.drivers, i);
+      this.shifts.push({ id: `SH${i + 1}`, driver_id: dr.id, started_at: this.minsAgo(i * 60 + 200), ended_at: i % 3 === 0 ? null : this.minsAgo(i * 60), minutes: 120 + Math.floor(seeded(i) * 300) });
+    }
+
+    // Zonalar (shahar markazi atrofida taxminiy poligon) + surge
+    CITIES.forEach((name, i) => {
+      const c = CITY_COORDS[name] ?? [37.55, 67.3];
+      const d = 0.06;
+      this.zones.push({
+        id: `ZN${i + 1}`, name: `${name} markaziy zona`, city: name,
+        polygon: [[c[0] + d, c[1] - d], [c[0] + d, c[1] + d], [c[0] - d, c[1] + d], [c[0] - d, c[1] - d]],
+        surge: i % 3 === 0 ? 1.3 : 1.0, is_active: true,
+      });
+    });
+
+    // Kampaniyalar
+    this.campaigns = [
+      { id: 'CP1', title: 'Hafta oxiri 20% chegirma', channel: 'push', segment: { tier: 'gold' }, body: 'Gold mijozlarga hafta oxiri 20% chegirma!', status: 'sent', recipients: 312, created_at: this.dateAgo(2) },
+      { id: 'CP2', title: 'Termiz aksiyasi', channel: 'sms', segment: { city: 'Termiz' }, body: 'TERMIZ50 promo-kodi bilan 5000 so\'m chegirma', status: 'scheduled', recipients: 0, created_at: this.dateAgo(1) },
+    ];
+
+    // Korporativ akkauntlar
+    this.corporate = [
+      { id: 'CO1', name: 'Abdulfayz-Angor X/K', contact: 'Buxgalteriya', phone: '998901112233', balance: 4500000, employees: 24, rides: 312, is_active: true },
+      { id: 'CO2', name: 'Surxon Tekstil', contact: 'HR bo\'limi', phone: '998931114455', balance: 1200000, employees: 58, rides: 540, is_active: true },
+    ];
+
+    // Haydovchi ledger (oxirgi harakatlar)
+    for (let i = 0; i < 30; i++) {
+      const dr = pick(this.drivers, i);
+      const amt = (5 + Math.floor(seeded(i) * 40)) * 1000;
+      this.ledger.push({ id: `LD${i + 1}`, driver_id: dr.id, type: i % 4 === 0 ? 'commission' : i % 5 === 0 ? 'withdrawal' : 'ride_earning', amount: amt, balance_after: dr.balance, note: '', created_at: this.minsAgo(i * 17 + 4) });
     }
 
     // Mijozlar
@@ -168,6 +228,17 @@ class MemoryStore {
     // Mo'ljallar lug'ati (seed + buyurtmalardan to'plangan)
     CITIES.forEach((c) => (PLACES[c] ?? []).forEach((n) => this.regPlace(c, n, 'seed')));
     this.orders.forEach((o) => { this.regPlace(o.from_city, o.from_place, 'seed'); this.regPlace(o.to_city, o.to_place, 'seed'); });
+
+    // Sharhlar (mijoz + buyurtma tayyor bo'lgach)
+    const tagPool = ['Toza mashina', 'Xushmuomala', 'Tez yetib keldi', 'Xavfsiz haydash', 'Yaxshi musiqa'];
+    for (let i = 0; i < 40; i++) {
+      const dr = pick(this.drivers, i);
+      const cl = pick(this.clients, i + 3);
+      this.reviews.push({
+        id: `RV${i + 1}`, order_id: `#${10620 - i}`, driver_id: dr.id, client: cl.full_name,
+        rating: 3 + Math.floor(seeded(i) * 3), tags: [pick(tagPool, i), pick(tagPool, i + 2)], comment: '', created_at: this.minsAgo(i * 31 + 5),
+      });
+    }
 
     // Pul yechish
     for (let i = 0; i < 14; i++) {
@@ -224,6 +295,43 @@ class MemoryStore {
     this.places.push(p); this.placeIndex[key] = p; return p;
   }
   nextOrderId(): string { return `#${this.seq++}`; }
+  coordsOf(city: string): [number, number] { return CITY_COORDS[city] ?? [37.55, 67.3]; }
+
+  /** Eng yaqin bo'sh haydovchi (haversine) — auto-dispatch yadrosi. */
+  nearestFreeDriver(lat: number, lng: number, tariff?: string): { driver: Driver; distance: number } | null {
+    const free = this.drivers.filter((d) => d.status === 'free' && d.kyc_status === 'approved' && (!tariff || d.tariff === tariff));
+    let best: { driver: Driver; distance: number } | null = null;
+    for (const d of free) {
+      const dist = haversineKm(lat, lng, d.lat, d.lng);
+      if (!best || dist < best.distance) best = { driver: d, distance: dist };
+    }
+    return best;
+  }
+
+  /** Haydovchi scoring — qabul/bekor/yakunlash % + reyting (Yandex scoring kabi). */
+  scoreDriver(driverId: string) {
+    const dOrders = this.orders.filter((o) => o.driver_id === driverId);
+    const total = dOrders.length || 1;
+    const completed = dOrders.filter((o) => o.status === 'completed').length;
+    const cancelled = dOrders.filter((o) => o.status === 'cancelled').length;
+    const driver = this.findDriver(driverId);
+    const rating = driver ? driver.rating : 5;
+    const completionRate = +((completed / total) * 100).toFixed(1);
+    const cancelRate = +((cancelled / total) * 100).toFixed(1);
+    const acceptanceRate = +(85 + ((seeded(parseInt(driverId.replace(/\D/g, ''), 10) || 1) - 0.5) * 20)).toFixed(1);
+    // 0–100 ball: reyting (40%) + yakunlash (30%) + qabul (20%) − bekor jarima (10%)
+    const score = Math.max(0, Math.min(100, Math.round((rating / 5) * 40 + (completionRate / 100) * 30 + (acceptanceRate / 100) * 20 - (cancelRate / 100) * 10)));
+    return { driver_id: driverId, rating, completion_rate: completionRate, cancel_rate: cancelRate, acceptance_rate: Math.max(0, acceptanceRate), orders: dOrders.length, score };
+  }
+
+  addLedger(driverId: string, type: string, amount: number, note: string): LedgerEntry {
+    const d = this.findDriver(driverId);
+    const balance = d ? d.balance : 0;
+    const e: LedgerEntry = { id: `LD${this.ledger.length + 1}`, driver_id: driverId, type, amount, balance_after: balance, note, created_at: 'hozir' };
+    this.ledger.unshift(e);
+    return e;
+  }
+
   findDriver(id: string) { return this.drivers.find((d) => d.id === id); }
   findOrder(id: string) { return this.orders.find((o) => o.id === id); }
   findClient(id: string) { return this.clients.find((c) => c.id === id); }
