@@ -45,10 +45,14 @@ router.get(
     const labels: string[] = [];
     const completed: number[] = [];
     const cancelled: number[] = [];
+    const end = new Date(2026, 5, 21); // oxirgi kun
     for (let i = n - 1; i >= 0; i--) {
-      labels.push(String(21 - (i % 28)).padStart(2, '0'));
-      completed.push(300 + Math.round(Math.sin(i) * 80 + i * 18));
-      cancelled.push(40 + Math.round(Math.cos(i) * 14 + i * 3));
+      const d = new Date(end);
+      d.setDate(end.getDate() - i);
+      labels.push(String(d.getDate()).padStart(2, '0'));
+      const idx = n - 1 - i;
+      completed.push(300 + Math.round(Math.sin(idx) * 80 + idx * 18));
+      cancelled.push(40 + Math.round(Math.abs(Math.cos(idx)) * 14 + idx * 3));
     }
     return ok(res, { labels, completed, cancelled });
   }),

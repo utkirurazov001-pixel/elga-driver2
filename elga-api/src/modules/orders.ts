@@ -39,6 +39,7 @@ router.get(
 
 router.get(
   '/:id',
+  requireRole('super_admin', 'operator', 'dispatcher'),
   asyncHandler(async (req, res) => {
     const o = store.findOrder(req.params.id);
     if (!o) throw ApiError.notFound('Buyurtma topilmadi');

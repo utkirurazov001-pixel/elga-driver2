@@ -15,7 +15,7 @@
       body:'<div class="grid g-half" style="align-items:start;gap:20px">'+
         '<div>'+dl([
           ['Mijoz', o.client],['Telefon','<span class="mono">'+o.client_phone+'</span>'],
-          ['Olish','<b>'+(o.from||'')+'</b>'],['Tushirish','<b>'+(o.to||'')+'</b>'],
+          ['Olish','<b>'+U.esc(o.from||'')+'</b>'],['Tushirish','<b>'+U.esc(o.to||'')+'</b>'],
           ['Safar turi', o.route_type==='inter'?'<span class="tg gold">Shaharlararo</span>':'<span class="tg neutral">Shahar ichi</span>'],
           ['Tarif', U.tariff(o.tariff)],
           ['Masofa', o.distance+' km'],['Davomiyligi', o.duration+' daq'],
@@ -77,7 +77,7 @@
         back.querySelector('[data-close]').addEventListener('click',close);
         var bl=back.querySelector('[data-block]'), un=back.querySelector('[data-unblock]');
         if(bl) bl.addEventListener('click',function(){ blockReason(d, true, close, rerender); });
-        if(un) un.addEventListener('click',function(){ d.status='free'; U.toast('Bajarildi', d.full_name+' blokdan chiqarildi'); close(); rerender&&rerender(); });
+        if(un) un.addEventListener('click',function(){ d.status='free'; U.toast('Bajarildi', d.full_name+' blokdan chiqarildi'); window.apiAction('POST','/drivers/'+d.id+'/unblock').then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); }); close(); rerender&&rerender(); });
       }
     });
   };
@@ -93,7 +93,9 @@
         back.querySelector('[data-ok]').addEventListener('click',function(){
           var r=back.querySelector('[data-reason]').value.trim();
           if(!r){ U.toast('Xato','Sabab kiriting','error'); return; }
-          d.status='blocked'; close(); parentClose&&parentClose(); U.toast('Bloklandi', d.full_name+' bloklandi'); rerender&&rerender();
+          d.status='blocked'; close(); parentClose&&parentClose(); U.toast('Bloklandi', d.full_name+' bloklandi');
+          window.apiAction('POST','/drivers/'+d.id+'/block',{reason:r}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          rerender&&rerender();
         });
       }
     });
@@ -115,6 +117,7 @@
         back.querySelector('[data-close]').addEventListener('click',close);
         back.querySelector('[data-toggle]').addEventListener('click',function(){
           c.is_blocked=!c.is_blocked; U.toast('Bajarildi', c.full_name+' '+(c.is_blocked?'bloklandi':'blokdan chiqarildi')); close();
+          window.apiAction('POST','/clients/'+c.id+'/block').then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });
       }
@@ -130,7 +133,7 @@
         ['Buyurtma','<span class="mono">'+c.order+'</span>'],['Vaqt', c.created_at],
         ['Holat', U.genTag(c.status)]
       ])+'<div class="field full" style="margin-top:16px"><label>Tavsif</label>'+
-        '<div class="card-body" style="background:var(--surface-2);border-radius:11px;padding:13px">'+c.description+'</div></div>'+
+        '<div class="card-body" style="background:var(--surface-2);border-radius:11px;padding:13px">'+U.esc(c.description)+'</div></div>'+
         '<div class="field full" style="margin-top:14px"><label>Javob / yechim</label>'+
         '<textarea class="input" data-resolution placeholder="Operatorning javobi yoki yechimi..."></textarea></div>',
       foot:'<button class="btn" data-close>Yopish</button>'+
@@ -138,8 +141,17 @@
       onMount:function(back,close){
         back.querySelector('[data-close]').addEventListener('click',close);
         var rv=back.querySelector('[data-review]'), rs=back.querySelector('[data-resolve]');
-        if(rv) rv.addEventListener('click',function(){ c.status='in_review'; U.toast('Yangilandi','Shikoyat ko\'rib chiqilmoqda'); close(); rerender&&rerender(); });
-        if(rs) rs.addEventListener('click',function(){ c.status='resolved'; U.toast('Hal qilindi','Shikoyat yopildi'); close(); rerender&&rerender(); window.refreshBadges&&window.refreshBadges(); });
+        if(rv) rv.addEventListener('click',function(){
+          var txt=(back.querySelector('[data-resolution]')||{}).value||'ko\'rib chiqilmoqda';
+          c.status='in_review'; U.toast('Yangilandi','Shikoyat ko\'rib chiqilmoqda'); close();
+          window.apiAction('POST','/complaints/'+c.id+'/respond',{resolution:txt}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          rerender&&rerender();
+        });
+        if(rs) rs.addEventListener('click',function(){
+          c.status='resolved'; U.toast('Hal qilindi','Shikoyat yopildi'); close();
+          window.apiAction('POST','/complaints/'+c.id+'/resolve').then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          rerender&&rerender(); window.refreshBadges&&window.refreshBadges();
+        });
       }
     });
   };
@@ -210,7 +222,9 @@
         back.querySelector('[data-close]').addEventListener('click',close);
         back.querySelectorAll('[data-pick]').forEach(function(b){b.addEventListener('click',function(){
           var d=window.DB.drivers.find(function(x){return x.id===b.getAttribute('data-pick');});
+          if(o){ o.driver=d.full_name; o.driver_id=d.id; o.park=d.park_number; o.status='assigned'; d.status='busy'; }
           close(); U.toast('Tayinlandi', (o?o.id:'Buyurtma')+' → '+d.full_name);
+          if(o) window.apiAction('POST','/orders/'+encodeURIComponent(o.id)+'/assign',{driver_id:d.id}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });});
       }
@@ -248,6 +262,7 @@
           var c=back.querySelector('[data-code]').value.trim();
           if(c.length<4){ U.toast('Xato','Tasdiq kodini kiriting','error'); return; }
           w.status='paid'; close(); U.toast('To\'landi', w.driver+' · '+window.money(w.amount)+' so\'m '+w.provider);
+          window.apiAction('POST','/finance/withdrawals/'+w.id+'/approve',{confirm:true,code:c}).then(function(r){ if(!r.ok&&!r.demo) U.toast('Backend xatosi', r.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });
       }
@@ -263,8 +278,10 @@
       onMount:function(back,close){
         back.querySelector('[data-close]').addEventListener('click',close);
         back.querySelector('[data-ok]').addEventListener('click',function(){
-          if(!back.querySelector('[data-reason]').value.trim()){ U.toast('Xato','Sabab kiriting','error'); return; }
+          var reason=back.querySelector('[data-reason]').value.trim();
+          if(!reason){ U.toast('Xato','Sabab kiriting','error'); return; }
           w.status='rejected'; close(); U.toast('Rad etildi', w.driver+' so\'rovi rad etildi','error');
+          window.apiAction('POST','/finance/withdrawals/'+w.id+'/reject',{reason:reason}).then(function(r){ if(!r.ok&&!r.demo) U.toast('Backend xatosi', r.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });
       }
@@ -291,6 +308,7 @@
             t[k] = (k==='name')?v:parseFloat(v)||0;
           });
           if(!id){ t.id='TF'+(window.DB.tariffs.length+1); t.active=true; window.DB.tariffs.push(t); }
+          else window.apiAction('PATCH','/tariffs/'+t.id,{base_fare:t.base,per_km:t.per_km,per_min:t.per_min,min_fare:t.min_fare,surge_multiplier:t.surge,commission_percent:t.commission}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
           close(); U.toast('Saqlandi','Tarif yangilandi'); rerender&&rerender();
         });
       }
@@ -375,6 +393,7 @@
           var c=back.querySelector('[data-c]').value, n=back.querySelector('[data-n]').value.trim();
           if(!n){ U.toast('Xato','Mo\'ljal nomini kiriting','error'); return; }
           window.DB.addPlace(c,n); close(); U.toast('Qo\'shildi', c+' · '+n+' lug\'atga qo\'shildi');
+          window.apiAction('POST','/places',{city:c,name:n}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
           window.rerenderPage && window.rerenderPage();
         });
       }
@@ -398,9 +417,11 @@
         back.querySelector('[data-ok]').addEventListener('click',function(){
           var pts=parseInt(back.querySelector('[data-pts]').value,10)||0;
           var act=back.querySelector('[data-act]').value;
-          if(!back.querySelector('[data-reason]').value.trim()){ U.toast('Xato','Sabab kiriting','error'); return; }
+          var reason=back.querySelector('[data-reason]').value.trim();
+          if(!reason){ U.toast('Xato','Sabab kiriting','error'); return; }
           if(c){ c.points += act==='earn'?pts:-pts; if(c.points<0)c.points=0; }
           close(); U.toast('Bajarildi',(act==='earn'?'+':'−')+pts+' ball qo\'llandi');
+          if(c) window.apiAction('POST','/loyalty/adjust',{client_id:c.id,type:act,points:pts,reason:reason}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });
       }

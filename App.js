@@ -28,6 +28,19 @@ import { Ionicons } from '@expo/vector-icons';
 
 const BASE = 'https://api.elga.uz';
 
+// Faol (tugamagan) buyurtma holatlari — bularda buyurtma "tirik" hisoblanadi.
+// completed/cancelled/paid — yakuniy holatlar (faol emas).
+const ACTIVE_STATUSES = ['searching', 'assigned', 'accepted', 'arrived', 'in_progress'];
+
+// Faol buyurtma lokal saqlanadigan kalit (crash/kill/OS-restart'da yo'qolmaydi).
+const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
+
+// Ixtiyoriy NetInfo — internet qaytishini tez aniqlash uchun. Standalone (EAS) buildda
+// to'liq ishlaydi; Expo Go yoki modul o'rnatilmagan bo'lsa xavfsiz o'tkazib yuboriladi
+// (ilova qulamaydi — AppState + socket reconnect baribir holatni tiklaydi).
+let NetInfo = null;
+try { NetInfo = require('@react-native-community/netinfo').default; } catch (e) { NetInfo = null; }
+
 // Tab panelining tizim navigatsiyasidan tashqari balandligi (safe-area pastdan qo'shiladi)
 const TABBAR_H = 56;
 
@@ -579,6 +592,7 @@ function AppInner() {
 
   const socketRef = useRef(null);
   const watchRef = useRef(null);
+  const appStateRef = useRef(AppState.currentState);
   const mapRef = useRef(null);
   // Tarmoq qatlami reflari
   const lastLocRef = useRef(null);   // oxirgi GPS — qayta ulanganda darrov yuboramiz
@@ -586,8 +600,6 @@ function AppInner() {
   const lastGpsRef = useRef(0);      // oxirgi GPS vaqti ("arvoh" aniqlash uchun)
   const pollRef = useRef(null);      // backup polling intervali
   const healthRef = useRef(null);    // reachability heartbeat timeri
-  const appStateRef = useRef('active');
-  const persistedOrderRef = useRef(''); // faol buyurtmani ortiqcha yozmaslik uchun
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
   const [mapReady, setMapReady] = useState(false);
 
@@ -602,6 +614,12 @@ function AppInner() {
         if (t && u) {
           setToken(t); setUser(JSON.parse(u));
           if (p) { setStoredPin(p); setPinStep('enter'); }
+          // Crash recovery: oxirgi faol buyurtmani lokaldan DARHOL ko'rsatamiz
+          // (internet kelguncha bo'sh ekran chiqmaydi). Keyin server bilan sinxron.
+          try {
+            const ao = await AsyncStorage.getItem(ACTIVE_ORDER_KEY);
+            if (ao) { const o = JSON.parse(ao); if (o && ACTIVE_STATUSES.includes(o.status)) setOrder(o); }
+          } catch (e) {}
         }
       } catch (e) {}
       setBooting(false);
@@ -645,44 +663,59 @@ function AppInner() {
     return () => { unsub(); OfflineQueue.onChange = null; };
   }, []);
 
-  // ---- Faol buyurtmani lokal saqlash/tiklash (crash/restart bo'lsa ham yo'qolmaydi) ----
+  // Faol buyurtmani lokal saqlash — app kill / crash / OS restart bo'lsa ham
+  // buyurtma yo'qolmaydi. Status yoki id o'zgarganda yoziladi yoki o'chiriladi.
+  // (Boot effektida ACTIVE_ORDER_KEY dan darrov tiklanadi.)
   useEffect(() => {
-    if (!token) return;
-    (async () => {
-      try {
-        const o = await AsyncStorage.getItem('active_order');
-        if (o) setOrder((cur) => cur || JSON.parse(o));
-      } catch (e) {}
-    })();
-  }, [token]);
+    if (order && ACTIVE_STATUSES.includes(order.status)) {
+      AsyncStorage.setItem(ACTIVE_ORDER_KEY, JSON.stringify(order)).catch(() => {});
+    } else {
+      AsyncStorage.removeItem(ACTIVE_ORDER_KEY).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id, order?.status]);
 
-  useEffect(() => {
-    // Faqat buyurtma id/holati o'zgarganda yozamiz (har meter tikida emas)
-    const sig = order ? `${order.id}:${order.status}` : '';
-    if (sig === persistedOrderRef.current) return;
-    persistedOrderRef.current = sig;
-    if (order) AsyncStorage.setItem('active_order', JSON.stringify(order)).catch(() => {});
-    else AsyncStorage.removeItem('active_order').catch(() => {});
-  }, [order]);
-
-  // ---- AppState: fondan qaytganda socket/buyurtma/navbatni sinxronlash ----
+  // ---- AppState + NetInfo: foreground'ga qaytganda yoki internet qaytganda
+  // socket/buyurtma/navbatni sinxronlash (#40). NetInfo ixtiyoriy — bo'lmasa
+  // reachability heartbeat baribir holatni tiklaydi. ----
   useEffect(() => {
     if (!token || pinStep) return;
-    const sub = AppState.addEventListener('change', (st) => {
+    const onAppState = (next) => {
       const prev = appStateRef.current;
-      appStateRef.current = st;
-      if (st === 'active' && prev !== 'active') {
+      appStateRef.current = next;
+      // background/inactive -> active: foreground'ga qaytdi
+      if (prev && /inactive|background/.test(prev) && next === 'active') {
         ensureSocket();
         resumeActiveOrder();
         OfflineQueue.flush(token);
         if (online && !watchRef.current) startTracking();
       }
-    });
-    return () => sub.remove();
+    };
+    const appSub = AppState.addEventListener('change', onAppState);
+
+    let netUnsub = null;
+    if (NetInfo) {
+      try {
+        let wasOffline = false;
+        netUnsub = NetInfo.addEventListener((state) => {
+          const isOnline = !!state.isConnected && state.isInternetReachable !== false;
+          NetMonitor.set(isOnline); // bannerni tez yangilaydi (heartbeatni kutmaymiz)
+          // offline -> online o'tishida tiklash (har bir state'da emas)
+          if (isOnline && wasOffline) { ensureSocket(); resumeActiveOrder(); OfflineQueue.flush(token); }
+          wasOffline = !isOnline;
+        });
+      } catch (e) {}
+    }
+
+    return () => {
+      try { appSub.remove(); } catch (e) {}
+      try { netUnsub && netUnsub(); } catch (e) {}
+    };
   }, [token, pinStep, online]);
 
   // ---- Reachability heartbeat: /health ni davriy tekshirish ----
-  // Onlayn bo'lsa kamroq (20s), oflayn bo'lsa tez-tez (5s) — qaytishini tez ushlaymiz.
+  // NetInfo bor-yo'qligidan qat'i nazar ishlaydi (universal fallback) va bannerni
+  // haqiqiy server holatiga moslaydi. Onlayn ~20s, oflayn ~5s.
   useEffect(() => {
     if (!token || pinStep) return;
     let stopped = false;
@@ -723,12 +756,16 @@ function AppInner() {
     mapRef.current.injectJavaScript(`window.updateMap(${JSON.stringify(d)});true;`);
   }, [mapReady, myLoc, order?.from_lat, order?.from_lng, order?.to_lat, order?.to_lng]);
 
-  // Socketni faqat haqiqatan o'lgan/yo'q bo'lsa qayta yaratamiz. Socket.IO o'zi
-  // (reconnectionAttempts: Infinity) qayta ulanib turadi — uning backoff jarayonini
-  // bekorga uzmaymiz (s.active = qayta ulanmoqda).
+  // Socketni kerakli holatga keltiramiz. Socket.IO o'zi (reconnectionAttempts: Infinity)
+  // qayta ulanib turadi — uning backoff jarayonini bekorga uzmaymiz:
+  //   • ulangan      → hech narsa qilmaymiz
+  //   • qayta ulanmoqda (s.active) → connect() bilan yengil turtki beramiz
+  //   • o'lgan/yo'q  → qaytadan yaratamiz
   function ensureSocket() {
     const s = socketRef.current;
-    if (s && (s.connected || s.active)) return;
+    if (!s) { connectSocket(); return; }
+    if (s.connected) return;
+    if (s.active) { try { s.connect(); } catch (e) {} return; }
     connectSocket();
   }
 
@@ -808,19 +845,23 @@ function AppInner() {
     try { await Notifications.scheduleNotificationAsync({ content: { title, body }, trigger: null }); } catch (e) {}
   }
 
+  // Faol buyurtmani serverdan tiklash — server YAGONA haqiqat manbai.
+  // Ilova ochilganda, socket connect/reconnect bo'lganda, internet/foreground
+  // qaytganda chaqiriladi. Tarmoq xatosida lokal holat saqlanadi (tozalanmaydi).
   async function resumeActiveOrder() {
     try {
       // Yengil so'rov: bitta urinish, qisqa timeout (poll/reconnect baribir qayta chaqiradi)
       const r = await api('/api/me/active-order', 'GET', null, token, 8000, { retries: 0 });
       if (r && r.order) {
-        setOrder(r.order);
-      } else if (r && 'order' in r && !r.order) {
-        // Server aniq "faol buyurtma yo'q" dedi — lokal keshda qolgan eski
-        // (yakunlangan/bekor qilingan) buyurtmani tozalaymiz (fantom oldini olamiz).
-        // Tarmoq xatosida bu yerga yetib kelmaymiz (api throw qiladi) — kesh saqlanadi.
-        setOrder(null);
+        // Bor buyurtma — eski holat bilan birlashtirib yangilaymiz (flicker bo'lmaydi)
+        setOrder((prev) => (prev && prev.id === r.order.id) ? { ...prev, ...r.order } : r.order);
+      } else if (r) {
+        // Server: faol buyurtma yo'q → lokaldagi eskirgan (fantom) buyurtmani tozalaymiz
+        setOrder((prev) => (prev && ACTIVE_STATUSES.includes(prev.status)) ? null : prev);
       }
-    } catch (e) {}
+    } catch (e) {
+      // Tarmoq xatosi — lokal (saqlangan) holatni saqlab qolamiz
+    }
   }
 
   async function loadEarnings() {
@@ -961,7 +1002,7 @@ function AppInner() {
   }
 
   async function logout() {
-    await AsyncStorage.multiRemove(['token', 'user', 'pin']);
+    await AsyncStorage.multiRemove(['token', 'user', 'pin', ACTIVE_ORDER_KEY]);
     stopTracking();
     socketRef.current?.disconnect();
     keepAwakeOff();

@@ -1,5 +1,6 @@
 import express, { type Express } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import pinoHttp from 'pino-http';
@@ -19,13 +20,15 @@ export function createApp(): Express {
     cors({
       origin(origin, cb) {
         // origin yo'q (curl/health) yoki allowlistda bo'lsa ruxsat (BE-SEC-03)
+        // Ruxsatsiz manba — 500 emas, shunchaki CORS sarlavhasiz (brauzer bloklaydi)
         if (!origin || env.corsOrigins.includes(origin)) return cb(null, true);
-        return cb(new Error('CORS: ruxsat etilmagan manba'));
+        return cb(null, false);
       },
       credentials: true,
     }),
   );
   app.use(express.json({ limit: '1mb' }));
+  app.use(cookieParser());
   app.use(pinoHttp({ logger }));
 
   // Rate-limit (BE-SEC-03)

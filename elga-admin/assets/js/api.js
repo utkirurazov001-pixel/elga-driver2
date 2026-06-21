@@ -86,7 +86,7 @@
   function mapOrder(o){
     o.client_ini=ini(o.client);
     o.from = o.from_city+' · '+o.from_place; o.to = o.to_city+' · '+o.to_place;
-    o.park = o.park; o.tariff=tlabel(o.tariff); o.payment=o.payment; return o;
+    o.tariff=tlabel(o.tariff); return o;
   }
   function mapWithdrawal(w){ w.driver_ini=ini(w.driver); w.provider=cap(w.provider); return w; }
   function mapTxn(t){ t.provider=cap(t.provider); return t; }
@@ -107,6 +107,16 @@
     L.cancel_rate = d.cancel_rate;
     L.commission = +(d.commission_today/1e6).toFixed(2);
   }
+
+  /* Yozish amali — live rejimda backendga yuboradi, demo'da no-op.
+     Promise qaytaradi: {ok:true,data} yoki {ok:false,message}. */
+  window.apiAction = function(method, path, body){
+    if(!(window.ELGA && window.ELGA.live)) return Promise.resolve({ok:true, demo:true});
+    return window.ELGA.request(method, path, body).then(function(r){
+      if(r.status>=200 && r.status<300 && r.body && r.body.success) return {ok:true, data:r.body.data};
+      return {ok:false, message:(r.body && r.body.error && r.body.error.message) || 'Server xatosi'};
+    }).catch(function(){ return {ok:false, message:'Tarmoq xatosi'}; });
+  };
 
   window.ELGA = ELGA;
 })();

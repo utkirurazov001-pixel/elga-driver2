@@ -4,6 +4,13 @@
 (function(){
   var UI = {};
 
+  // HTML-ekranlash (XSS himoyasi — foydalanuvchi kiritgan matn uchun)
+  UI.esc = function(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  };
+
   // ---- holat teglari ----
   var ORDER_TAGS = {
     completed:['done','Bajarildi'], in_progress:['prog','Yo\'lda'], arriving:['prog','Yetib bormoqda'],
@@ -30,14 +37,14 @@
   UI.kycTag = function(s){ return UI.tag(KYC_TAGS,s); };
   UI.genTag = function(s){ return UI.tag(GEN_TAGS, String(s)); };
 
-  UI.avatar = function(ini, blue){ return '<div class="av'+(blue?' blue':'')+'">'+ini+'</div>'; };
+  UI.avatar = function(ini, blue){ return '<div class="av'+(blue?' blue':'')+'">'+UI.esc(ini)+'</div>'; };
   UI.cust = function(name, ini, sub, blue){
-    return '<div class="cust">'+UI.avatar(ini,blue)+'<div><b>'+name+'</b>'+(sub?'<br><span>'+sub+'</span>':'')+'</div></div>';
+    return '<div class="cust">'+UI.avatar(ini,blue)+'<div><b>'+UI.esc(name)+'</b>'+(sub?'<br><span>'+UI.esc(sub)+'</span>':'')+'</div></div>';
   };
-  UI.park = function(n){ return n? '<span class="park">'+n+'</span>' : '<span class="muted">—</span>'; };
-  UI.tariff = function(t){ return '<span class="tariff-chip">'+t+'</span>'; };
+  UI.park = function(n){ return n? '<span class="park">'+UI.esc(n)+'</span>' : '<span class="muted">—</span>'; };
+  UI.tariff = function(t){ return '<span class="tariff-chip">'+UI.esc(t)+'</span>'; };
   UI.route = function(from,to){
-    return '<div class="route">'+window.icon('pin',13)+from+' → '+to+'</div>';
+    return '<div class="route">'+window.icon('pin',13)+UI.esc(from)+' → '+UI.esc(to)+'</div>';
   };
 
   // ---- KPI karta ----

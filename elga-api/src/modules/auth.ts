@@ -9,6 +9,7 @@ import { signAccess, signRefresh, verifyRefresh } from '../utils/jwt';
 import { validate } from '../middleware/validate';
 import { authenticate } from '../middleware/auth';
 import { maskPhone } from '../utils/mask';
+import { env } from '../config/env';
 
 const router = Router();
 
@@ -43,7 +44,7 @@ router.post(
     const payload = { sub: user.id, login: user.login, role: user.role };
     store.addAudit({ user_id: user.id, user: user.login, role: user.role, action: 'auth.login', entity: 'admin_users', entity_id: user.id, detail: 'Tizimga kirish', ip: req.ip ?? '' });
 
-    res.cookie?.('refresh_token', signRefresh(payload), { httpOnly: true, sameSite: 'strict', secure: true, maxAge: 7 * 24 * 3600 * 1000 });
+    res.cookie('refresh_token', signRefresh(payload), { httpOnly: true, sameSite: env.isProd ? 'strict' : 'lax', secure: env.isProd, maxAge: 7 * 24 * 3600 * 1000 });
     return ok(res, {
       access_token: signAccess(payload),
       refresh_token: signRefresh(payload),
@@ -81,7 +82,7 @@ router.post(
   authenticate,
   asyncHandler(async (req, res) => {
     store.addAudit({ user_id: req.user!.sub, user: req.user!.login, role: req.user!.role, action: 'auth.logout', entity: 'admin_users', entity_id: req.user!.sub, detail: 'Chiqish', ip: req.ip ?? '' });
-    res.clearCookie?.('refresh_token');
+    res.clearCookie('refresh_token');
     return ok(res, { message: 'Chiqildi' });
   }),
 );

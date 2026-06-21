@@ -25,8 +25,8 @@ router.patch(
   }),
 );
 
-// Promo-kodlar
-router.get('/promo-codes', asyncHandler(async (_req, res) => ok(res, store.promos)));
+// Promo-kodlar (super_admin, operator)
+router.get('/promo-codes', requireRole('super_admin', 'operator'), asyncHandler(async (_req, res) => ok(res, store.promos)));
 
 const adjustSchema = z.object({
   client_id: z.string().min(1),

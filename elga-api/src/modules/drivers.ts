@@ -39,7 +39,12 @@ router.get(
     if (sort) {
       const dir = qstr(req, 'dir') === 'asc' ? 1 : -1;
       const val = (x: Driver) => (x as unknown as Record<string, unknown>)[sort] as string | number;
-      rows = [...rows].sort((a, b) => (val(a) > val(b) ? dir : -dir));
+      rows = [...rows].sort((a, b) => {
+        const x = val(a);
+        const y = val(b);
+        if (x === y) return 0;
+        return (x > y ? 1 : -1) * dir;
+      });
     }
     const { rows: pageRows, meta } = paginate(rows, page, limit);
     return ok(res, pageRows.map((d) => serialize(d, req.user!.role)), meta);
@@ -48,6 +53,7 @@ router.get(
 
 router.get(
   '/:id',
+  requireRole('super_admin', 'operator', 'dispatcher'),
   asyncHandler(async (req, res) => {
     const d = store.findDriver(req.params.id);
     if (!d) throw ApiError.notFound('Haydovchi topilmadi');
