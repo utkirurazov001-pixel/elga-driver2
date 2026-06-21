@@ -239,6 +239,54 @@ window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify(
 </script></body></html>`;
 }
 
+// ---- Crash monitoring (yengil, tashqi SDK'siz, production-ready) ----
+// Sentry/Crashlytics o'rnatish uchun native sozlama + DSN kerak; uni qo'shilguncha
+// quyidagi best-effort reporter fatal xatolarni serverga (mavjud bo'lsa) yuboradi
+// va eng muhimi — global handler ASYNC/timer/socket ichidagi fatal JS xatolar
+// JS kontekstini jimgina o'ldirib qo'yishining oldini oladi.
+let _lastCrashTs = 0;
+function reportCrash(kind, error, stack) {
+  try {
+    const now = Date.now();
+    if (now - _lastCrashTs < 3000) return; // spamga qarshi throttle
+    _lastCrashTs = now;
+    const payload = {
+      kind,
+      message: String(error?.message || error || 'unknown'),
+      stack: String(error?.stack || stack || '').slice(0, 4000),
+      platform: Platform.OS,
+      ts: new Date().toISOString(),
+    };
+    // Backend endpoint mavjud bo'lsa qabul qiladi; bo'lmasa jim o'tadi.
+    // Cheksiz osilib qolmasligi uchun AbortController bilan timeout.
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    fetch(`${BASE}/api/client-error`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    }).catch(() => {}).finally(() => clearTimeout(t));
+  } catch (e) {}
+}
+
+// Global JS xato ushlagich — ErrorBoundary faqat RENDER xatolarini ushlaydi;
+// bu esa async/timer/socket ichidagi fatal xatolarni ushlab, ilovani jimgina
+// qulashdan saqlaydi (eski handler ham chaqiriladi).
+(function installGlobalErrorHandler() {
+  try {
+    const g = global;
+    if (g.__elgaErrHandlerInstalled || !g.ErrorUtils?.getGlobalHandler) return;
+    g.__elgaErrHandlerInstalled = true;
+    const prev = g.ErrorUtils.getGlobalHandler();
+    g.ErrorUtils.setGlobalHandler((error, isFatal) => {
+      console.warn('[GlobalError]', isFatal ? 'FATAL' : 'non-fatal', error?.message);
+      reportCrash(isFatal ? 'fatal' : 'error', error);
+      if (typeof prev === 'function') prev(error, isFatal);
+    });
+  } catch (e) {}
+})();
+
 // ErrorBoundary — render paytida kutilmagan xato bo'lsa (masalan, buyurtma
 // obyektida noto'g'ri maydon), butun ilova OQ EKRANga aylanib qulamasligi uchun.
 // Xato ushlanadi va foydalanuvchiga "Qayta urinish" tugmasi ko'rsatiladi.
@@ -251,8 +299,9 @@ class ErrorBoundary extends React.Component {
     return { hasError: true };
   }
   componentDidCatch(error, info) {
-    // Faqat log — ilova qulamaydi
+    // Log + masofaviy hisobot (best-effort). Ilova qulamaydi.
     console.warn('[ErrorBoundary]', error?.message, info?.componentStack);
+    reportCrash('render', error, info?.componentStack);
   }
   reset = () => this.setState({ hasError: false });
   render() {
@@ -373,6 +422,31 @@ function BootLogo() {
   );
 }
 
+// MapPanel — xaritani AppInner ning yuqori chastotali qayta-renderlaridan ajratamiz.
+// AppInner da GPS (har 5 sek), taksometr (`meter`), `soloMeter` va `wait_update`
+// holatlari tez-tez yangilanadi va har safar butun daraxtni qayta render qiladi.
+// WebView'ni React.memo bilan o'rab, faqat barqaror proplar (source/style/onReady)
+// berib, xarita ostki daraxti shu yangilanishlarda QAYTA RENDER BO'LMAYDI.
+// Xarita o'zi imperativ `injectJavaScript` orqali yangilanishda davom etadi.
+const MapPanel = React.memo(React.forwardRef(function MapPanel({ source, style, onReady }, ref) {
+  return (
+    <WebView
+      ref={ref}
+      style={style}
+      originWhitelist={['*']}
+      source={source}
+      onMessage={(e) => {
+        try {
+          const m = JSON.parse(e.nativeEvent.data);
+          if (m.type === 'mapReady') onReady && onReady();
+        } catch (err) {}
+      }}
+      javaScriptEnabled
+      domStorageEnabled
+    />
+  );
+}));
+
 function AppInner() {
   const insets = useSafeAreaInsets();
   const [booting, setBooting] = useState(true);
@@ -459,6 +533,9 @@ function AppInner() {
       resumeActiveOrder();
     })();
     return () => {
+      // Listenerlarni ham olib tashlaymiz — aks holda disconnect'dan keyin
+      // qayta ulanishda eski handlerlar takror ishlab ketishi mumkin.
+      socketRef.current?.removeAllListeners();
       socketRef.current?.disconnect();
       watchRef.current?.remove?.();
       try { if (typeof KeepAwake?.deactivateKeepAwakeAsync === 'function') KeepAwake.deactivateKeepAwakeAsync('driver').catch(() => {}); } catch (e) {}
@@ -468,6 +545,11 @@ function AppInner() {
 
   // Xarita tayyor bo'lgach va joylashuv/buyurtma o'zgarganda — markerlarni
   // qayta yuklamasdan yangilaymiz (lag bo'lmaydi).
+  // Barqaror callback — MapPanel memoizatsiyasi buzilmasligi uchun useCallback.
+  // Xarita tayyor bo'lganda faqat mapReady ni o'rnatadi; markerlarni quyidagi
+  // effekt (mapReady deps) yuboradi.
+  const onMapReady = useCallback(() => setMapReady(true), []);
+
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const d = {
@@ -480,7 +562,13 @@ function AppInner() {
 
   function connectSocket() {
     if (socketRef.current?.connected) return; // allaqachon ulangan
-    socketRef.current?.disconnect();
+    // Eski soketni TO'LIQ tozalaymiz: faqat disconnect() listenerlarni saqlab
+    // qoladi va reconnection:Infinity tufayli eski soket qayta ulanib, takroriy
+    // 'new_order' (ikki marta vibratsiya/e'lon) yuborishi mumkin edi. (memory leak / duplicate events)
+    if (socketRef.current) {
+      socketRef.current.removeAllListeners();
+      socketRef.current.disconnect();
+    }
     const s = io(BASE, {
       auth: { token },
       transports: ['websocket', 'polling'],
@@ -677,6 +765,7 @@ function AppInner() {
   async function logout() {
     await AsyncStorage.multiRemove(['token', 'user', 'pin']);
     stopTracking();
+    socketRef.current?.removeAllListeners();
     socketRef.current?.disconnect();
     keepAwakeOff();
     hidePersistentNotif();
@@ -1010,29 +1099,10 @@ function AppInner() {
 
       {tab === 'home' ? (
         <View style={s.flex}>
-          {/* Xarita */}
-          <WebView
-            ref={mapRef}
-            style={s.map}
-            originWhitelist={['*']}
-            source={mapSource}
-            onMessage={(e) => {
-              try {
-                const m = JSON.parse(e.nativeEvent.data);
-                if (m.type === 'mapReady') {
-                  setMapReady(true);
-                  // Xarita yangi yuklandi — joriy ma'lumotni darhol yuboramiz
-                  const d = {
-                    myLat: myLoc?.lat ?? null, myLng: myLoc?.lng ?? null,
-                    pickLat: order?.from_lat ?? null, pickLng: order?.from_lng ?? null,
-                    dropLat: order?.to_lat ?? null, dropLng: order?.to_lng ?? null,
-                  };
-                  mapRef.current?.injectJavaScript(`window.updateMap(${JSON.stringify(d)});true;`);
-                }
-              } catch (err) {}
-            }}
-            javaScriptEnabled domStorageEnabled
-          />
+          {/* Xarita — memoizatsiya qilingan (GPS/meter yangilanishlarida qayta render bo'lmaydi).
+              `mapReady` true bo'lgach, quyidagi useEffect (mapReady deps) joriy
+              joylashuv/buyurtma markerlarini imperativ ravishda yuboradi. */}
+          <MapPanel ref={mapRef} style={s.map} source={mapSource} onReady={onMapReady} />
 
           {/* ── Yuqori panel: avatar + ism/reyting + online tugmasi ── */}
           <View style={[s.topBar, { top: insets.top + 6 }]}>

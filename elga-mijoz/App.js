@@ -460,6 +460,7 @@ function AppInner() {
       startPinHalo();
     })();
     return () => {
+      socketRef.current?.removeAllListeners();
       socketRef.current?.disconnect();
       if (nearbyTimer.current) clearInterval(nearbyTimer.current);
     };
@@ -627,6 +628,15 @@ function AppInner() {
   }
 
   function connectSocket() {
+    if (socketRef.current?.connected) return; // allaqachon ulangan — takror yaratmaymiz
+    // Eski soketni TO'LIQ tozalaymiz. Aks holda effekt qayta ishga tushganda
+    // (masalan pinStep o'zgarsa) eski soket listenerlari bilan qoladi va
+    // reconnection:Infinity tufayli qayta ulanib, 'driver_location'/'meter'
+    // hodisalarini IKKI marta yuboradi — markerlar va re-renderlar takrorlanadi. (duplicate events / memory leak)
+    if (socketRef.current) {
+      socketRef.current.removeAllListeners();
+      socketRef.current.disconnect();
+    }
     const s = io(BASE, { auth: { token }, transports: ['websocket', 'polling'], reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 2000 });
     socketRef.current = s;
     // Qayta ulanganda faol buyurtma holatini serverdan qayta tiklaymiz (#40 — internet uzilsa holat yo'qolmaydi)
@@ -1079,6 +1089,7 @@ function AppInner() {
 
   async function doLogout() {
     await AsyncStorage.multiRemove(['token', 'user', 'pin']);
+    socketRef.current?.removeAllListeners();
     socketRef.current?.disconnect();
     setToken(null); setUser(null); setStep('phone');
     setPhone(''); setCode(''); setName('');
