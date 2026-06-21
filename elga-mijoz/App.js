@@ -477,6 +477,38 @@ function AppInner() {
     if (tab === 'trips' && token) loadTrips();
   }, [tab]);
 
+  // ---- Faol buyurtmani davriy yangilash (socket push o'tkazib yuborilsa ham) ----
+  // Haydovchi qabul qilganda uning ma'lumotlari mijozga aniq ko'rinishi uchun
+  // kutish/yo'ldagi holatda har 5 sekundda serverdan faol buyurtmani olamiz.
+  useEffect(() => {
+    const st = order?.status;
+    const oid = order?.id;
+    if (!oid || !['searching', 'assigned', 'accepted', 'arrived'].includes(st)) return;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        let r = await api('/api/orders/active', 'GET', null, tokenRef.current || token).catch(() => null);
+        let fresh = r?.order;
+        if (!fresh) {
+          const r2 = await api('/api/me/active-order', 'GET', null, tokenRef.current || token).catch(() => null);
+          fresh = r2?.order;
+        }
+        if (stopped || !fresh || fresh.id !== oid) return;
+        // Endigina qabul qilindi -> bildirishnoma (faqat o'tish payti)
+        if ((st === 'searching' || st === 'assigned') && fresh.status === 'accepted') {
+          arrivedNotified.current = false;
+          const nm = fresh.driver_name || 'Haydovchi';
+          const car = fresh.driver_car ? ` · ${fresh.driver_car}${fresh.driver_plate ? ' ' + fresh.driver_plate : ''}` : '';
+          notify('Haydovchi topildi! 🚗', `${nm}${car} yo'lda`);
+        }
+        setOrder((prev) => (prev && prev.id === fresh.id) ? { ...prev, ...fresh } : prev);
+      } catch (_) {}
+    };
+    poll();
+    const iv = setInterval(poll, 5000);
+    return () => { stopped = true; clearInterval(iv); };
+  }, [order?.id, order?.status, token]);
+
   // ---- Profile tab load ----
   useEffect(() => {
     if (tab === 'profile' && token) { loadBalance(); loadFavorites(); }
