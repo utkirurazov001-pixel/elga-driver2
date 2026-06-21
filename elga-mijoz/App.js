@@ -343,6 +343,10 @@ function AppInner() {
   const [voiceSec, setVoiceSec] = useState(0);          // yozilgan soniya (taymer)
   const voiceTimer = useRef(null);
   const recordingRef = useRef(false);                   // tez bosishda holat poygasiga qarshi
+  // AI ovozli buyurtma (nutq -> matn -> AI -> manzil avto-to'ldirish)
+  const [voiceParsing, setVoiceParsing] = useState(false);   // AI tahlil qilyaptimi
+  const [voiceClarify, setVoiceClarify] = useState('');      // aniqlashtirish savoli (noaniq manzil)
+  const [voiceHeard, setVoiceHeard] = useState('');          // AI eshitgan matn (transcript)
 
   // Arrived bildirishnomasi bir marta chiqsin
   const arrivedNotified = useRef(false);
@@ -894,12 +898,13 @@ function AppInner() {
   // haydovchi ovozni eshitadi. Narx safar oxirida km+vaqt bo'yicha.
   function openVoiceOrder() {
     if (order) { Alert.alert('Faol buyurtma', 'Avval joriy buyurtmani yakunlang yoki bekor qiling'); return; }
-    setVoiceSec(0); setRecording(false); setVoiceModal(true);
+    setVoiceSec(0); setRecording(false); setVoiceParsing(false); setVoiceClarify(''); setVoiceHeard(''); setVoiceModal(true);
   }
   function closeVoiceOrder() {
     if (voiceTimer.current) { clearInterval(voiceTimer.current); voiceTimer.current = null; }
     if (recordingRef.current) { recordingRef.current = false; audioRecorder.stop().catch(() => {}); }
     setRecording(false); setVoiceSec(0); setVoiceModal(false);
+    setVoiceParsing(false); setVoiceClarify(''); setVoiceHeard('');
   }
   async function startVoiceRecording() {
     if (recordingRef.current) return;
@@ -926,7 +931,10 @@ function AppInner() {
       await audioRecorder.stop();
       const uri = audioRecorder.uri;
       if (!uri || voiceSec < 1) { Alert.alert('Qisqa', 'Manzilni biroz uzunroq gapiring'); return; }
-      await sendVoiceOrder(uri);
+      // Avval AI tahlil (nutq -> manzil avto-to'ldirish). Endpoint yo'q/xato bo'lsa
+      // eski oqimga qaytamiz (haydovchi ovozni eshitadi) — nol regressiya.
+      const handled = await parseVoiceAndFill(uri);
+      if (!handled) await sendVoiceOrder(uri);
     } catch (e) { Alert.alert('Xato', e.message); }
   }
   // Lokal audio faylni base64 data-URL ga aylantiradi (backend order_voice formati)
@@ -963,6 +971,75 @@ function AppInner() {
       }
     }
     setLoading(false);
+  }
+
+  // Matnli manzilni koordinataga aylantirish — mavjud joy qidiruvi orqali.
+  async function geocodeText(q, near) {
+    if (!q || typeof q !== 'string') return null;
+    try {
+      const ll = near ? `&lat=${near.lat}&lng=${near.lng}` : '';
+      const r = await api(`/api/places/search?q=${encodeURIComponent(q.trim())}${ll}`, 'GET');
+      const top = (r?.places || [])[0];
+      if (top && top.lat != null && top.lng != null) {
+        return { lat: Number(top.lat), lng: Number(top.lng), address: top.address || top.name || q };
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // AI tahlilidan kelgan pickup/destination'ni hal qilib, tasdiqlash ekraniga o'tamiz.
+  async function resolveAndGoConfirm(p, from) {
+    // Pickup: CURRENT_LOCATION bo'lsa GPS, aks holda matnni geokodlaymiz
+    let pk = from;
+    if (p.pickup_text && p.pickup_text !== 'CURRENT_LOCATION') {
+      const g = await geocodeText(p.pickup_text, from);
+      if (g) pk = g;
+    }
+    // Destination matnini koordinataga aylantiramiz
+    const dst = await geocodeText(p.destination_text, from);
+    if (!dst) {
+      // Topilmadi -> qidiruvni oldindan to'ldirib ochamiz, mijoz tanlaydi
+      setVoiceModal(false); setVoiceParsing(false);
+      setSearchQ(p.destination_text || '');
+      setSearchOpen(true);
+      if (p.destination_text) searchPlaces(p.destination_text);
+      return;
+    }
+    if (pk) setPickup({ lat: pk.lat, lng: pk.lng, address: pk.address || pickup?.address });
+    setDest({ lat: dst.lat, lng: dst.lng, address: dst.address });
+    setEstimates({}); estCacheKey.current = null;
+    setVoiceModal(false); setVoiceParsing(false); setVoiceSec(0); setVoiceClarify(''); setVoiceHeard('');
+    setOrderStep('confirm');
+  }
+
+  // 🎙 AI ovozli buyurtma: audio -> backend STT+AI -> JSON -> manzil avto-to'ldirish.
+  // true qaytarsa AI ishladi (yoki aniqlashtirish so'raldi); false -> eski oqimga qaytamiz.
+  async function parseVoiceAndFill(uri) {
+    const from = pickup || myLoc;
+    setVoiceParsing(true); setVoiceClarify(''); setVoiceHeard('');
+    try {
+      const audio = await fileToDataUrl(uri);
+      const r = await api('/api/voice/parse', 'POST', {
+        audio, lang: 'uz',
+        lat: from?.lat ?? null, lng: from?.lng ?? null,
+      }, token, 45000);
+      const p = (r && r.parsed) ? r.parsed : (r || {});
+      if (typeof p.transcript === 'string') setVoiceHeard(p.transcript);
+      else if (typeof r?.transcript === 'string') setVoiceHeard(r.transcript);
+      // Noaniq manzil yoki destination yo'q -> aniqlashtirish so'raymiz (modalda qoldik)
+      if (p.needs_clarification || !p.destination_text || p.destination_known === false) {
+        setVoiceClarify(p.clarification_question || 'Qaysi manzilga bormoqchisiz?');
+        setVoiceParsing(false);
+        return true;
+      }
+      await resolveAndGoConfirm(p, from);
+      return true;
+    } catch (e) {
+      // 404 (endpoint hali yo'q) yoki boshqa xato -> eski oqim (haydovchi eshitadi)
+      console.warn('[voice/parse]', e?.status, e?.message);
+      setVoiceParsing(false); setVoiceClarify(''); setVoiceHeard('');
+      return false;
+    }
   }
 
   async function openPayment(orderId, provider) {
@@ -2126,22 +2203,51 @@ function AppInner() {
           <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16, alignItems: 'center' }]}>
             <Text style={[s.modalTitle, { color: WHITE }]}>🎙 Ovozli buyurtma</Text>
             <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 }}>
-              Tugmani bosib ushlab turing va qayerga borishingizni gapirib ayting.
-              Haydovchi ovozingizni eshitadi. Narx hisoblagich (km + vaqt) bo'yicha.
+              Tugmani bosib ushlab turing va qayerga borishingizni tabiiy gapiring.
+              Masalan: «Meni Muzrabot bozoriga olib boring».
             </Text>
 
             <TouchableOpacity
               activeOpacity={0.85}
+              disabled={voiceParsing}
               onPressIn={startVoiceRecording}
               onPressOut={stopVoiceRecording}
-              style={[s.voiceRecBtn, recording && { backgroundColor: RED, transform: [{ scale: 1.08 }] }]}>
+              style={[s.voiceRecBtn, recording && { backgroundColor: RED, transform: [{ scale: 1.08 }] }, voiceParsing && { opacity: 0.6 }]}>
               <Ionicons name={recording ? 'radio' : 'mic'} size={48} color="#1A1A1A" />
             </TouchableOpacity>
 
-            <Text style={{ color: recording ? RED : GRAY1, fontSize: 15, fontWeight: '600', marginTop: 18 }}>
-              {recording ? `● Yozilmoqda… ${voiceSec}s` : 'Bosib ushlab turing'}
-            </Text>
-            {loading && <ActivityIndicator color={YELLOW} style={{ marginTop: 12 }} />}
+            {voiceParsing ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18 }}>
+                <ActivityIndicator color={YELLOW} />
+                <Text style={{ color: GRAY1, fontSize: 15, fontWeight: '600' }}>Tahlil qilinmoqda…</Text>
+              </View>
+            ) : (
+              <Text style={{ color: recording ? RED : GRAY1, fontSize: 15, fontWeight: '600', marginTop: 18 }}>
+                {recording ? `● Yozilmoqda… ${voiceSec}s` : 'Bosib ushlab turing'}
+              </Text>
+            )}
+
+            {/* AI eshitgan matn */}
+            {!!voiceHeard && !voiceParsing && (
+              <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginTop: 10, paddingHorizontal: 10, fontStyle: 'italic' }} numberOfLines={2}>
+                «{voiceHeard}»
+              </Text>
+            )}
+
+            {/* Aniqlashtirish savoli (noaniq manzil) */}
+            {!!voiceClarify && !voiceParsing && (
+              <View style={{ backgroundColor: CARD2, borderRadius: 12, padding: 14, marginTop: 14, width: '100%', borderWidth: 1, borderColor: YELLOW + '66' }}>
+                <Text style={{ color: YELLOW, fontSize: 14, fontWeight: '700', textAlign: 'center' }}>{voiceClarify}</Text>
+                <Text style={{ color: GRAY1, fontSize: 12, textAlign: 'center', marginTop: 6 }}>
+                  Tugmani bosib qayta gapiring yoki qo'lda qidiring.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => { setVoiceModal(false); setVoiceClarify(''); setSearchOpen(true); }}
+                  style={{ marginTop: 12, paddingVertical: 10, alignItems: 'center', backgroundColor: YELLOW, borderRadius: 10 }} activeOpacity={0.85}>
+                  <Text style={{ color: '#1A1A1A', fontSize: 14, fontWeight: '700' }}>🔍 Qo'lda qidirish</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <TouchableOpacity onPress={closeVoiceOrder} style={{ marginTop: 20, alignItems: 'center' }}>
               <Text style={{ color: GRAY1, fontSize: 15 }}>Yopish</Text>
