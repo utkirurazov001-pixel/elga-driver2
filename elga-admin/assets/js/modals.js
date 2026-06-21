@@ -428,6 +428,45 @@
     window.rerenderPage && window.rerenderPage();
   };
 
+  /* ---- XODIM (admin_users) QO'SHISH/TAHRIR ---- */
+  window.staffModal = function(staff, rerender){
+    var roles=window.DB.ROLES;
+    var s = staff || {login:'',full_name:'',phone:'',role:'operator',is_active:true};
+    U.modal({
+      title: staff?'Xodimni tahrirlash':'Yangi xodim', sub: staff?('@'+s.login):'admin_users · RBAC',
+      body:'<div class="form-grid">'+
+        '<div class="field"><label>Login</label><input class="input mono" data-login value="'+U.esc(s.login)+'"'+(staff?' disabled':'')+'></div>'+
+        '<div class="field"><label>Parol'+(staff?' (yangilash, ixtiyoriy)':'')+'</label><input class="input" type="password" data-pw placeholder="••••••"></div>'+
+        '<div class="field full"><label>F.I.O</label><input class="input" data-name value="'+U.esc(s.full_name)+'"></div>'+
+        '<div class="field"><label>Telefon</label><input class="input mono" data-phone value="'+U.esc(s.phone||'')+'"></div>'+
+        '<div class="field"><label>Rol</label><select class="input" data-role>'+roles.map(function(r){return '<option value="'+r+'"'+(s.role===r?' selected':'')+'>'+window.roleLabel(r)+'</option>';}).join('')+'</select></div>'+
+        '</div>',
+      foot:'<button class="btn" data-close>Bekor</button><button class="btn btn-primary" data-ok>Saqlash</button>',
+      onMount:function(back,close){
+        back.querySelector('[data-close]').addEventListener('click',close);
+        back.querySelector('[data-ok]').addEventListener('click',function(){
+          var login=back.querySelector('[data-login]').value.trim();
+          var pw=back.querySelector('[data-pw]').value, name=back.querySelector('[data-name]').value.trim();
+          var phone=back.querySelector('[data-phone]').value.trim(), role=back.querySelector('[data-role]').value;
+          if(!name){ U.toast('Xato','F.I.O kiriting','error'); return; }
+          if(!staff && (!login||pw.length<6)){ U.toast('Xato','Login va kamida 6 belgili parol','error'); return; }
+          var ini=name.split(' ').map(function(x){return x[0];}).join('').slice(0,2).toUpperCase();
+          if(staff){
+            s.full_name=name; s.phone=phone; s.role=role; s.ini=ini;
+            window.apiAction('PATCH','/admin/users/'+s.id, Object.assign({full_name:name,phone:phone,role:role}, pw?{password:pw}:{})).then(rep);
+          } else {
+            var ns={id:'AU'+(window.DB.staff.length+1), login:login, full_name:name, ini:ini, phone:phone, role:role, is_active:true, last_login:'—'};
+            window.DB.staff.push(ns);
+            window.apiAction('POST','/admin/users',{login:login,password:pw,full_name:name,phone:phone||'998900000000',role:role}).then(rep);
+          }
+          function rep(x){ if(x&&!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); }
+          close(); U.toast('Saqlandi', name+' · '+window.roleLabel(role)); rerender&&rerender();
+          window.rerenderPage && window.rerenderPage();
+        });
+      }
+    });
+  };
+
   /* ---- KORPORATIV QO'SHISH ---- */
   window.corporateModal = function(){
     U.modal({

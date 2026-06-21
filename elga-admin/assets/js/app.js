@@ -69,6 +69,7 @@
         '<form id="loginForm">'+
           '<div class="field"><label>Login</label><input class="input" id="lg" value="admin" autocomplete="username"></div>'+
           '<div class="field"><label>Parol</label><input class="input" id="pw" type="password" value="elga1226" autocomplete="current-password"></div>'+
+          '<div class="field"><label>2FA kod <span class="muted" style="font-weight:500">(agar yoqilgan bo\'lsa)</span></label><input class="input mono" id="otp" placeholder="000000" maxlength="6" autocomplete="one-time-code"></div>'+
           '<button class="btn btn-primary" type="submit">'+window.icon('lock',16)+' Tizimga kirish</button>'+
         '</form>'+
         '<div class="login-demo">Demo kirish: <b>admin</b> / <b>elga1226</b><br>app.elga.uz · super_admin roli</div>'+
@@ -90,14 +91,16 @@
       function enterLive(){
         window.ELGA.bootstrap().then(function(){
           if(window.ELGA.me){ ME.full_name=window.ELGA.me.full_name; ME.role=window.ELGA.me.role; ME.ini=(ME.full_name.split(' ').map(function(x){return x[0];}).join('').slice(0,2)); }
+          window.ELGA.connectSocket && window.ELGA.connectSocket(); // real-time WS
           sessionStorage.setItem('elga_admin_in','1');
           renderShell(); navigate('grid');
-          window.UI.toast('Backendga ulandi', 'api.elga.uz · jonli ma\'lumot · 1226');
+          window.UI.toast('Backendga ulandi', 'api.elga.uz · jonli ma\'lumot + WS · 1226');
         }).catch(function(){ enterDemo('Ma\'lumot yuklanmadi — namuna rejimi'); });
       }
 
+      var otp=(document.getElementById('otp')||{}).value;
       if(!window.ELGA){ enterDemo(); return; }
-      window.ELGA.login(u, pw).then(function(res){
+      window.ELGA.login(u, pw, otp).then(function(res){
         if(res.ok){ enterLive(); }
         else if(res.type==='auth'){ btn.disabled=false; btn.style.opacity='1'; btn.innerHTML=old; window.UI.toast('Kirish xato', res.message||'Login yoki parol noto\'g\'ri','error'); }
         else { enterDemo(); } // network — backend yo'q
@@ -157,6 +160,7 @@
 
   function doLogout(){
     if(window.RealtimeEngine) window.RealtimeEngine.stop();
+    if(window.ELGA && window.ELGA.disconnectSocket) window.ELGA.disconnectSocket();
     sessionStorage.removeItem('elga_admin_in'); renderLogin();
   }
 
@@ -417,9 +421,13 @@
     else if(t=e.target.closest('[data-adj]')){ window.adjustPoints(t.getAttribute('data-adj')); }
     else if(t=e.target.closest('[data-edit-promo]')){ window.promoModal(t.getAttribute('data-edit-promo'), window.rerenderPage); }
     else if(t=e.target.closest('[data-new-promo]')){ window.promoModal(null, window.rerenderPage); }
+    else if(t=e.target.closest('[data-edit-staff]')){
+      var st2=window.DB.staff.find(function(x){return x.id===t.getAttribute('data-edit-staff');});
+      if(st2) window.staffModal(st2);
+    }
     else if(t=e.target.closest('[data-x="new"]')){
       if(current.route==='car') window.UI.toast('Forma','Yangi haydovchi formasi (demo)');
-      else if(current.route==='badge') window.UI.toast('Forma','Yangi xodim formasi (demo)');
+      else if(current.route==='badge') window.staffModal(null);
       else window.newOrderModal();
     }
   });

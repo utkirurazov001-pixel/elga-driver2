@@ -1,0 +1,56 @@
+# Render blueprint — ELGA TAXI 1226 backend (api.elga.uz) + DB + Redis
+# DEP-01/02. Maxfiy kalitlar Render dashboard'da to'ldiriladi (sync:false).
+services:
+  - type: web
+    name: elga-api
+    runtime: node
+    rootDir: elga-api
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: CORS_ORIGIN
+        value: https://app.elga.uz
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: elga-pg
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: elga-redis
+          type: redis
+          property: connectionString
+      - key: PAYME_MERCHANT_ID
+        sync: false
+      - key: PAYME_KEY
+        sync: false
+      - key: CLICK_SERVICE_ID
+        sync: false
+      - key: CLICK_MERCHANT_ID
+        sync: false
+      - key: CLICK_SECRET
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+
+  - type: redis
+    name: elga-redis
+    plan: starter
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+databases:
+  - name: elga-pg
+    plan: basic-256mb
+    databaseName: elga
+    postgresMajorVersion: "16"

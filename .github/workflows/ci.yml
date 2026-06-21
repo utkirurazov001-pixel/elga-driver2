@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (elga-api)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: elga-api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: elga-api/package-lock.json
+      - run: npm ci
+      - name: Typecheck (tsc strict)
+        run: npm run typecheck
+      - name: Test (vitest + supertest)
+        run: npm test
+      - name: Build
+        run: npm run build
+
+  admin:
+    name: Admin (elga-admin) — JS syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax check all admin JS
+        run: |
+          cd elga-admin
+          for f in $(find assets/js -name '*.js'); do node --check "$f" || exit 1; done
+          echo "Admin JS syntax OK"
