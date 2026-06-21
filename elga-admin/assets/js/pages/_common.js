@@ -60,12 +60,15 @@ window.PAGES = window.PAGES || {};
         filters: opts.filters? opts.filters(state):[],
         right: opts.toolbarRight
       }, function(st){
+        // kursor pozitsiyasini saqlab qolamiz (oxiriga sakramasligi uchun)
+        var ae = document.activeElement;
+        var caret = (ae && ae.getAttribute && ae.getAttribute('data-f')==='q') ? ae.selectionStart : null;
         state.q = st.q!=null?st.q:state.q;
         (opts.filters?opts.filters(state):[]).forEach(function(f){ if(st[f.key]!=null) state[f.key]=st[f.key]; });
         state.page = 1;
         render();
-        // qidiruv inputiga fokusni qaytarish
-        var inp = root.querySelector('[data-f="q"]'); if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }
+        var inp = root.querySelector('[data-f="q"]');
+        if(inp && caret!=null){ inp.focus(); try{ inp.setSelectionRange(caret, caret); }catch(e){} }
       });
       root.appendChild(tb);
 

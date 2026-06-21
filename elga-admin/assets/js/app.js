@@ -378,15 +378,21 @@
     else if(t=e.target.closest('[data-wr]')){ window.rejectWithdrawal(t.getAttribute('data-wr')); }
     else if(t=e.target.closest('[data-block]')){
       var c=window.DB.clients.find(function(x){return x.id===t.getAttribute('data-block');});
-      if(c){ c.is_blocked=!c.is_blocked; window.UI.toast('Bajarildi', c.full_name+' '+(c.is_blocked?'bloklandi':'blokdan chiqarildi')); window.rerenderPage(); }
+      if(c){ c.is_blocked=!c.is_blocked; window.UI.toast('Bajarildi', c.full_name+' '+(c.is_blocked?'bloklandi':'blokdan chiqarildi'));
+        window.apiAction('POST','/clients/'+c.id+'/block').then(function(x){ if(!x.ok&&!x.demo) window.UI.toast('Backend xatosi', x.message,'error'); });
+        window.rerenderPage(); }
     }
     else if(t=e.target.closest('[data-kyc-ok]')){
       var d=window.DB.drivers.find(function(x){return x.id===t.getAttribute('data-kyc-ok');});
-      if(d){ d.kyc_status='approved'; window.UI.toast('Tasdiqlandi', d.full_name+' KYC tasdiqlandi'); window.rerenderPage(); }
+      if(d){ d.kyc_status='approved'; window.UI.toast('Tasdiqlandi', d.full_name+' KYC tasdiqlandi');
+        window.apiAction('POST','/drivers/'+d.id+'/kyc',{decision:'approved'}).then(function(x){ if(!x.ok&&!x.demo) window.UI.toast('Backend xatosi', x.message,'error'); });
+        window.rerenderPage(); }
     }
     else if(t=e.target.closest('[data-kyc-no]')){
       var d2=window.DB.drivers.find(function(x){return x.id===t.getAttribute('data-kyc-no');});
-      if(d2){ d2.kyc_status='rejected'; window.UI.toast('Rad etildi', d2.full_name+' KYC rad etildi','error'); window.rerenderPage(); }
+      if(d2){ d2.kyc_status='rejected'; window.UI.toast('Rad etildi', d2.full_name+' KYC rad etildi','error');
+        window.apiAction('POST','/drivers/'+d2.id+'/kyc',{decision:'rejected'}).then(function(x){ if(!x.ok&&!x.demo) window.UI.toast('Backend xatosi', x.message,'error'); });
+        window.rerenderPage(); }
     }
     else if(t=e.target.closest('[data-fulfill]')){
       var r=window.DB.redemptions.find(function(x){return x.id===t.getAttribute('data-fulfill');});
