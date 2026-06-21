@@ -10,19 +10,25 @@
     var done=[300,360,330,390,420,400,450,480,440,500,520,490,540,580];
     var canc=[40,52,38,55,62,48,58,66,52,70,76,60,82,90];
     var days=['08','09','10','11','12','13','14','15','16','17','18','19','20','21'];
+    var L = window.LiveKPI;
 
-    var kpis = [
-      U.kpi({icon:'bag', bg:'var(--gold-soft)', color:'var(--gold)', label:'Bugungi buyurtmalar', val:'486', delta:'9.2%', deltaUp:true}),
-      U.kpi({icon:'car', bg:'var(--success-soft)', color:'var(--success)', label:'Faol haydovchilar', val:'128', unit:'/ 214', delta:'4.1%', deltaUp:true}),
-      U.kpi({icon:'cash', bg:'var(--warning-soft)', color:'var(--warning)', label:'Bugungi daromad', val:'6.8', unit:'mln so\'m', delta:'7.4%', deltaUp:true}),
-      U.kpi({icon:'users', bg:'var(--info-soft)', color:'#84a9f5', label:'Yangi mijozlar', val:'34', delta:'1.8%', deltaUp:false})
-    ].join('');
-
-    var strip = [
-      U.mini({icon:'clock', bg:'var(--info-soft)', color:'#84a9f5', label:'O\'rtacha kutish vaqti', val:'3.4', unit:'daqiqa'}),
-      U.mini({icon:'xcircle', bg:'var(--danger-soft)', color:'var(--danger)', label:'Bekor qilish foizi', val:'8.1', unit:'%'}),
-      U.mini({icon:'trend', bg:'var(--gold-soft)', color:'var(--gold)', label:'Bugungi komissiya (15%)', val:'1.02', unit:'mln so\'m'})
-    ].join('');
+    function kpiHTML(){
+      return [
+        U.kpi({icon:'bag', bg:'var(--gold-soft)', color:'var(--gold)', label:'Bugungi buyurtmalar', val:L.orders_today, delta:'9.2%', deltaUp:true}),
+        U.kpi({icon:'car', bg:'var(--success-soft)', color:'var(--success)', label:'Faol haydovchilar', val:L.active_drivers, unit:'/ 214', delta:'4.1%', deltaUp:true}),
+        U.kpi({icon:'cash', bg:'var(--warning-soft)', color:'var(--warning)', label:'Bugungi daromad', val:L.revenue_today, unit:'mln so\'m', delta:'7.4%', deltaUp:true}),
+        U.kpi({icon:'users', bg:'var(--info-soft)', color:'#84a9f5', label:'Yangi mijozlar', val:L.new_clients, delta:'1.8%', deltaUp:false})
+      ].join('');
+    }
+    function stripHTML(){
+      return [
+        U.mini({icon:'clock', bg:'var(--info-soft)', color:'#84a9f5', label:'O\'rtacha kutish vaqti', val:L.avg_wait, unit:'daqiqa'}),
+        U.mini({icon:'xcircle', bg:'var(--danger-soft)', color:'var(--danger)', label:'Bekor qilish foizi', val:L.cancel_rate, unit:'%'}),
+        U.mini({icon:'trend', bg:'var(--gold-soft)', color:'var(--gold)', label:'Bugungi komissiya (15%)', val:L.commission, unit:'mln so\'m'})
+      ].join('');
+    }
+    var kpis = kpiHTML();
+    var strip = stripHTML();
 
     var recent = window.DB.orders.slice(0,5);
     var ordersRows = recent.map(function(o){
@@ -41,13 +47,6 @@
         '<div class="tm">'+c.created_at+'</div></div>';
     }).join('');
 
-    var pins = [
-      ['26%','22%','success',''],['42%','48%','warning','busy'],['35%','73%','success',''],
-      ['66%','30%','text-faint','off'],['76%','62%','success',''],['54%','82%','warning','busy'],['46%','38%','success','']
-    ].map(function(p){return '<div class="map-pin '+p[3]+'" style="top:'+p[0]+';left:'+p[1]+';background:var(--'+p[2]+')"></div>';}).join('');
-    var cityLbls = [['20%','18%','Angor'],['38%','44%','Muzrabot'],['30%','70%','Jarqo\'rg\'on'],['62%','26%','Sherobod'],['72%','60%','Termiz'],['50%','80%','Denov']]
-      .map(function(c){return '<span class="map-city" style="top:'+c[0]+';left:'+c[1]+'">'+c[2]+'</span>';}).join('');
-
     var withdrawRows = window.DB.withdrawals.filter(function(w){return w.status==='pending';}).slice(0,3).map(function(w){
       return '<tr><td>'+U.cust(w.driver,w.driver_ini,w.driver_phone)+'</td><td>'+U.park(w.park)+'</td>'+
         '<td class="sum">'+window.money(w.amount)+'</td><td>'+U.tariff(w.provider)+'</td>'+
@@ -59,11 +58,11 @@
       title:'Boshqaruv paneli',
       sub:'21-iyun 2026 · Surxondaryo',
       live:true,
-      actions:'<button class="btn">'+window.icon('download',16)+'Hisobot</button>'+
+      actions:'<button class="btn" data-goto="finance">'+window.icon('download',16)+'Hisobot</button>'+
               '<button class="btn btn-primary" data-new-order>'+window.icon('plus',16)+'Yangi buyurtma</button>'
     })+
-    '<div class="kpis">'+kpis+'</div>'+
-    '<div class="strip">'+strip+'</div>'+
+    '<div class="kpis" id="dashKpis">'+kpis+'</div>'+
+    '<div class="strip" id="dashStrip">'+strip+'</div>'+
     '<div class="grid g-2 mb16">'+
       '<div class="card"><div class="card-head"><div><h3>Buyurtmalar dinamikasi</h3><p>So\'nggi 14 kun · jami 5 940 ta</p></div>'+
         '<div class="seg"><button>Hafta</button><button class="on">14 kun</button><button>Oy</button></div></div>'+
@@ -84,16 +83,15 @@
         statRow('success','Bo\'sh (free)',74,60)+statRow('warning','Buyurtmada (busy)',54,44)+
         statRow('text-faint','Oflayn (offline)',86,70)+statRow('danger','Bloklangan',6,7)+
         '</div></div></div>'+
-      '<div class="card"><div class="card-head"><div><h3>Jonli xarita</h3><p>Surxondaryo · 128 haydovchi onlayn</p></div>'+
+      '<div class="card"><div class="card-head"><div><h3>Jonli xarita</h3><p>Surxondaryo · <span id="dashOnline">'+window.DB.drivers.filter(function(d){return d.status==='free'||d.status==='busy';}).length+'</span> haydovchi onlayn</p></div>'+
         '<button class="btn btn-sm" data-goto="map">To\'liq xarita</button></div>'+
-        '<div class="card-body"><div class="map">'+cityLbls+pins+
-        '<div class="ph">'+window.icon('map',30)+'<div class="mono">[ jonli xarita · haydovchilar joylashuvi ]</div></div></div></div></div>'+
+        '<div class="card-body"><div id="dashMap" style="height:262px;border-radius:12px;overflow:hidden;border:1px solid var(--border)"></div></div></div></div>'+
     '</div>'+
     '<div class="grid g-2 mb16" style="align-items:start">'+
       '<div class="card"><div class="card-head"><div><h3>So\'nggi buyurtmalar</h3><p>Real vaqt</p></div>'+
         '<button class="btn btn-sm" data-goto="bag">Barchasi</button></div>'+
         '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Mijoz</th><th>Yo\'nalish</th><th>Tarif</th><th>Park</th><th>Summa</th><th>Holat</th></tr></thead>'+
-        '<tbody>'+ordersRows+'</tbody></table></div></div>'+
+        '<tbody id="dashOrders">'+ordersRows+'</tbody></table></div></div>'+
       '<div class="card"><div class="card-head"><div><h3>So\'nggi shikoyatlar</h3><p>13 ta yangi</p></div></div>'+
         '<div class="card-body"><div class="cmp-list">'+complaints+'</div></div>'+
         '<div class="foot-link" data-goto="warn">Barcha shikoyatlarni ko\'rish →</div></div>'+
@@ -120,6 +118,31 @@
     root.querySelectorAll('[data-goto]').forEach(function(b){ b.addEventListener('click',function(){ ctx.navigate(b.getAttribute('data-goto')); }); });
     root.querySelectorAll('[data-wd]').forEach(function(b){ b.addEventListener('click',function(){ window.confirmWithdrawal(b.getAttribute('data-wd')); }); });
     var no=root.querySelector('[data-new-order]'); if(no) no.addEventListener('click', window.newOrderModal);
+
+    // Mount: jonli xarita + real-time obunalar
+    root._onMount = function(){
+      var mapEl = root.querySelector('#dashMap');
+      var handle = window.GeoMap.create(mapEl, {zoom:9, scroll:false});
+      if(window.Bus){
+        window.addPageSub(window.Bus.on('driver:location', function(moved){ handle.setDrivers(moved); }));
+        window.addPageSub(window.Bus.on('kpi:update', function(){
+          var k=root.querySelector('#dashKpis'); if(k) k.innerHTML=kpiHTML();
+          var s=root.querySelector('#dashStrip'); if(s) s.innerHTML=stripHTML();
+          var on=root.querySelector('#dashOnline'); if(on) on.textContent=window.DB.drivers.filter(function(d){return d.status==='free'||d.status==='busy';}).length;
+        }));
+        window.addPageSub(window.Bus.on('order:new', function(){
+          var tb=root.querySelector('#dashOrders'); if(!tb) return;
+          tb.innerHTML = window.DB.orders.slice(0,5).map(rowHTML).join('');
+        }));
+      }
+    };
+    function rowHTML(o){
+      return '<tr><td class="mono">'+o.id+'</td>'+
+        '<td>'+U.cust(o.client,o.client_ini,o.client_phone)+'</td>'+
+        '<td>'+U.route(o.from,o.to)+'</td><td>'+U.tariff(o.tariff)+'</td>'+
+        '<td>'+U.park(o.park)+'</td><td class="sum">'+window.money(o.price)+'</td>'+
+        '<td>'+U.orderTag(o.status)+'</td></tr>';
+    }
     return root;
   };
 
@@ -136,24 +159,22 @@
 
   /* ---------------- DISPETCHER ---------------- */
   window.PAGES.radio = function(ctx){
-    var queue = window.DB.orders.filter(function(o){return o.status==='new'||o.status==='searching';});
-    var freeDrivers = window.DB.drivers.filter(function(d){return d.status==='free';});
     return window.listPage({
       title:'Dispetcher', sub:'Kutilayotgan buyurtmalar navbati · 1226', live:true,
       actions:'<button class="btn btn-primary" data-x="new">'+window.icon('plus',16)+'Qo\'lda buyurtma</button>',
       placeholder:'Buyurtma yoki mijoz qidirish...',
-      perPage:8,
+      perPage:8, liveEvents:['order:new','order:updated','driver:status'],
       beforeTable:function(){
+        var queue = window.DB.orders.filter(function(o){return o.status==='new'||o.status==='searching';});
+        var freeDrivers = window.DB.drivers.filter(function(d){return d.status==='free';});
         return '<div class="strip">'+
           U.mini({icon:'inbox',bg:'var(--warning-soft)',color:'var(--warning)',label:'Navbatda',val:queue.length,unit:'buyurtma'})+
           U.mini({icon:'car',bg:'var(--success-soft)',color:'var(--success)',label:'Bo\'sh haydovchi',val:freeDrivers.length})+
           U.mini({icon:'clock',bg:'var(--info-soft)',color:'#84a9f5',label:'O\'rt. tayinlash',val:'1.8',unit:'daqiqa'})+
           '</div>';
       },
-      getData:function(st){
-        var rows = queue.filter(function(o){return U.matches(o,st.q,['id','client','from','to']);});
-        var total=rows.length;
-        return {rows:U.paginate(rows,st.page,8), total:total};
+      rows:function(st){
+        return window.DB.orders.filter(function(o){return (o.status==='new'||o.status==='searching') && U.matches(o,st.q,['id','client','from','to']);});
       },
       columns:[
         {th:'ID', render:function(o){return '<span class="mono">'+o.id+'</span>';}},
@@ -172,11 +193,12 @@
   /* ---------------- BUYURTMALAR ---------------- */
   window.PAGES.bag = function(ctx){
     return window.listPage({
-      title:'Buyurtmalar', sub:'Barcha buyurtmalar · filter, qidiruv, paginatsiya',
-      actions:'<button class="btn">'+window.icon('download',16)+'Eksport</button>'+
+      title:'Buyurtmalar', sub:'Barcha buyurtmalar · filter, sort, qidiruv, eksport', live:true,
+      actions:'<button class="btn" data-export>'+window.icon('download',16)+'CSV eksport</button>'+
               '<button class="btn btn-primary" data-x="new">'+window.icon('plus',16)+'Yangi buyurtma</button>',
       placeholder:'ID, mijoz yoki haydovchi qidirish...',
-      perPage:10,
+      perPage:10, exportName:'elga-buyurtmalar',
+      liveEvents:['order:new','order:updated'],
       filters:function(st){return [
         {key:'status', label:'Holat', value:st.status||'', options:[
           window.opt('','Barcha holatlar'),window.opt('completed','Bajarildi'),window.opt('in_progress','Yo\'lda'),
@@ -184,23 +206,22 @@
         {key:'city', label:'Shahar', value:st.city||'', options:window.cityOptions()},
         {key:'tariff', label:'Tarif', value:st.tariff||'', options:[window.opt('','Barcha tariflar')].concat(window.DB.TARIFFS.map(function(t){return window.opt(t,t);}))}
       ];},
-      getData:function(st){
-        var rows = window.DB.orders.filter(function(o){
+      rows:function(st){
+        return window.DB.orders.filter(function(o){
           return U.matches(o,st.q,['id','client','driver','from','to']) &&
             (!st.status||o.status===st.status) && (!st.city||o.from===st.city||o.to===st.city) &&
             (!st.tariff||o.tariff===st.tariff);
         });
-        return {rows:U.paginate(rows,st.page,10), total:rows.length};
       },
       columns:[
-        {th:'ID', render:function(o){return '<span class="mono">'+o.id+'</span>';}},
-        {th:'Mijoz', render:function(o){return U.cust(o.client,o.client_ini,o.client_phone);}},
-        {th:'Yo\'nalish', render:function(o){return U.route(o.from,o.to);}},
-        {th:'Haydovchi', render:function(o){return o.driver?o.driver+' '+U.park(o.park):'<span class="muted">—</span>';}},
-        {th:'Tarif', render:function(o){return U.tariff(o.tariff);}},
-        {th:'Summa', cls:'sum', render:function(o){return window.money(o.price);}},
-        {th:'To\'lov', render:function(o){return U.tariff(payLabel(o.payment));}},
-        {th:'Holat', render:function(o){return U.orderTag(o.status);}}
+        {th:'ID', sortKey:'id', csv:function(o){return o.id;}, render:function(o){return '<span class="mono">'+o.id+(o._new?' <span class="tg gold" style="padding:1px 6px;font-size:9px">yangi</span>':'')+'</span>';}},
+        {th:'Mijoz', sortKey:'client', csv:function(o){return o.client;}, render:function(o){return U.cust(o.client,o.client_ini,o.client_phone);}},
+        {th:'Yo\'nalish', csv:function(o){return o.from+' → '+o.to;}, render:function(o){return U.route(o.from,o.to);}},
+        {th:'Haydovchi', csv:function(o){return o.driver||'';}, render:function(o){return o.driver?o.driver+' '+U.park(o.park):'<span class="muted">—</span>';}},
+        {th:'Tarif', sortKey:'tariff', csv:function(o){return o.tariff;}, render:function(o){return U.tariff(o.tariff);}},
+        {th:'Summa', cls:'sum', sortKey:'price', csv:function(o){return o.price;}, render:function(o){return window.money(o.price);}},
+        {th:'To\'lov', csv:function(o){return payLabel(o.payment);}, render:function(o){return U.tariff(payLabel(o.payment));}},
+        {th:'Holat', sortKey:'status', csv:function(o){return o.status;}, render:function(o){return U.orderTag(o.status);}}
       ],
       onRowClick:function(o){ window.orderDetail(o); }
     });
@@ -211,30 +232,34 @@
   window.PAGES.map = function(ctx){
     var root = document.createElement('div');
     var online = window.DB.drivers.filter(function(d){return d.status!=='offline'&&d.status!=='blocked';});
-    var pins='';
-    for(var i=0;i<40;i++){
-      var d=online[i%online.length];
-      var top=(8+(i*53)%84)+'%', left=(6+(i*37)%88)+'%';
-      var cls = d.status==='busy'?'busy':(d.status==='offline'?'off':'');
-      var col = d.status==='busy'?'warning':(d.status==='offline'?'text-faint':'success');
-      pins+='<div class="map-pin '+cls+'" style="top:'+top+';left:'+left+';background:var(--'+col+')"></div>';
-    }
-    var cityLbls = [['16%','14%','Angor'],['34%','40%','Muzrabot'],['26%','72%','Jarqo\'rg\'on'],['60%','22%','Sherobod'],['74%','58%','Termiz'],['48%','82%','Denov']]
-      .map(function(c){return '<span class="map-city" style="top:'+c[0]+';left:'+c[1]+'">'+c[2]+'</span>';}).join('');
 
     root.innerHTML = window.pageHead({title:'Jonli xarita', sub:'Surxondaryo · '+online.length+' haydovchi onlayn', live:true,
-      actions:'<button class="btn">'+window.icon('refresh',16)+'Yangilash</button>'})+
-      '<div class="strip">'+
+      actions:'<button class="btn" data-refresh>'+window.icon('refresh',16)+'Yangilash</button>'})+
+      '<div class="strip" id="mapStrip">'+
         U.mini({icon:'car',bg:'var(--success-soft)',color:'var(--success)',label:'Bo\'sh',val:window.DB.drivers.filter(function(d){return d.status==='free';}).length})+
         U.mini({icon:'route',bg:'var(--warning-soft)',color:'var(--warning)',label:'Buyurtmada',val:window.DB.drivers.filter(function(d){return d.status==='busy';}).length})+
         U.mini({icon:'pin',bg:'var(--info-soft)',color:'#84a9f5',label:'Shaharlar',val:window.DB.CITIES.length})+
       '</div>'+
-      '<div class="card"><div class="card-head"><div><h3>Haydovchilar joylashuvi</h3><p>WebSocket: driver:location (mock)</p></div>'+
+      '<div class="card"><div class="card-head"><div><h3>Haydovchilar joylashuvi</h3><p>WebSocket: driver:location · jonli</p></div>'+
       '<div class="chart-legend"><span><i style="background:var(--success);border-radius:50%"></i>Bo\'sh</span>'+
       '<span><i style="background:var(--warning);border-radius:50%"></i>Buyurtmada</span>'+
       '<span><i style="background:var(--text-faint);border-radius:50%"></i>Oflayn</span></div></div>'+
-      '<div class="card-body"><div class="map tall">'+cityLbls+pins+
-      '<div class="ph">'+window.icon('map',30)+'<div class="mono">[ jonli xarita · api.elga.uz ulanganda Leaflet/Mapbox bilan almashtiriladi ]</div></div></div></div></div>';
+      '<div class="card-body"><div id="liveMap" style="height:540px;border-radius:12px;overflow:hidden;border:1px solid var(--border)"></div></div></div>';
+
+    root._onMount = function(){
+      var handle = window.GeoMap.create(root.querySelector('#liveMap'), {zoom:9, tall:true, scroll:true,
+        drivers: window.DB.drivers.filter(function(d){return d.status!=='offline'&&d.status!=='blocked';})});
+      if(window.Bus){
+        window.addPageSub(window.Bus.on('driver:location', function(moved){ handle.setDrivers(moved); }));
+        window.addPageSub(window.Bus.on('kpi:update', function(){
+          var s=root.querySelector('#mapStrip'); if(!s) return;
+          s.innerHTML = U.mini({icon:'car',bg:'var(--success-soft)',color:'var(--success)',label:'Bo\'sh',val:window.DB.drivers.filter(function(d){return d.status==='free';}).length})+
+            U.mini({icon:'route',bg:'var(--warning-soft)',color:'var(--warning)',label:'Buyurtmada',val:window.DB.drivers.filter(function(d){return d.status==='busy';}).length})+
+            U.mini({icon:'pin',bg:'var(--info-soft)',color:'#84a9f5',label:'Shaharlar',val:window.DB.CITIES.length});
+        }));
+      }
+      var rf=root.querySelector('[data-refresh]'); if(rf) rf.addEventListener('click',function(){ handle.setDrivers(window.DB.drivers.filter(function(d){return d.status!=='offline'&&d.status!=='blocked';})); U.toast('Yangilandi','Xarita yangilandi'); });
+    };
     return root;
   };
 })();

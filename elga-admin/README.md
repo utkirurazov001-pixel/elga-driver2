@@ -22,6 +22,22 @@ Bu papka statik — to'g'ridan-to'g'ri Cloudflare Pages ga yuklanadi:
 - Build command: (bo'sh)
 - Output directory: `elga-admin`
 
+## Professional imkoniyatlar (v2)
+
+- **Real-time dvigatel** (`realtime.js`) — Socket.IO simulyatsiyasi: yangi buyurtmalar
+  (`order:new`), holat o'zgarishi (`order:updated`), haydovchi harakati
+  (`driver:location`), KPI jonli yangilanishi (`kpi:update`). Event bus orqali
+  sahifalar avtomatik yangilanadi. `api.elga.uz` ulanganda haqiqiy socket bilan
+  almashtiriladi.
+- **Interaktiv xarita** (`map.js`) — Leaflet + CartoDB dark tiles, Surxondaryo
+  real koordinatalari, harakatlanuvchi haydovchi markerlari, popup. Internet
+  bo'lmasa nafis fallback (panel baribir ishlaydi).
+- **Jadval**: ustun sarlavhasini bosib **sortlash**, **CSV eksport** (haqiqiy
+  yuklab olish), filtr + qidiruv + paginatsiya.
+- **⌘K command palette** — klaviaturadan istalgan bo'limga tez o'tish (↑↓ Enter).
+- **Topbar**: ishlaydigan bildirishnoma paneli va profil menyusi (dropdown).
+- Dashboard KPI raqamlari va jonli xarita real vaqtda yangilanib turadi.
+
 ## Bo'limlar (TZ §16 traceability)
 
 | Bo'lim | Endpoint (kelajakda) |

@@ -429,6 +429,14 @@ textarea.input{resize:vertical;min-height:88px;line-height:1.5}
 .login-demo{margin-top:18px;padding-top:16px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-faint);text-align:center;line-height:1.7}
 .login-demo b{color:var(--gold-dark)}
 
+/* ============ LEAFLET (dark) ============ */
+.leaflet-container{background:#0c0e12;font-family:'Manrope',sans-serif}
+.leaflet-bar a{background:var(--surface-2);color:var(--text);border-color:var(--border)}
+.leaflet-bar a:hover{background:var(--surface-3)}
+.leaflet-popup-content-wrapper{background:#fff;border-radius:10px}
+.leaflet-popup-tip{background:#fff}
+.pal-row.sel{background:var(--surface-2)}
+
 /* ============ RESPONSIVE ============ */
 @media(max-width:1240px){.kpis{grid-template-columns:repeat(2,1fr)}.g-2,.g-2b,.g-half{grid-template-columns:1fr}.strip{grid-template-columns:1fr}.reward-grid{grid-template-columns:repeat(2,1fr)}.g-3{grid-template-columns:1fr 1fr}}
 @media(max-width:900px){

@@ -55,7 +55,14 @@
   // cfg: {columns:[{th,render(row),cls}], rows, page, perPage, total, onPage, empty}
   UI.table = function(cfg){
     var cols = cfg.columns;
-    var head = '<thead><tr>'+cols.map(function(c){return '<th'+(c.cls?' class="'+c.cls+'"':'')+'>'+(c.th||'')+'</th>';}).join('')+'</tr></thead>';
+    var sort = cfg.sort || {};
+    var head = '<thead><tr>'+cols.map(function(c){
+      var sortable = c.sortKey && cfg.onSort;
+      var arrow = '';
+      if(sortable && sort.key===c.sortKey){ arrow = ' <span style="color:var(--gold)">'+(sort.dir==='asc'?'▲':'▼')+'</span>'; }
+      var attr = sortable ? ' data-sort="'+c.sortKey+'" style="cursor:pointer;user-select:none"' : '';
+      return '<th'+(c.cls?' class="'+c.cls+'"':'')+attr+'>'+(c.th||'')+arrow+'</th>';
+    }).join('')+'</tr></thead>';
     var body;
     if(!cfg.rows.length){
       body = '<tbody><tr><td colspan="'+cols.length+'"><div class="empty">'+window.icon('inbox',40)+
@@ -90,7 +97,30 @@
         cfg.onPage(parseInt(b.getAttribute('data-pg'),10));
       });
     }
+    if(cfg.onSort){
+      wrap.querySelectorAll('th[data-sort]').forEach(function(th){
+        th.addEventListener('click', function(){ cfg.onSort(th.getAttribute('data-sort')); });
+      });
+    }
     return wrap;
+  };
+
+  // CSV eksport (haqiqiy yuklab olish)
+  UI.exportCSV = function(filename, columns, rows){
+    var head = columns.map(function(c){return '"'+(c.th||c.key||'')+'"';}).join(',');
+    var body = rows.map(function(r){
+      return columns.map(function(c){
+        var v = c.csv ? c.csv(r) : (c.key ? r[c.key] : '');
+        return '"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+      }).join(',');
+    }).join('\n');
+    var csv = '﻿'+head+'\n'+body;
+    var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    UI.toast('Eksport tayyor', filename+' yuklab olindi');
   };
 
   // ---- Toolbar (qidiruv + filtrlar) ----

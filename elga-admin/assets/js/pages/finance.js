@@ -59,28 +59,28 @@
   window.PAGES.cash = function(ctx){
     return window.listPage({
       title:'Pul yechish so\'rovlari', sub:'Tasdiqlash ikki bosqichli (confirm) · BE-FR-020',
+      actions:'<button class="btn" data-export>'+window.icon('download',16)+'CSV eksport</button>',
       placeholder:'Haydovchi qidirish...',
-      perPage:10,
+      perPage:10, exportName:'elga-pul-yechish',
       filters:function(st){return [
         {key:'status', value:st.status||'', options:[window.opt('','Barcha holatlar'),
           window.opt('pending','Kutilmoqda'),window.opt('approved','Tasdiqlangan'),window.opt('paid','To\'langan'),window.opt('rejected','Rad etilgan')]},
         {key:'provider', value:st.provider||'', options:[window.opt('','Barcha provayderlar'),window.opt('Payme','Payme'),window.opt('Click','Click')]}
       ];},
-      getData:function(st){
-        var rows = window.DB.withdrawals.filter(function(w){
+      rows:function(st){
+        return window.DB.withdrawals.filter(function(w){
           return U.matches(w,st.q,['driver','driver_phone']) &&
             (!st.status||w.status===st.status)&&(!st.provider||w.provider===st.provider);
         });
-        return {rows:U.paginate(rows,st.page,10), total:rows.length};
       },
       columns:[
-        {th:'ID', render:function(w){return '<span class="mono">'+w.id+'</span>';}},
-        {th:'Haydovchi', render:function(w){return U.cust(w.driver,w.driver_ini,w.driver_phone);}},
-        {th:'Park', render:function(w){return U.park(w.park);}},
-        {th:'Summa', cls:'sum', render:function(w){return window.money(w.amount);}},
-        {th:'Provayder', render:function(w){return U.tariff(w.provider);}},
-        {th:'So\'ralgan', render:function(w){return '<span class="muted">'+w.requested_at+'</span>';}},
-        {th:'Holat', render:function(w){return U.genTag(w.status);}},
+        {th:'ID', csv:function(w){return w.id;}, render:function(w){return '<span class="mono">'+w.id+'</span>';}},
+        {th:'Haydovchi', sortKey:'driver', csv:function(w){return w.driver;}, render:function(w){return U.cust(w.driver,w.driver_ini,w.driver_phone);}},
+        {th:'Park', sortKey:'park', csv:function(w){return w.park;}, render:function(w){return U.park(w.park);}},
+        {th:'Summa', cls:'sum', sortKey:'amount', csv:function(w){return w.amount;}, render:function(w){return window.money(w.amount);}},
+        {th:'Provayder', sortKey:'provider', csv:function(w){return w.provider;}, render:function(w){return U.tariff(w.provider);}},
+        {th:'So\'ralgan', csv:function(w){return w.requested_at;}, render:function(w){return '<span class="muted">'+w.requested_at+'</span>';}},
+        {th:'Holat', sortKey:'status', csv:function(w){return w.status;}, render:function(w){return U.genTag(w.status);}},
         {th:'', cls:'right', render:function(w){
           if(w.status!=='pending') return '<span class="muted">—</span>';
           return '<div class="row-actions"><button class="btn btn-primary btn-sm" data-wd="'+w.id+'">Tasdiqlash</button>'+
@@ -95,9 +95,9 @@
     var tlabel = {ride_payment:'Safar to\'lovi',commission:'Komissiya',topup:'To\'ldirish',withdrawal:'Yechish',refund:'Qaytarish'};
     return window.listPage({
       title:'Tranzaksiyalar', sub:'Barcha moliyaviy harakatlar',
-      actions:'<button class="btn">'+window.icon('download',16)+'Eksport</button>',
+      actions:'<button class="btn" data-export>'+window.icon('download',16)+'CSV eksport</button>',
       placeholder:'ID, buyurtma yoki ism...',
-      perPage:12,
+      perPage:12, exportName:'elga-tranzaksiyalar',
       filters:function(st){return [
         {key:'type', value:st.type||'', options:[window.opt('','Barcha turlar'),
           window.opt('ride_payment','Safar to\'lovi'),window.opt('commission','Komissiya'),
@@ -105,22 +105,21 @@
         {key:'status', value:st.status||'', options:[window.opt('','Barcha holatlar'),
           window.opt('success','Muvaffaqiyatli'),window.opt('pending','Kutilmoqda'),window.opt('failed','Xato')]}
       ];},
-      getData:function(st){
-        var rows = window.DB.transactions.filter(function(t){
+      rows:function(st){
+        return window.DB.transactions.filter(function(t){
           return U.matches(t,st.q,['id','order','who']) &&
             (!st.type||t.type===st.type)&&(!st.status||t.status===st.status);
         });
-        return {rows:U.paginate(rows,st.page,12), total:rows.length};
       },
       columns:[
-        {th:'ID', render:function(t){return '<span class="mono">'+t.id+'</span>';}},
-        {th:'Tur', render:function(t){return U.tariff(tlabel[t.type]||t.type);}},
-        {th:'Buyurtma', render:function(t){return t.order?'<span class="mono muted">'+t.order+'</span>':'<span class="muted">—</span>';}},
-        {th:'Tomon', render:function(t){return t.who;}},
-        {th:'Provayder', render:function(t){return t.provider;}},
-        {th:'Summa', cls:'sum', render:function(t){return (t.type==='refund'||t.type==='withdrawal'?'−':'')+window.money(t.amount);}},
-        {th:'Vaqt', render:function(t){return '<span class="muted">'+t.created_at+'</span>';}},
-        {th:'Holat', render:function(t){return U.genTag(t.status);}}
+        {th:'ID', csv:function(t){return t.id;}, render:function(t){return '<span class="mono">'+t.id+'</span>';}},
+        {th:'Tur', sortKey:'type', csv:function(t){return tlabel[t.type]||t.type;}, render:function(t){return U.tariff(tlabel[t.type]||t.type);}},
+        {th:'Buyurtma', csv:function(t){return t.order||'';}, render:function(t){return t.order?'<span class="mono muted">'+t.order+'</span>':'<span class="muted">—</span>';}},
+        {th:'Tomon', sortKey:'who', csv:function(t){return t.who;}, render:function(t){return t.who;}},
+        {th:'Provayder', sortKey:'provider', csv:function(t){return t.provider;}, render:function(t){return t.provider;}},
+        {th:'Summa', cls:'sum', sortKey:'amount', csv:function(t){return t.amount;}, render:function(t){return (t.type==='refund'||t.type==='withdrawal'?'−':'')+window.money(t.amount);}},
+        {th:'Vaqt', csv:function(t){return t.created_at;}, render:function(t){return '<span class="muted">'+t.created_at+'</span>';}},
+        {th:'Holat', sortKey:'status', csv:function(t){return t.status;}, render:function(t){return U.genTag(t.status);}}
       ]
     });
   };

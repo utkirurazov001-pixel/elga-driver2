@@ -20,11 +20,32 @@ window.PAGES = window.PAGES || {};
        beforeTable(state, wrap)->htmlString (ixtiyoriy KPI strip va h.k.)
      } */
   window.listPage = function(opts){
-    var state = { q:'', page:1 };
+    var state = { q:'', page:1, sortKey:opts.defaultSort||null, sortDir:opts.defaultDir||'desc' };
     var root = document.createElement('div');
+    var perPage = opts.perPage||10;
+
+    function computeData(){
+      // Yangi shartnoma: opts.rows(state) -> to'liq filtrlangan massiv (sort+paginate markazda)
+      if(opts.rows){
+        var full = opts.rows(state);
+        if(state.sortKey){
+          var col = (opts.columns||[]).filter(function(c){return c.sortKey===state.sortKey;})[0];
+          var valOf = col && col.sortVal ? col.sortVal : function(r){ return r[state.sortKey]; };
+          full = full.slice().sort(function(a,b){
+            var x=valOf(a), y=valOf(b);
+            if(typeof x==='string'&&!isNaN(parseFloat(x))&&isFinite(x)) {x=parseFloat(x);y=parseFloat(y);}
+            if(x<y) return state.sortDir==='asc'?-1:1;
+            if(x>y) return state.sortDir==='asc'?1:-1;
+            return 0;
+          });
+        }
+        return { rows: full.slice((state.page-1)*perPage, state.page*perPage), total: full.length, _full: full };
+      }
+      return opts.getData(state);
+    }
 
     function render(){
-      var data = opts.getData(state);
+      var data = computeData();
       root.innerHTML = window.pageHead({title:opts.title, sub:opts.sub, actions:typeof opts.actions==='function'?opts.actions():opts.actions, live:opts.live});
 
       if(opts.beforeTable){
@@ -54,8 +75,14 @@ window.PAGES = window.PAGES || {};
         rowAttr: opts.rowAttr,
         total: data.total,
         page: state.page,
-        perPage: opts.perPage||10,
+        perPage: perPage,
         emptyTitle: opts.emptyTitle, empty: opts.empty,
+        sort: opts.rows ? {key:state.sortKey, dir:state.sortDir} : null,
+        onSort: opts.rows ? function(key){
+          if(state.sortKey===key){ state.sortDir = state.sortDir==='asc'?'desc':'asc'; }
+          else { state.sortKey=key; state.sortDir='asc'; }
+          render();
+        } : null,
         onPage: function(p){ state.page=p; render(); }
       });
       // qator bosish (detal)
@@ -70,9 +97,35 @@ window.PAGES = window.PAGES || {};
         });
       }
       root.appendChild(tbl);
+
+      // CSV eksport tugmasi (sarlavhadagi [data-export])
+      var exp = root.querySelector('[data-export]');
+      if(exp){
+        exp.addEventListener('click', function(){
+          var full = data._full || data.rows;
+          var cols = (opts.exportColumns||opts.columns).filter(function(c){return c.csv||c.key||c.exportKey;});
+          window.UI.exportCSV((opts.exportName||'elga-export')+'.csv',
+            cols.map(function(c){return {th:c.csvTh||(c.th||c.exportKey),csv:c.csv,key:c.exportKey};}), full);
+        });
+      }
     }
     root._render = render;
     render();
+
+    // Jonli yangilanish (real-time event'lar)
+    if(opts.liveEvents && window.Bus){
+      opts.liveEvents.forEach(function(ev){
+        var off = window.Bus.on(ev, function(){
+          // foydalanuvchi yozayotgan yoki modal ochiq bo'lsa — tegmaymiz
+          if(document.querySelector('.modal-back')) return;
+          var ae = document.activeElement;
+          if(ae && root.contains(ae) && (ae.tagName==='INPUT'||ae.tagName==='SELECT'||ae.tagName==='TEXTAREA')) return;
+          if(state.page>1) return; // faqat 1-sahifada jonli oqim
+          render();
+        });
+        if(window.addPageSub) window.addPageSub(off);
+      });
+    }
     return root;
   };
 
