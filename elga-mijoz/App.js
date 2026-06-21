@@ -1454,8 +1454,14 @@ function AppInner() {
               )}
 
               <TouchableOpacity style={s.qayergaBtn} onPress={() => setSearchOpen(true)} activeOpacity={0.85}>
-                <Ionicons name="search" size={18} color={GRAY1} style={{ marginRight: 10 }} />
-                <Text style={{ color: GRAY1, fontSize: 16 }}>Maktab, bozor, ko'cha...</Text>
+                <View style={s.qayergaIconWrap}>
+                  <Ionicons name="search" size={20} color="#1A1A1A" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>Qayerga borasiz?</Text>
+                  <Text style={{ color: GRAY1, fontSize: 12, marginTop: 1 }}>Manzilni kiriting yoki tanlang</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={GRAY1} />
               </TouchableOpacity>
 
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
@@ -2527,10 +2533,21 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: CARD2,
-    borderRadius: 14,
-    height: 52,
-    paddingHorizontal: 16,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: YELLOW,
+    gap: 12,
+  },
+  qayergaIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: YELLOW,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   shortBtn: {
     flex: 1,
