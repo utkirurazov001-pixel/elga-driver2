@@ -21,6 +21,7 @@
       content.appendChild(tab==='cities'?citiesNode():placesNode());
       root.appendChild(content);
     }
+    root._render = render; // joriy tabni saqlab qayta render (rerenderPage uchun)
     function citiesNode(){
       return window.listPage({
         title:'', sub:'', placeholder:'Shahar qidirish...',
@@ -51,8 +52,8 @@
           }).sort(function(a,b){return b.count-a.count;});
         },
         columns:[
-          {th:'Mo\'ljal / manzil', sortKey:'name', csv:function(p){return p.name;}, render:function(p){return '<b>'+p.name+'</b>';}},
-          {th:'Shahar', sortKey:'city', csv:function(p){return p.city;}, render:function(p){return '<div class="route">'+window.icon('pin',13)+p.city+'</div>';}},
+          {th:'Mo\'ljal / manzil', sortKey:'name', csv:function(p){return p.name;}, render:function(p){return '<b>'+U.esc(p.name)+'</b>';}},
+          {th:'Shahar', sortKey:'city', csv:function(p){return p.city;}, render:function(p){return '<div class="route">'+window.icon('pin',13)+U.esc(p.city)+'</div>';}},
           {th:'Foydalanish', sortKey:'count', csv:function(p){return p.count;}, render:function(p){return '<span class="mono gold">'+p.count+'</span>';}},
           {th:'Manba', csv:function(p){return p.source;}, render:function(p){return U.tariff(p.source==='seed'?'Bazaviy':'Kiritilgan');}},
           {th:'Qo\'shilgan', csv:function(p){return p.added_at;}, render:function(p){return '<span class="muted">'+p.added_at+'</span>';}}

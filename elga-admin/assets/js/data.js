@@ -175,7 +175,7 @@
 
   // ---- NOTIFICATIONS ----
   var notifications = [
-    {id:'N1', type:'order', title:'Yangi buyurtma #10620', body:'Angor → Termiz · Komfort · 42 000 so\'m', read:false, created_at:minsAgo(2), icon:'bag', tone:'info'},
+    {id:'N1', type:'order', title:'Yangi buyurtma #10620', body:'Angor · Elektroset → Angor · 15 bayroq · Komfort · 24 000 so\'m', read:false, created_at:minsAgo(2), icon:'bag', tone:'info'},
     {id:'N2', type:'complaint', title:'Yangi shikoyat', body:'Haydovchi kechikdi · #10402 · Aziz K.', read:false, created_at:minsAgo(5), icon:'warn', tone:'danger'},
     {id:'N3', type:'withdrawal', title:'Pul yechish so\'rovi', body:'Dilshod T. · 540 000 so\'m · Payme', read:false, created_at:minsAgo(18), icon:'cash', tone:'gold'},
     {id:'N4', type:'kyc', title:'KYC tasdiqlash kutilmoqda', body:'2 ta yangi haydovchi hujjati yuklandi', read:true, created_at:minsAgo(55), icon:'shield', tone:'info'},
