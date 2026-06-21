@@ -65,11 +65,32 @@
     document.getElementById('loginForm').addEventListener('submit',function(e){
       e.preventDefault();
       var u=document.getElementById('lg').value.trim();
+      var pw=document.getElementById('pw').value;
       if(!u){ window.UI.toast('Xato','Login kiriting','error'); return; }
-      sessionStorage.setItem('elga_admin_in','1');
-      renderShell();
-      navigate('grid');
-      window.UI.toast('Xush kelibsiz!', ME.full_name+' · '+window.roleLabel(ME.role));
+      var btn=e.target.querySelector('button[type="submit"]');
+      btn.disabled=true; btn.style.opacity='.7'; var old=btn.innerHTML; btn.innerHTML=window.icon('refresh',16)+' Tekshirilmoqda...';
+
+      function enterDemo(msg){
+        window.ELGA && (window.ELGA.live=false);
+        sessionStorage.setItem('elga_admin_in','1');
+        renderShell(); navigate('grid');
+        window.UI.toast('Demo rejimi', msg||'Backend topilmadi — namuna ma\'lumot','info');
+      }
+      function enterLive(){
+        window.ELGA.bootstrap().then(function(){
+          if(window.ELGA.me){ ME.full_name=window.ELGA.me.full_name; ME.role=window.ELGA.me.role; ME.ini=(ME.full_name.split(' ').map(function(x){return x[0];}).join('').slice(0,2)); }
+          sessionStorage.setItem('elga_admin_in','1');
+          renderShell(); navigate('grid');
+          window.UI.toast('Backendga ulandi', 'api.elga.uz · jonli ma\'lumot · 1226');
+        }).catch(function(){ enterDemo('Ma\'lumot yuklanmadi — namuna rejimi'); });
+      }
+
+      if(!window.ELGA){ enterDemo(); return; }
+      window.ELGA.login(u, pw).then(function(res){
+        if(res.ok){ enterLive(); }
+        else if(res.type==='auth'){ btn.disabled=false; btn.style.opacity='1'; btn.innerHTML=old; window.UI.toast('Kirish xato', res.message||'Login yoki parol noto\'g\'ri','error'); }
+        else { enterDemo(); } // network — backend yo'q
+      });
     });
   }
 
@@ -109,8 +130,8 @@
     app.querySelector('#logout').addEventListener('click',doLogout);
     var ts=app.querySelector('.top-search input'); if(ts) ts.addEventListener('focus',function(){ this.blur(); openPalette(); });
 
-    // Real-time dvigatelni ishga tushirish
-    if(window.RealtimeEngine) window.RealtimeEngine.start();
+    // Real-time dvigatel — faqat demo rejimda (live'da keyin real Socket.IO)
+    if(window.RealtimeEngine && !(window.ELGA && window.ELGA.live)) window.RealtimeEngine.start();
     // Global jonli obunalar (badge'lar, qo'ng'iroq nuqtasi)
     if(window.Bus){
       window.Bus.on('notice:new', function(){
