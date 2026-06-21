@@ -204,13 +204,14 @@
           window.opt('','Barcha holatlar'),window.opt('completed','Bajarildi'),window.opt('in_progress','Yo\'lda'),
           window.opt('searching','Qidirilmoqda'),window.opt('assigned','Tayinlangan'),window.opt('cancelled','Bekor')]},
         {key:'city', label:'Shahar', value:st.city||'', options:window.cityOptions()},
+        {key:'route', label:'Safar turi', value:st.route||'', options:[window.opt('','Barcha safarlar'),window.opt('intra','Shahar ichi'),window.opt('inter','Shaharlararo')]},
         {key:'tariff', label:'Tarif', value:st.tariff||'', options:[window.opt('','Barcha tariflar')].concat(window.DB.TARIFFS.map(function(t){return window.opt(t,t);}))}
       ];},
       rows:function(st){
         return window.DB.orders.filter(function(o){
-          return U.matches(o,st.q,['id','client','driver','from','to']) &&
-            (!st.status||o.status===st.status) && (!st.city||o.from===st.city||o.to===st.city) &&
-            (!st.tariff||o.tariff===st.tariff);
+          return U.matches(o,st.q,['id','client','driver','from','to','from_place','to_place']) &&
+            (!st.status||o.status===st.status) && (!st.city||o.from_city===st.city||o.to_city===st.city) &&
+            (!st.tariff||o.tariff===st.tariff) && (!st.route||o.route_type===st.route);
         });
       },
       columns:[

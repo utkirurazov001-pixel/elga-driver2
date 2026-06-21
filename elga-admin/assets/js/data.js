@@ -11,6 +11,16 @@
   var CARS = [["Chevrolet","Cobalt"],["Chevrolet","Nexia 3"],["Chevrolet","Lacetti"],["Chevrolet","Gentra"],["Chevrolet","Spark"],["Chevrolet","Malibu"],["Daewoo","Matiz"]];
   var COLORS = ["Oq","Kulrang","Qora","Kumush","Bej"];
 
+  // ---- MO'LJALLAR / MANZILLAR (namuna — platformaga kiritilgani sari to'planadi) ----
+  var PLACES = {
+    "Angor":       ["Markaz","Elektroset","15 bayroq","Yangi bozor","Temir yo'l vokzali","Sanoat zonasi","Do'stlik MFY","Paxtakor","Navoiy ko'chasi"],
+    "Muzrabot":    ["Markaz","Pariqishloq","Xalqabod","Navbahor","Oqoltin","Bandixon yo'li","Mustaqillik MFY"],
+    "Jarqo'rg'on": ["Markaz","Sharq","Markaziy bozor","Yangiobod","Vokzal","Paxtazor"],
+    "Sherobod":    ["Markaz","Qiziriq yo'li","Bozor","Vokzal","Talimarjon yo'li"],
+    "Termiz":      ["Markaz","Vokzal","Aeroport","Alpomish maydoni","Markaziy bozor","Chegara (Ayritom)","Universitet"],
+    "Denov":       ["Markaz","Markaziy bozor","Sariosiyo yo'li","Yangiariq","Qumqo'rg'on yo'li"]
+  };
+
   function pick(a,i){ return a[i % a.length]; }
   function rnd(seed){ var x=Math.sin(seed)*10000; return x-Math.floor(x); }
   function initials(name){ var p=name.split(' '); return ((p[0]||'')[0]||'')+((p[1]||'')[0]||''); }
@@ -54,18 +64,27 @@
   // ---- ORDERS ----
   var OSTATUS = ["completed","in_progress","searching","assigned","cancelled","new"];
   var PAY = ["cash","payme","click","balance"];
+  function placeOf(city,seed){ var arr=PLACES[city]||["Markaz"]; return arr[Math.floor(rnd(seed)*arr.length)]; }
   var orders = [];
   for(var o=0;o<140;o++){
     var cl = pick(clients,o);
     var dr = pick(drivers,o+2);
     var st = o<3?pick(["new","searching"],o):pick(OSTATUS,o%6);
-    var from = pick(CITIES,o), to = pick(CITIES,o+3); if(to===from) to=pick(CITIES,o+1);
-    var price = (18+Math.floor(rnd(o)*82))*1000;
+    var fromCity = pick(CITIES,o);
+    var intercity = rnd(o+50) < 0.3;            // ~30% shaharlararo
+    var toCity = intercity ? (function(){ var t=pick(CITIES,o+3); if(t===fromCity) t=pick(CITIES,o+1); return t; })() : fromCity;
+    var fromPlace = placeOf(fromCity,o+1), toPlace = placeOf(toCity,o+7);
+    if(toPlace===fromPlace && !intercity) toPlace = placeOf(toCity,o+13);
+    var fromLabel = fromCity+' · '+fromPlace, toLabel = toCity+' · '+toPlace;
+    var price = intercity ? (35+Math.floor(rnd(o)*70))*1000 : (12+Math.floor(rnd(o)*26))*1000;
     orders.push({
       id:'#'+(10620-o), client:cl.full_name, client_id:cl.id, client_ini:cl.ini, client_phone:cl.phone,
       driver: st==='new'||st==='searching'?null:dr.full_name, driver_id:dr.id, park: st==='new'||st==='searching'?null:dr.park_number,
-      from:from, to:to, tariff:pick(TARIFFS,o%3), distance:(3+rnd(o)*40).toFixed(1),
-      duration: 6+Math.floor(rnd(o+1)*48), price:price, commission:Math.round(price*0.15),
+      from_city:fromCity, from_place:fromPlace, to_city:toCity, to_place:toPlace,
+      from:fromLabel, to:toLabel, route_type: intercity?'inter':'intra',
+      tariff:pick(TARIFFS,o%3), distance: intercity ? (20+rnd(o)*70).toFixed(1) : (1.5+rnd(o)*8).toFixed(1),
+      duration: intercity ? 30+Math.floor(rnd(o+1)*60) : 5+Math.floor(rnd(o+1)*22),
+      price:price, commission:Math.round(price*0.15),
       payment: pick(PAY,o), payment_status: st==='completed'?'paid':'pending',
       status:st, created_at: minsAgo(o*7+3), cancel_reason: st==='cancelled'?pick(["Mijoz topilmadi","Haydovchi rad etdi","Narx kelishmadi","Mijoz bekor qildi"],o):null
     });
@@ -163,6 +182,20 @@
     {id:'N5', type:'system', title:'Tizim yangilandi', body:'Tariflar moduli yangilandi (v3.0)', read:true, created_at:dateAgo(1), icon:'cog', tone:'info'}
   ];
 
+  // ---- MO'LJALLAR LUG'ATI (places) — seed + buyurtmalardan to'plangan foydalanish ----
+  var places = [];
+  var placeIndex = {};
+  function regPlace(city, name){
+    var key = city+'|'+name;
+    if(placeIndex[key]){ placeIndex[key].count++; return placeIndex[key]; }
+    var p = {id:'PL'+(places.length+1), city:city, name:name, count:1,
+      added_at: dateAgo(Math.floor(rnd(places.length)*40)), source:'seed'};
+    places.push(p); placeIndex[key]=p; return p;
+  }
+  CITIES.forEach(function(c){ (PLACES[c]||[]).forEach(function(n){ regPlace(c,n); }); });
+  // buyurtmalardagi foydalanishni hisobga olish
+  orders.forEach(function(o){ regPlace(o.from_city,o.from_place); regPlace(o.to_city,o.to_place); });
+
   // ---- AUDIT LOGS ----
   var ACT = [
     ["withdrawal.approve","withdrawals","WD501","Pul yechish tasdiqlandi (2-bosqich)"],
@@ -195,11 +228,20 @@
   }
 
   window.DB = {
-    CITIES:CITIES, TARIFFS:TARIFFS, ROLES:ROLES,
+    CITIES:CITIES, TARIFFS:TARIFFS, ROLES:ROLES, PLACES:PLACES,
     drivers:drivers, clients:clients, orders:orders, withdrawals:withdrawals,
     transactions:transactions, complaints:complaints, staff:staff,
     rewards:rewards, redemptions:redemptions, promos:promos, cities:cityRows,
-    notifications:notifications, audit:audit,
+    notifications:notifications, audit:audit, places:places,
+    // Yangi manzil kiritilganda lug'atga qo'shib boradi (to'planadi)
+    addPlace:function(city,name){
+      name=(name||'').trim(); if(!city||!name) return null;
+      var key=city+'|'+name, p=placeIndex[key];
+      if(p){ p.count++; return p; }
+      p={id:'PL'+(places.length+1), city:city, name:name, count:1, added_at:'hozir', source:'kiritilgan'};
+      places.push(p); placeIndex[key]=p; return p;
+    },
+    placesOf:function(city){ return places.filter(function(p){return p.city===city;}).sort(function(a,b){return b.count-a.count;}); },
     tariffs:[
       {id:'TF1', name:'Ekonom', base:8000, per_km:1500, per_min:300, min_fare:12000, surge:1.0, commission:15, active:true},
       {id:'TF2', name:'Komfort', base:12000, per_km:2200, per_min:450, min_fare:18000, surge:1.0, commission:15, active:true},

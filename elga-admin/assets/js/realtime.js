@@ -33,15 +33,22 @@
   function ini(n){ var p=n.split(' '); return (p[0][0]||'')+((p[1]||'')[0]||''); }
 
   /* ---- Yangi buyurtma yaratish ---- */
+  function placeOf(city){ var arr=(window.DB.PLACES&&window.DB.PLACES[city])||['Markaz']; return arr[Math.floor(rnd()*arr.length)]; }
   function spawnOrder(){
     var cities=window.DB.CITIES, tar=window.DB.TARIFFS;
     var nm=pick(FIRST)+' '+pick(LAST);
-    var from=pick(cities), to=pick(cities); if(to===from) to=pick(cities);
-    var price=(18+Math.floor(rnd()*82))*1000;
+    var fc=pick(cities);
+    var inter = rnd()<0.3;
+    var tc = inter ? (function(){ var t=pick(cities); if(t===fc) t=pick(cities); return t; })() : fc;
+    var fp=placeOf(fc), tp=placeOf(tc);
+    if(window.DB.addPlace){ window.DB.addPlace(fc,fp); window.DB.addPlace(tc,tp); }
+    var price = inter ? (35+Math.floor(rnd()*70))*1000 : (12+Math.floor(rnd()*26))*1000;
     var o={ id:'#'+(seq++), client:nm, client_id:'CL'+(3000+seq), client_ini:ini(nm),
       client_phone:'+998 9'+Math.floor(rnd()*9)+' '+(10+Math.floor(rnd()*89))+' *** ** '+(10+Math.floor(rnd()*89)),
-      driver:null, driver_id:null, park:null, from:from, to:to, tariff:pick(tar),
-      distance:(3+rnd()*40).toFixed(1), duration:6+Math.floor(rnd()*48),
+      driver:null, driver_id:null, park:null,
+      from_city:fc, from_place:fp, to_city:tc, to_place:tp,
+      from:fc+' · '+fp, to:tc+' · '+tp, route_type: inter?'inter':'intra', tariff:pick(tar),
+      distance: inter?(20+rnd()*60).toFixed(1):(1.5+rnd()*8).toFixed(1), duration: inter?40:12,
       price:price, commission:Math.round(price*0.15), payment:pick(['cash','payme','click','balance']),
       payment_status:'pending', status:'searching', created_at:'hozir', cancel_reason:null, _new:true };
     window.DB.orders.unshift(o);

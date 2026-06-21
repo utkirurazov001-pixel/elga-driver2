@@ -4,25 +4,63 @@
 (function(){
   var U = window.UI;
 
-  /* ---------------- SHAHARLAR / ZONALAR ---------------- */
+  /* ---------------- SHAHARLAR / ZONALAR + MO'LJALLAR ---------------- */
   window.PAGES.pin = function(ctx){
-    return window.listPage({
-      title:'Shaharlar / Zonalar', sub:'Surxondaryo · faqat ruxsat etilgan 6 shahar (RULE-04)',
-      placeholder:'Shahar qidirish...',
-      perPage:10,
-      getData:function(st){
-        var rows = window.DB.cities.filter(function(c){return U.matches(c,st.q,['name']);});
-        return {rows:rows, total:null};
-      },
-      columns:[
-        {th:'Shahar', render:function(c){return '<div class="route">'+window.icon('pin',14)+'<b>'+c.name+'</b></div>';}},
-        {th:'Viloyat', render:function(c){return c.region;}},
-        {th:'Haydovchilar', render:function(c){return c.drivers;}},
-        {th:'Buyurtmalar', render:function(c){return c.orders;}},
-        {th:'Holat', render:function(c){return c.active?U.genTag('true'):U.genTag('false');}},
-        {th:'', cls:'right', render:function(c){return '<button class="btn btn-icon btn-sm" title="Tahrir">'+window.icon('edit',15)+'</button>';}}
-      ]
-    });
+    var root = document.createElement('div');
+    var tab = 'cities';
+    function render(){
+      root.innerHTML = window.pageHead({title:'Shaharlar / Zonalar', sub:'Surxondaryo · 6 shahar (RULE-04) · manzillar lug\'ati to\'planib boradi'});
+      var tabs=document.createElement('div'); tabs.className='tabs';
+      [['cities','Shaharlar'],['places','Mo\'ljallar (manzillar)']].forEach(function(it){
+        var b=document.createElement('button'); b.textContent=it[1]; if(it[0]===tab) b.className='on';
+        b.addEventListener('click',function(){ tab=it[0]; render(); });
+        tabs.appendChild(b);
+      });
+      root.appendChild(tabs);
+      var content=document.createElement('div');
+      content.appendChild(tab==='cities'?citiesNode():placesNode());
+      root.appendChild(content);
+    }
+    function citiesNode(){
+      return window.listPage({
+        title:'', sub:'', placeholder:'Shahar qidirish...',
+        rows:function(st){ return window.DB.cities.filter(function(c){return U.matches(c,st.q,['name']);}); },
+        columns:[
+          {th:'Shahar', sortKey:'name', render:function(c){return '<div class="route">'+window.icon('pin',14)+'<b>'+c.name+'</b></div>';}},
+          {th:'Viloyat', render:function(c){return c.region;}},
+          {th:'Haydovchilar', sortKey:'drivers', render:function(c){return c.drivers;}},
+          {th:'Buyurtmalar', sortKey:'orders', render:function(c){return c.orders;}},
+          {th:'Mo\'ljallar', render:function(c){return window.DB.placesOf(c.name).length;}},
+          {th:'Holat', render:function(c){return c.active?U.genTag('true'):U.genTag('false');}},
+          {th:'', cls:'right', render:function(c){return '<button class="btn btn-icon btn-sm" title="Tahrir">'+window.icon('edit',15)+'</button>';}}
+        ]
+      });
+    }
+    function placesNode(){
+      return window.listPage({
+        title:'', sub:'', placeholder:'Mo\'ljal nomi qidirish...', perPage:12, exportName:'elga-moljallar',
+        actions:'<button class="btn" data-export>'+window.icon('download',16)+'CSV eksport</button>'+
+                '<button class="btn btn-primary" data-add-place>'+window.icon('plus',16)+'Mo\'ljal qo\'shish</button>',
+        filters:function(st){return [
+          {key:'city', value:st.city||'', options:window.cityOptions()},
+          {key:'source', value:st.source||'', options:[window.opt('','Barcha manba'),window.opt('seed','Bazaviy'),window.opt('kiritilgan','Kiritilgan')]}
+        ];},
+        rows:function(st){
+          return window.DB.places.filter(function(p){
+            return U.matches(p,st.q,['name','city']) && (!st.city||p.city===st.city) && (!st.source||p.source===st.source);
+          }).sort(function(a,b){return b.count-a.count;});
+        },
+        columns:[
+          {th:'Mo\'ljal / manzil', sortKey:'name', csv:function(p){return p.name;}, render:function(p){return '<b>'+p.name+'</b>';}},
+          {th:'Shahar', sortKey:'city', csv:function(p){return p.city;}, render:function(p){return '<div class="route">'+window.icon('pin',13)+p.city+'</div>';}},
+          {th:'Foydalanish', sortKey:'count', csv:function(p){return p.count;}, render:function(p){return '<span class="mono gold">'+p.count+'</span>';}},
+          {th:'Manba', csv:function(p){return p.source;}, render:function(p){return U.tariff(p.source==='seed'?'Bazaviy':'Kiritilgan');}},
+          {th:'Qo\'shilgan', csv:function(p){return p.added_at;}, render:function(p){return '<span class="muted">'+p.added_at+'</span>';}}
+        ]
+      });
+    }
+    render();
+    return root;
   };
 
   /* ---------------- BILDIRISHNOMALAR ---------------- */

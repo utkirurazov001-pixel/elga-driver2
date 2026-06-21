@@ -371,6 +371,7 @@
       var r=window.DB.redemptions.find(function(x){return x.id===t.getAttribute('data-fulfill');});
       if(r){ r.status='fulfilled'; window.UI.toast('Berildi','Sovg\'a berildi: '+r.reward); window.rerenderPage(); }
     }
+    else if(t=e.target.closest('[data-add-place]')){ window.addPlaceModal(); }
     else if(t=e.target.closest('[data-adjust]')){ window.adjustPoints(null); }
     else if(t=e.target.closest('[data-adj]')){ window.adjustPoints(t.getAttribute('data-adj')); }
     else if(t=e.target.closest('[data-edit-promo]')){ window.promoModal(t.getAttribute('data-edit-promo'), window.rerenderPage); }
