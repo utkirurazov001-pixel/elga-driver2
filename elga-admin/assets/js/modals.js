@@ -15,7 +15,7 @@
       body:'<div class="grid g-half" style="align-items:start;gap:20px">'+
         '<div>'+dl([
           ['Mijoz', o.client],['Telefon','<span class="mono">'+o.client_phone+'</span>'],
-          ['Olish','<b>'+(o.from||'')+'</b>'],['Tushirish','<b>'+(o.to||'')+'</b>'],
+          ['Olish','<b>'+U.esc(o.from||'')+'</b>'],['Tushirish','<b>'+U.esc(o.to||'')+'</b>'],
           ['Safar turi', o.route_type==='inter'?'<span class="tg gold">Shaharlararo</span>':'<span class="tg neutral">Shahar ichi</span>'],
           ['Tarif', U.tariff(o.tariff)],
           ['Masofa', o.distance+' km'],['Davomiyligi', o.duration+' daq'],
@@ -67,6 +67,7 @@
         '<div>'+dl([
           ['Reyting','★ '+d.rating],['Buyurtmalar', d.orders_count],
           ['Balans','<b class="mono">'+window.money(d.balance)+' so\'m</b>'],
+          ['Scoring ball', (function(){var s=window.DB.driverScore?window.DB.driverScore(d):null; return s?'<span class="tg '+(s.score>=75?'done':s.score>=50?'wait':'canc')+'">'+s.score+'</span> <span class="muted" style="font-size:11px">qabul '+s.accept+'% · yakun '+s.completion+'%</span>':'—';})()],
           ['KYC', U.kycTag(d.kyc_status)],['Holat', U.driverTag(d.status)]
         ])+'</div></div>',
       foot:'<button class="btn" data-close>Yopish</button>'+
@@ -77,7 +78,7 @@
         back.querySelector('[data-close]').addEventListener('click',close);
         var bl=back.querySelector('[data-block]'), un=back.querySelector('[data-unblock]');
         if(bl) bl.addEventListener('click',function(){ blockReason(d, true, close, rerender); });
-        if(un) un.addEventListener('click',function(){ d.status='free'; U.toast('Bajarildi', d.full_name+' blokdan chiqarildi'); close(); rerender&&rerender(); });
+        if(un) un.addEventListener('click',function(){ d.status='free'; U.toast('Bajarildi', d.full_name+' blokdan chiqarildi'); window.apiAction('POST','/drivers/'+d.id+'/unblock').then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); }); close(); rerender&&rerender(); });
       }
     });
   };
@@ -93,7 +94,9 @@
         back.querySelector('[data-ok]').addEventListener('click',function(){
           var r=back.querySelector('[data-reason]').value.trim();
           if(!r){ U.toast('Xato','Sabab kiriting','error'); return; }
-          d.status='blocked'; close(); parentClose&&parentClose(); U.toast('Bloklandi', d.full_name+' bloklandi'); rerender&&rerender();
+          d.status='blocked'; close(); parentClose&&parentClose(); U.toast('Bloklandi', d.full_name+' bloklandi');
+          window.apiAction('POST','/drivers/'+d.id+'/block',{reason:r}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          rerender&&rerender();
         });
       }
     });
@@ -101,6 +104,13 @@
 
   /* ---- MIJOZ DETALI ---- */
   window.clientDetail = function(c){
+    var hist = (window.DB.clientOrders?window.DB.clientOrders(c.id):[]).slice(0,5);
+    var histHTML = hist.length ? '<div style="margin-top:16px"><label style="font-size:12px;font-weight:700;color:var(--text-dim)">Safar tarixi</label>'+
+      '<div class="cmp-list" style="margin-top:8px">'+hist.map(function(o){
+        return '<div class="cmp"><div class="ic info">'+window.icon('bag',16)+'</div>'+
+          '<div><div class="tt">'+U.esc(o.from||'')+' → '+U.esc(o.to||'')+'</div><div class="ds">'+U.esc(o.id)+' · '+U.tariff(o.tariff)+'</div></div>'+
+          '<div class="tm">'+window.money(o.price)+'</div></div>';
+      }).join('')+'</div></div>' : '';
     U.modal({
       title:c.full_name, sub:'Mijoz · '+c.tier.toUpperCase()+' daraja',
       body:dl([
@@ -109,12 +119,13 @@
         ['Sadoqat balli','<span class="mono gold">'+c.points+' ball</span>'],
         ['Daraja', c.tier.toUpperCase()],['Ro\'yxatdan', c.registered_at],
         ['Holat', c.is_blocked?'<span class="tg canc">Bloklangan</span>':'<span class="tg done">Faol</span>']
-      ]),
+      ])+histHTML,
       foot:'<button class="btn" data-close>Yopish</button><button class="btn '+(c.is_blocked?'btn-success':'btn-danger')+'" data-toggle>'+(c.is_blocked?'Blokdan chiqarish':'Bloklash')+'</button>',
       onMount:function(back,close){
         back.querySelector('[data-close]').addEventListener('click',close);
         back.querySelector('[data-toggle]').addEventListener('click',function(){
           c.is_blocked=!c.is_blocked; U.toast('Bajarildi', c.full_name+' '+(c.is_blocked?'bloklandi':'blokdan chiqarildi')); close();
+          window.apiAction('POST','/clients/'+c.id+'/block').then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });
       }
@@ -130,7 +141,7 @@
         ['Buyurtma','<span class="mono">'+c.order+'</span>'],['Vaqt', c.created_at],
         ['Holat', U.genTag(c.status)]
       ])+'<div class="field full" style="margin-top:16px"><label>Tavsif</label>'+
-        '<div class="card-body" style="background:var(--surface-2);border-radius:11px;padding:13px">'+c.description+'</div></div>'+
+        '<div class="card-body" style="background:var(--surface-2);border-radius:11px;padding:13px">'+U.esc(c.description)+'</div></div>'+
         '<div class="field full" style="margin-top:14px"><label>Javob / yechim</label>'+
         '<textarea class="input" data-resolution placeholder="Operatorning javobi yoki yechimi..."></textarea></div>',
       foot:'<button class="btn" data-close>Yopish</button>'+
@@ -138,8 +149,17 @@
       onMount:function(back,close){
         back.querySelector('[data-close]').addEventListener('click',close);
         var rv=back.querySelector('[data-review]'), rs=back.querySelector('[data-resolve]');
-        if(rv) rv.addEventListener('click',function(){ c.status='in_review'; U.toast('Yangilandi','Shikoyat ko\'rib chiqilmoqda'); close(); rerender&&rerender(); });
-        if(rs) rs.addEventListener('click',function(){ c.status='resolved'; U.toast('Hal qilindi','Shikoyat yopildi'); close(); rerender&&rerender(); window.refreshBadges&&window.refreshBadges(); });
+        if(rv) rv.addEventListener('click',function(){
+          var txt=(back.querySelector('[data-resolution]')||{}).value||'ko\'rib chiqilmoqda';
+          c.status='in_review'; U.toast('Yangilandi','Shikoyat ko\'rib chiqilmoqda'); close();
+          window.apiAction('POST','/complaints/'+c.id+'/respond',{resolution:txt}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          rerender&&rerender();
+        });
+        if(rs) rs.addEventListener('click',function(){
+          c.status='resolved'; U.toast('Hal qilindi','Shikoyat yopildi'); close();
+          window.apiAction('POST','/complaints/'+c.id+'/resolve').then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          rerender&&rerender(); window.refreshBadges&&window.refreshBadges();
+        });
       }
     });
   };
@@ -210,7 +230,9 @@
         back.querySelector('[data-close]').addEventListener('click',close);
         back.querySelectorAll('[data-pick]').forEach(function(b){b.addEventListener('click',function(){
           var d=window.DB.drivers.find(function(x){return x.id===b.getAttribute('data-pick');});
+          if(o){ o.driver=d.full_name; o.driver_id=d.id; o.park=d.park_number; o.status='assigned'; d.status='busy'; }
           close(); U.toast('Tayinlandi', (o?o.id:'Buyurtma')+' → '+d.full_name);
+          if(o) window.apiAction('POST','/orders/'+encodeURIComponent(o.id)+'/assign',{driver_id:d.id}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });});
       }
@@ -248,6 +270,7 @@
           var c=back.querySelector('[data-code]').value.trim();
           if(c.length<4){ U.toast('Xato','Tasdiq kodini kiriting','error'); return; }
           w.status='paid'; close(); U.toast('To\'landi', w.driver+' · '+window.money(w.amount)+' so\'m '+w.provider);
+          window.apiAction('POST','/finance/withdrawals/'+w.id+'/approve',{confirm:true,code:c}).then(function(r){ if(!r.ok&&!r.demo) U.toast('Backend xatosi', r.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });
       }
@@ -263,8 +286,10 @@
       onMount:function(back,close){
         back.querySelector('[data-close]').addEventListener('click',close);
         back.querySelector('[data-ok]').addEventListener('click',function(){
-          if(!back.querySelector('[data-reason]').value.trim()){ U.toast('Xato','Sabab kiriting','error'); return; }
+          var reason=back.querySelector('[data-reason]').value.trim();
+          if(!reason){ U.toast('Xato','Sabab kiriting','error'); return; }
           w.status='rejected'; close(); U.toast('Rad etildi', w.driver+' so\'rovi rad etildi','error');
+          window.apiAction('POST','/finance/withdrawals/'+w.id+'/reject',{reason:reason}).then(function(r){ if(!r.ok&&!r.demo) U.toast('Backend xatosi', r.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });
       }
@@ -291,6 +316,7 @@
             t[k] = (k==='name')?v:parseFloat(v)||0;
           });
           if(!id){ t.id='TF'+(window.DB.tariffs.length+1); t.active=true; window.DB.tariffs.push(t); }
+          else window.apiAction('PATCH','/tariffs/'+t.id,{base_fare:t.base,per_km:t.per_km,per_min:t.per_min,min_fare:t.min_fare,surge_multiplier:t.surge,commission_percent:t.commission}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
           close(); U.toast('Saqlandi','Tarif yangilandi'); rerender&&rerender();
         });
       }
@@ -375,9 +401,103 @@
           var c=back.querySelector('[data-c]').value, n=back.querySelector('[data-n]').value.trim();
           if(!n){ U.toast('Xato','Mo\'ljal nomini kiriting','error'); return; }
           window.DB.addPlace(c,n); close(); U.toast('Qo\'shildi', c+' · '+n+' lug\'atga qo\'shildi');
+          window.apiAction('POST','/places',{city:c,name:n}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
           window.rerenderPage && window.rerenderPage();
         });
       }
+    });
+  };
+
+  /* ---- AVTOMATIK TAYINLASH (eng yaqin bo'sh haydovchi) ---- */
+  window.autoAssign = function(orderId){
+    var o = window.DB.orders.find(function(x){return x.id===orderId;});
+    if(!o) return;
+    if(window.GeoMap && window.GeoMap.seedDriverCoords) window.GeoMap.seedDriverCoords();
+    var coords = (window.GeoMap && window.GeoMap.CITY_COORDS && window.GeoMap.CITY_COORDS[o.from_city]) || [37.55,67.3];
+    function hav(aLat,aLng,bLat,bLng){var R=6371,dLat=(bLat-aLat)*Math.PI/180,dLng=(bLng-aLng)*Math.PI/180;
+      var s=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(aLat*Math.PI/180)*Math.cos(bLat*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+      return R*2*Math.atan2(Math.sqrt(s),Math.sqrt(1-s));}
+    var free = window.DB.drivers.filter(function(d){return d.status==='free'&&d.kyc_status==='approved'&&d.tariff===o.tariff;});
+    if(!free.length) free = window.DB.drivers.filter(function(d){return d.status==='free'&&d.kyc_status==='approved';});
+    var best=null;
+    free.forEach(function(d){ if(d.lat==null) return; var dist=hav(coords[0],coords[1],d.lat,d.lng); if(!best||dist<best.dist) best={d:d,dist:dist}; });
+    if(!best){ U.toast('Topilmadi','Bo\'sh haydovchi yo\'q','error'); return; }
+    o.driver=best.d.full_name; o.driver_id=best.d.id; o.park=best.d.park_number; o.status='assigned'; best.d.status='busy';
+    window.apiAction('POST','/orders/'+encodeURIComponent(o.id)+'/auto-assign').then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+    U.toast('Avto-tayinlandi', o.id+' → '+best.d.full_name+' ('+best.dist.toFixed(1)+' km)');
+    window.rerenderPage && window.rerenderPage();
+  };
+
+  /* ---- KORPORATIV QO'SHISH ---- */
+  window.corporateModal = function(){
+    U.modal({
+      title:'Yangi korxona', sub:'B2B akkaunt',
+      body:'<div class="form-grid">'+
+        '<div class="field full"><label>Korxona nomi</label><input class="input" data-n></div>'+
+        '<div class="field"><label>Aloqa</label><input class="input" data-c placeholder="Buxgalteriya"></div>'+
+        '<div class="field"><label>Telefon</label><input class="input mono" data-p placeholder="+998 ..."></div>'+
+        '<div class="field full"><label>Boshlang\'ich balans</label><input class="input mono" type="number" data-b value="0"></div>'+
+        '</div>',
+      foot:'<button class="btn" data-close>Bekor</button><button class="btn btn-primary" data-ok>Qo\'shish</button>',
+      onMount:function(back,close){
+        back.querySelector('[data-close]').addEventListener('click',close);
+        back.querySelector('[data-ok]').addEventListener('click',function(){
+          var n=back.querySelector('[data-n]').value.trim(); if(!n){U.toast('Xato','Nom kiriting','error');return;}
+          var co={id:'CO'+(window.DB.corporate.length+1), name:n, contact:back.querySelector('[data-c]').value||'-',
+            phone:back.querySelector('[data-p]').value||'-', balance:parseInt(back.querySelector('[data-b]').value,10)||0, employees:0, rides:0, active:true};
+          window.DB.corporate.push(co);
+          window.apiAction('POST','/corporate',{name:n, contact:co.contact, phone:co.phone, balance:co.balance}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          close(); U.toast('Qo\'shildi', n); window.rerenderPage && window.rerenderPage();
+        });
+      }
+    });
+  };
+
+  /* ---- KAMPANIYA YARATISH ---- */
+  window.campaignModal = function(rerender){
+    var tiers=['Barcha mijozlar','Gold mijozlar','Silver mijozlar','Bronze mijozlar'];
+    var cities=window.DB.CITIES;
+    U.modal({
+      title:'Yangi kampaniya', sub:'Segmentlangan push / SMS e\'lon',
+      body:'<div class="form-grid">'+
+        '<div class="field full"><label>Sarlavha</label><input class="input" data-t placeholder="Masalan: Hafta oxiri aksiyasi"></div>'+
+        '<div class="field"><label>Kanal</label><select class="input" data-ch><option value="push">Push</option><option value="sms">SMS</option><option value="inapp">Ilova ichida</option></select></div>'+
+        '<div class="field"><label>Segment (daraja)</label><select class="input" data-seg>'+tiers.map(function(t){return '<option>'+t+'</option>';}).join('')+'</select></div>'+
+        '<div class="field full"><label>Shahar (ixtiyoriy)</label><select class="input" data-city><option value="">Barcha shaharlar</option>'+cities.map(function(c){return '<option>'+c+'</option>';}).join('')+'</select></div>'+
+        '<div class="field full"><label>Matn</label><textarea class="input" data-body placeholder="Xabar matni..."></textarea></div>'+
+        '</div><div class="hint" style="margin-top:8px">Qabul qiluvchilar segment bo\'yicha hisoblanadi. Haqiqiy yetkazib berish push/SMS provayder kalitini talab qiladi.</div>',
+      foot:'<button class="btn" data-close>Bekor</button><button class="btn" data-sched>Rejalashtirish</button><button class="btn btn-primary" data-send>'+window.icon('send',16)+' Hozir yuborish</button>',
+      onMount:function(back,close){
+        back.querySelector('[data-close]').addEventListener('click',close);
+        function create(send){
+          var title=back.querySelector('[data-t]').value.trim();
+          if(!title){ U.toast('Xato','Sarlavha kiriting','error'); return; }
+          var seg=back.querySelector('[data-seg]').value, city=back.querySelector('[data-city]').value;
+          var tier = seg.indexOf('Gold')>=0?'gold':seg.indexOf('Silver')>=0?'silver':seg.indexOf('Bronze')>=0?'bronze':'';
+          var recip = window.DB.clients.filter(function(c){return (!tier||c.tier===tier);}).length;
+          window.DB.campaigns.unshift({id:'CP'+(window.DB.campaigns.length+1), title:title, channel:back.querySelector('[data-ch]').value,
+            segment:(city?city+' · ':'')+seg, body:back.querySelector('[data-body]').value, status:send?'sent':'scheduled', recipients:send?recip:0, created_at:'hozir'});
+          window.apiAction('POST','/campaigns',{title:title, channel:back.querySelector('[data-ch]').value, body:back.querySelector('[data-body]').value||'-', segment:(tier?{tier:tier}:{}), send_now:send}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          close(); U.toast(send?'Yuborildi':'Rejalashtirildi', title+(send?' · '+recip+' qabul':'')); rerender&&rerender();
+        }
+        back.querySelector('[data-send]').addEventListener('click',function(){create(true);});
+        back.querySelector('[data-sched]').addEventListener('click',function(){create(false);});
+      }
+    });
+  };
+
+  /* ---- KORPORATIV HISOB-FAKTURA ---- */
+  window.invoiceModal = function(id){
+    var co=window.DB.corporate.find(function(x){return x.id===id;}); if(!co) return;
+    var amount=co.rides*22000, vat=Math.round(amount*0.12);
+    U.modal({
+      title:'Hisob-faktura', sub:co.name+' · Iyun 2026',
+      body:dl([['Korxona',co.name],['Safarlar',co.rides+' ta'],['O\'rtacha narx','22 000 so\'m'],
+        ['Summa','<span class="mono">'+window.money(amount)+' so\'m</span>'],
+        ['QQS (12%)','<span class="mono">'+window.money(vat)+' so\'m</span>'],
+        ['Jami','<b class="mono" style="color:var(--gold);font-size:16px">'+window.money(amount+vat)+' so\'m</b>']]),
+      foot:'<button class="btn" data-close>Yopish</button><button class="btn btn-primary">'+window.icon('download',16)+' PDF yuklab olish</button>',
+      onMount:function(back,close){ back.querySelector('[data-close]').addEventListener('click',close); }
     });
   };
 
@@ -398,9 +518,11 @@
         back.querySelector('[data-ok]').addEventListener('click',function(){
           var pts=parseInt(back.querySelector('[data-pts]').value,10)||0;
           var act=back.querySelector('[data-act]').value;
-          if(!back.querySelector('[data-reason]').value.trim()){ U.toast('Xato','Sabab kiriting','error'); return; }
+          var reason=back.querySelector('[data-reason]').value.trim();
+          if(!reason){ U.toast('Xato','Sabab kiriting','error'); return; }
           if(c){ c.points += act==='earn'?pts:-pts; if(c.points<0)c.points=0; }
           close(); U.toast('Bajarildi',(act==='earn'?'+':'−')+pts+' ball qo\'llandi');
+          if(c) window.apiAction('POST','/loyalty/adjust',{client_id:c.id,type:act,points:pts,reason:reason}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });
       }

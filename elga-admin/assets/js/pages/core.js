@@ -43,9 +43,24 @@
 
     var complaints = window.DB.complaints.slice(0,4).map(function(c){
       return '<div class="cmp"><div class="ic">'+window.icon('warn',16)+'</div>'+
-        '<div><div class="tt">'+c.category+'</div><div class="ds">'+c.order+' · '+c.who+' · '+c.city+'</div></div>'+
-        '<div class="tm">'+c.created_at+'</div></div>';
+        '<div><div class="tt">'+U.esc(c.category)+'</div><div class="ds">'+U.esc(c.order)+' · '+U.esc(c.who)+' · '+U.esc(c.city)+'</div></div>'+
+        '<div class="tm">'+U.esc(c.created_at)+'</div></div>';
     }).join('');
+    var newComplaints = window.DB.complaints.filter(function(c){return c.status==='new';}).length;
+
+    // Haydovchi holati — DB'dan hisoblanadi
+    var drv = window.DB.drivers;
+    var dCount = function(s){ return drv.filter(function(d){return d.status===s;}).length; };
+    var dMax = Math.max(1, drv.length);
+    // Buyurtma holati — DB'dan
+    var ord = window.DB.orders;
+    var oCount = function(s){ return ord.filter(function(o){return o.status===s;}).length; };
+    var oDone = oCount('completed');
+    var oProg = ord.filter(function(o){return ['in_progress','assigned','arriving','searching','new'].indexOf(o.status)>=0;}).length;
+    var oCanc = oCount('cancelled');
+    var oTotal = oDone+oProg+oCanc;
+    var pendW = window.DB.withdrawals.filter(function(w){return w.status==='pending';}).length;
+    var tierCount = function(t){ return window.DB.clients.filter(function(c){return c.tier===t;}).length; };
 
     var withdrawRows = window.DB.withdrawals.filter(function(w){return w.status==='pending';}).slice(0,3).map(function(w){
       return '<tr><td>'+U.cust(w.driver,w.driver_ini,w.driver_phone)+'</td><td>'+U.park(w.park)+'</td>'+
@@ -70,18 +85,20 @@
         '<span><i style="background:var(--danger)"></i>Bekor qilingan</span></div>'+U.lineChart(done,canc,days,600)+'</div></div>'+
       '<div class="card"><div class="card-head"><div><h3>Buyurtmalar holati</h3><p>Bugun</p></div></div>'+
         '<div class="card-body"><div class="donut-wrap">'+
-        U.donut([{value:345,color:'var(--success)'},{value:82,color:'var(--warning)'},{value:59,color:'var(--danger)'}],486,'jami')+
+        U.donut([{value:oDone,color:'var(--success)'},{value:oProg,color:'var(--warning)'},{value:oCanc,color:'var(--danger)'}],oTotal,'jami')+
         '<div class="legend-list">'+
-        '<div class="legend-row"><i style="background:var(--success)"></i><span class="t">Bajarilgan</span><span class="v">345</span></div>'+
-        '<div class="legend-row"><i style="background:var(--warning)"></i><span class="t">Jarayonda</span><span class="v">82</span></div>'+
-        '<div class="legend-row"><i style="background:var(--danger)"></i><span class="t">Bekor qilingan</span><span class="v">59</span></div>'+
+        '<div class="legend-row"><i style="background:var(--success)"></i><span class="t">Bajarilgan</span><span class="v">'+oDone+'</span></div>'+
+        '<div class="legend-row"><i style="background:var(--warning)"></i><span class="t">Jarayonda</span><span class="v">'+oProg+'</span></div>'+
+        '<div class="legend-row"><i style="background:var(--danger)"></i><span class="t">Bekor qilingan</span><span class="v">'+oCanc+'</span></div>'+
         '</div></div></div></div>'+
     '</div>'+
     '<div class="grid g-2b mb16">'+
       '<div class="card"><div class="card-head"><div><h3>Haydovchilar holati</h3><p>Jonli</p></div></div>'+
         '<div class="card-body"><div class="stat-rows">'+
-        statRow('success','Bo\'sh (free)',74,60)+statRow('warning','Buyurtmada (busy)',54,44)+
-        statRow('text-faint','Oflayn (offline)',86,70)+statRow('danger','Bloklangan',6,7)+
+        statRow('success','Bo\'sh (free)',dCount('free'),Math.round(dCount('free')/dMax*100))+
+        statRow('warning','Buyurtmada (busy)',dCount('busy'),Math.round(dCount('busy')/dMax*100))+
+        statRow('text-faint','Oflayn (offline)',dCount('offline'),Math.round(dCount('offline')/dMax*100))+
+        statRow('danger','Bloklangan',dCount('blocked'),Math.round(dCount('blocked')/dMax*100))+
         '</div></div></div>'+
       '<div class="card"><div class="card-head"><div><h3>Jonli xarita</h3><p>Surxondaryo · <span id="dashOnline">'+window.DB.drivers.filter(function(d){return d.status==='free'||d.status==='busy';}).length+'</span> haydovchi onlayn</p></div>'+
         '<button class="btn btn-sm" data-goto="map">To\'liq xarita</button></div>'+
@@ -92,19 +109,19 @@
         '<button class="btn btn-sm" data-goto="bag">Barchasi</button></div>'+
         '<div class="table-wrap"><table><thead><tr><th>ID</th><th>Mijoz</th><th>Yo\'nalish</th><th>Tarif</th><th>Park</th><th>Summa</th><th>Holat</th></tr></thead>'+
         '<tbody id="dashOrders">'+ordersRows+'</tbody></table></div></div>'+
-      '<div class="card"><div class="card-head"><div><h3>So\'nggi shikoyatlar</h3><p>13 ta yangi</p></div></div>'+
+      '<div class="card"><div class="card-head"><div><h3>So\'nggi shikoyatlar</h3><p>'+newComplaints+' ta yangi</p></div></div>'+
         '<div class="card-body"><div class="cmp-list">'+complaints+'</div></div>'+
         '<div class="foot-link" data-goto="warn">Barcha shikoyatlarni ko\'rish →</div></div>'+
     '</div>'+
     '<div class="grid g-2b" style="align-items:start">'+
       '<div class="card"><div class="card-head"><div><h3>Sadoqat dasturi</h3><p>Bonuslar sizni kutmoqda!</p></div></div>'+
         '<div class="card-body"><div class="loyal">'+
-        tierRow('gold','GOLD','Gold daraja','312 mijoz · 12% chegirma','1 240')+
-        tierRow('silver','SLV','Silver daraja','874 mijoz · 7% chegirma','540')+
-        tierRow('bronze','BRZ','Bronze daraja','2 108 mijoz · 3% chegirma','120')+
+        tierRow('gold','GOLD','Gold daraja',tierCount('gold')+' mijoz · 12% chegirma','1 240')+
+        tierRow('silver','SLV','Silver daraja',tierCount('silver')+' mijoz · 7% chegirma','540')+
+        tierRow('bronze','BRZ','Bronze daraja',tierCount('bronze')+' mijoz · 3% chegirma','120')+
         '</div></div><div class="foot-link" data-goto="gift">Sovg\'alar katalogini boshqarish →</div></div>'+
       '<div class="card"><div class="card-head"><div><h3>Pul yechish so\'rovlari</h3><p>Tasdiqlash kutilmoqda · 2-bosqich confirm</p></div>'+
-        '<span class="tg gold">5 ta</span></div>'+
+        '<span class="tg gold">'+pendW+' ta</span></div>'+
         '<div class="table-wrap"><table><thead><tr><th>Haydovchi</th><th>Park</th><th>Summa</th><th>Provayder</th><th>Holat</th><th></th></tr></thead>'+
         '<tbody>'+withdrawRows+'</tbody></table></div></div>'+
     '</div>';
@@ -184,7 +201,8 @@
         {th:'Summa', cls:'sum', render:function(o){return window.money(o.price);}},
         {th:'Kutmoqda', render:function(o){return '<span class="muted">'+o.created_at+'</span>';}},
         {th:'Holat', render:function(o){return U.orderTag(o.status);}},
-        {th:'', cls:'right', render:function(o){return '<button class="btn btn-primary btn-sm" data-assign="'+o.id+'">Tayinlash</button>';}}
+        {th:'', cls:'right', render:function(o){return '<div class="row-actions"><button class="btn btn-success btn-sm" data-auto="'+o.id+'">Avto</button>'+
+          '<button class="btn btn-primary btn-sm" data-assign="'+o.id+'">Tayinlash</button></div>';}}
       ],
       onRowClick:function(o){ window.orderDetail(o); }
     });
@@ -218,7 +236,7 @@
         {th:'ID', sortKey:'id', csv:function(o){return o.id;}, render:function(o){return '<span class="mono">'+o.id+(o._new?' <span class="tg gold" style="padding:1px 6px;font-size:9px">yangi</span>':'')+'</span>';}},
         {th:'Mijoz', sortKey:'client', csv:function(o){return o.client;}, render:function(o){return U.cust(o.client,o.client_ini,o.client_phone);}},
         {th:'Yo\'nalish', csv:function(o){return o.from+' → '+o.to;}, render:function(o){return U.route(o.from,o.to);}},
-        {th:'Haydovchi', csv:function(o){return o.driver||'';}, render:function(o){return o.driver?o.driver+' '+U.park(o.park):'<span class="muted">—</span>';}},
+        {th:'Haydovchi', csv:function(o){return o.driver||'';}, render:function(o){return o.driver?U.esc(o.driver)+' '+U.park(o.park):'<span class="muted">—</span>';}},
         {th:'Tarif', sortKey:'tariff', csv:function(o){return o.tariff;}, render:function(o){return U.tariff(o.tariff);}},
         {th:'Summa', cls:'sum', sortKey:'price', csv:function(o){return o.price;}, render:function(o){return window.money(o.price);}},
         {th:'To\'lov', csv:function(o){return payLabel(o.payment);}, render:function(o){return U.tariff(payLabel(o.payment));}},

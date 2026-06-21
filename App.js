@@ -8,6 +8,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Linking, Platform,
   Modal, KeyboardAvoidingView, FlatList, Animated, Vibration, Easing,
+  AppState,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,6 +27,19 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { Ionicons } from '@expo/vector-icons';
 
 const BASE = 'https://api.elga.uz';
+
+// Faol (tugamagan) buyurtma holatlari — bularda buyurtma "tirik" hisoblanadi.
+// completed/cancelled/paid — yakuniy holatlar (faol emas).
+const ACTIVE_STATUSES = ['searching', 'assigned', 'accepted', 'arrived', 'in_progress'];
+
+// Faol buyurtma lokal saqlanadigan kalit (crash/kill/OS-restart'da yo'qolmaydi).
+const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
+
+// Ixtiyoriy NetInfo — internet qaytishini tez aniqlash uchun. Standalone (EAS) buildda
+// to'liq ishlaydi; Expo Go yoki modul o'rnatilmagan bo'lsa xavfsiz o'tkazib yuboriladi
+// (ilova qulamaydi — AppState + socket reconnect baribir holatni tiklaydi).
+let NetInfo = null;
+try { NetInfo = require('@react-native-community/netinfo').default; } catch (e) { NetInfo = null; }
 
 // Tab panelining tizim navigatsiyasidan tashqari balandligi (safe-area pastdan qo'shiladi)
 const TABBAR_H = 56;
@@ -93,32 +107,181 @@ async function hidePersistentNotif() {
   try { await Notifications.dismissNotificationAsync(PERSISTENT_ID); } catch (e) {}
 }
 
-async function api(path, method = 'GET', body = null, token = null, timeoutMs = 15000) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers.Authorization = 'Bearer ' + token;
-  // Sekin/uzilgan internetda so'rov cheksiz osilib qolmasin — timeout (ilova qotmaydi)
+// ============================================================
+//  TARMOQ QATLAMI — zaif/uzilgan internetga chidamli (offline-first)
+//  • deviceId / requestId / Idempotency-Key — takror so'rovlardan himoya
+//  • avtomatik qayta urinish (exponential backoff): 1s → 2s → 4s
+//  • global onlayn/oflayn holat (NetMonitor) — UI banner shu yerga obuna
+//  Eslatma: bularning bari sof JS — yangi native modul YO'Q, shuning uchun
+//  OTA (expo-updates) orqali darrov yetkaziladi (runtimeVersion o'zgarmaydi).
+// ============================================================
+
+// Soda UUID — crypto.randomUUID bo'lmagan RN muhitida ham ishlaydi
+function uuid() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+// Qurilma identifikatori — bir marta yaratiladi va saqlanadi (duplicate himoyasi)
+let _deviceId = null;
+async function getDeviceId() {
+  if (_deviceId) return _deviceId;
+  try {
+    let id = await AsyncStorage.getItem('device_id');
+    if (!id) { id = uuid(); await AsyncStorage.setItem('device_id', id); }
+    _deviceId = id;
+  } catch (e) { _deviceId = uuid(); }
+  return _deviceId;
+}
+
+// Global tarmoq holati — UI shu yerga obuna bo'lib bannerni ko'rsatadi
+const NetMonitor = {
+  online: true,
+  _subs: new Set(),
+  set(v) {
+    if (this.online === v) return;
+    this.online = v;
+    this._subs.forEach((fn) => { try { fn(v); } catch (e) {} });
+  },
+  subscribe(fn) { this._subs.add(fn); return () => this._subs.delete(fn); },
+};
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// /health ni yengil so'rov bilan tekshirish (reachability probe)
+async function pingHealth(timeoutMs = 6000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  let res;
   try {
-    res = await fetch(BASE + path, {
-      method, headers, body: body ? JSON.stringify(body) : undefined, signal: ctrl.signal,
-    });
+    const res = await fetch(BASE + '/health', { method: 'GET', signal: ctrl.signal });
+    clearTimeout(timer);
+    return res.ok;
   } catch (e) {
     clearTimeout(timer);
-    const err = new Error(e.name === 'AbortError' ? "Internet sekin — qayta urinib ko'ring" : "Ulanish yo'q — internetni tekshiring");
-    err.network = true;
-    throw err;
+    return false;
   }
-  clearTimeout(timer);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error(data.error || 'Xato: ' + res.status);
-    err.data = data; err.status = res.status;
-    throw err;
-  }
-  return data;
 }
+
+async function api(path, method = 'GET', body = null, token = null, timeoutMs = 15000, opts = {}) {
+  // opts: { retries, idempotencyKey, deviceId }
+  // GET — idempotent, xavfsiz qayta urinadi. POST faqat idempotencyKey berilsa
+  // qayta urinadi (server idempotency middleware / holat-tekshiruvi dubldan himoya qiladi).
+  const isGet = method === 'GET';
+  const maxRetries = opts.retries != null
+    ? opts.retries
+    : (isGet || opts.idempotencyKey ? 2 : 0);
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = 'Bearer ' + token;
+  // Duplicate himoyasi: har so'rovga deviceId + requestId + vaqt belgisi
+  const did = opts.deviceId || _deviceId;
+  if (did) headers['X-Device-Id'] = did;
+  headers['X-Request-Id'] = uuid();
+  headers['X-Client-Ts'] = String(Date.now());
+  if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
+
+  let lastErr = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Sekin/uzilgan internetda so'rov cheksiz osilib qolmasin — timeout (ilova qotmaydi)
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    let res;
+    try {
+      res = await fetch(BASE + path, {
+        method, headers, body: body ? JSON.stringify(body) : undefined, signal: ctrl.signal,
+      });
+    } catch (e) {
+      clearTimeout(timer);
+      lastErr = new Error(e.name === 'AbortError' ? "Internet sekin — qayta urinilmoqda" : "Ulanish yo'q — internetni tekshiring");
+      lastErr.network = true;
+      if (attempt < maxRetries) {
+        await sleep(Math.min(8000, 1000 * Math.pow(2, attempt))); // 1s, 2s, 4s...
+        continue;
+      }
+      NetMonitor.set(false); // urinishlar tugadi — oflaynmiz
+      throw lastErr;
+    }
+    clearTimeout(timer);
+    NetMonitor.set(true); // serverdan javob keldi — onlaynmiz
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      // Server mantiqiy javob qaytardi (4xx/5xx) — bu tarmoq xatosi emas, qayta urinmaymiz
+      const err = new Error(data.error || 'Xato: ' + res.status);
+      err.data = data; err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
+  throw lastErr || new Error('Tarmoq xatosi');
+}
+
+// ============================================================
+//  OFLAYN NAVBAT — internet yo'qligida muhim amallarni saqlab,
+//  qayta ulanganda avtomatik (tartib bilan) yuboradi.
+//  Hozircha buyurtma holati o'zgarishlari (accept/arrived/start/complete/reject).
+//  Har bir amal o'ziga xos id (idempotencyKey) bilan yuboriladi — dubl bo'lmaydi.
+// ============================================================
+const OFFLINE_QUEUE_KEY = 'offline_queue_v1';
+const OfflineQueue = {
+  items: [],
+  loaded: false,
+  flushing: false,
+  onChange: null, // UI sonni yangilash uchun
+  async load() {
+    if (this.loaded) return;
+    try {
+      const raw = await AsyncStorage.getItem(OFFLINE_QUEUE_KEY);
+      this.items = raw ? JSON.parse(raw) : [];
+    } catch (e) { this.items = []; }
+    this.loaded = true;
+    this._notify();
+  },
+  async _persist() {
+    try { await AsyncStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(this.items)); } catch (e) {}
+  },
+  _notify() { try { this.onChange && this.onChange(this.items.length); } catch (e) {} },
+  async enqueue(item) {
+    await this.load();
+    // Bir xil (orderId+action) takrorini qo'shmaymiz — dubl himoyasi
+    const dup = this.items.find((x) => x.kind === item.kind && x.orderId === item.orderId && x.action === item.action);
+    if (dup) return dup;
+    const rec = { id: uuid(), ts: Date.now(), ...item };
+    this.items.push(rec);
+    await this._persist();
+    this._notify();
+    return rec;
+  },
+  async flush(token) {
+    await this.load();
+    if (this.flushing || !token || this.items.length === 0) return;
+    this.flushing = true;
+    try {
+      while (this.items.length > 0) {
+        const it = this.items[0];
+        try {
+          if (it.kind === 'order_action') {
+            await api(`/api/orders/${it.orderId}/${it.action}`, 'POST', {}, token, 15000,
+              { idempotencyKey: it.id, retries: 1 });
+          }
+          this.items.shift(); // muvaffaqiyat — navbatdan olib tashlaymiz
+          await this._persist();
+          this._notify();
+        } catch (e) {
+          if (e && e.network) break; // hali oflayn — keyinroq davom etamiz
+          // Server mantiqiy xatosi (409 holat mos emas / 404 / 403): amal allaqachon
+          // qo'llangan yoki endi mumkin emas — o'tkazib yuboramiz (cheksiz qotmasin).
+          this.items.shift();
+          await this._persist();
+          this._notify();
+        }
+      }
+    } finally {
+      this.flushing = false;
+    }
+  },
+};
 
 const fmt = (n) => Number(n || 0).toLocaleString('ru-RU');
 
@@ -496,9 +659,21 @@ function AppInner() {
   const [meter, setMeter] = useState(null); // { km, minutes, fare }
   const [completedTrip, setCompletedTrip] = useState(null); // yakunlangan safar (baholash uchun)
 
+  // Tarmoq holati (zaif internetga chidamlilik)
+  const [netOnline, setNetOnline] = useState(true);        // internet bormi (reachability)
+  const [socketConnected, setSocketConnected] = useState(false); // realtime kanal ulanganmi
+  const [queuedCount, setQueuedCount] = useState(0);        // oflayn navbatdagi amallar soni
+
   const socketRef = useRef(null);
   const watchRef = useRef(null);
+  const appStateRef = useRef(AppState.currentState);
   const mapRef = useRef(null);
+  // Tarmoq qatlami reflari
+  const lastLocRef = useRef(null);   // oxirgi GPS — qayta ulanganda darrov yuboramiz
+  const lastEmitRef = useRef(0);     // GPS socket emit throttle (adaptiv interval)
+  const lastGpsRef = useRef(0);      // oxirgi GPS vaqti ("arvoh" aniqlash uchun)
+  const pollRef = useRef(null);      // backup polling intervali
+  const healthRef = useRef(null);    // reachability heartbeat timeri
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
   const [mapReady, setMapReady] = useState(false);
 
@@ -513,6 +688,12 @@ function AppInner() {
         if (t && u) {
           setToken(t); setUser(JSON.parse(u));
           if (p) { setStoredPin(p); setPinStep('enter'); }
+          // Crash recovery: oxirgi faol buyurtmani lokaldan DARHOL ko'rsatamiz
+          // (internet kelguncha bo'sh ekran chiqmaydi). Keyin server bilan sinxron.
+          try {
+            const ao = await AsyncStorage.getItem(ACTIVE_ORDER_KEY);
+            if (ao) { const o = JSON.parse(ao); if (o && ACTIVE_STATUSES.includes(o.status)) setOrder(o); }
+          } catch (e) {}
         }
       } catch (e) {}
       setBooting(false);
@@ -543,6 +724,103 @@ function AppInner() {
     };
   }, [token, pinStep]);
 
+  // ---- Tarmoq qatlami: navbat, qurilma ID, global holatga obuna (bir marta) ----
+  useEffect(() => {
+    OfflineQueue.onChange = (n) => setQueuedCount(n);
+    OfflineQueue.load();
+    getDeviceId();
+    // Saqlangan oxirgi joylashuvni tiklaymiz (xarita darrov ko'rsatadi)
+    (async () => {
+      try {
+        const l = await AsyncStorage.getItem('last_loc');
+        if (l) { const p = JSON.parse(l); lastLocRef.current = p; setMyLoc((cur) => cur || p); }
+      } catch (e) {}
+    })();
+    const unsub = NetMonitor.subscribe((v) => setNetOnline(v));
+    return () => { unsub(); OfflineQueue.onChange = null; };
+  }, []);
+
+  // Faol buyurtmani lokal saqlash — app kill / crash / OS restart bo'lsa ham
+  // buyurtma yo'qolmaydi. Status yoki id o'zgarganda yoziladi yoki o'chiriladi.
+  // (Boot effektida ACTIVE_ORDER_KEY dan darrov tiklanadi.)
+  useEffect(() => {
+    if (order && ACTIVE_STATUSES.includes(order.status)) {
+      AsyncStorage.setItem(ACTIVE_ORDER_KEY, JSON.stringify(order)).catch(() => {});
+    } else {
+      AsyncStorage.removeItem(ACTIVE_ORDER_KEY).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id, order?.status]);
+
+  // ---- AppState + NetInfo: foreground'ga qaytganda yoki internet qaytganda
+  // socket/buyurtma/navbatni sinxronlash (#40). NetInfo ixtiyoriy — bo'lmasa
+  // reachability heartbeat baribir holatni tiklaydi. ----
+  useEffect(() => {
+    if (!token || pinStep) return;
+    const onAppState = (next) => {
+      const prev = appStateRef.current;
+      appStateRef.current = next;
+      // background/inactive -> active: foreground'ga qaytdi
+      if (prev && /inactive|background/.test(prev) && next === 'active') {
+        ensureSocket();
+        resumeActiveOrder();
+        OfflineQueue.flush(token);
+        if (online && !watchRef.current) startTracking();
+      }
+    };
+    const appSub = AppState.addEventListener('change', onAppState);
+
+    let netUnsub = null;
+    if (NetInfo) {
+      try {
+        let wasOffline = false;
+        netUnsub = NetInfo.addEventListener((state) => {
+          const isOnline = !!state.isConnected && state.isInternetReachable !== false;
+          NetMonitor.set(isOnline); // bannerni tez yangilaydi (heartbeatni kutmaymiz)
+          // offline -> online o'tishida tiklash (har bir state'da emas)
+          if (isOnline && wasOffline) { ensureSocket(); resumeActiveOrder(); OfflineQueue.flush(token); }
+          wasOffline = !isOnline;
+        });
+      } catch (e) {}
+    }
+
+    return () => {
+      try { appSub.remove(); } catch (e) {}
+      try { netUnsub && netUnsub(); } catch (e) {}
+    };
+  }, [token, pinStep, online]);
+
+  // ---- Reachability heartbeat: /health ni davriy tekshirish ----
+  // NetInfo bor-yo'qligidan qat'i nazar ishlaydi (universal fallback) va bannerni
+  // haqiqiy server holatiga moslaydi. Onlayn ~20s, oflayn ~5s.
+  useEffect(() => {
+    if (!token || pinStep) return;
+    let stopped = false;
+    const tick = async () => {
+      const ok = await pingHealth();
+      if (stopped) return;
+      NetMonitor.set(ok);
+      if (ok) {
+        ensureSocket(); // internet bor — socket o'lgan bo'lsa tiklaymiz
+        OfflineQueue.flush(token);
+      }
+      healthRef.current = setTimeout(tick, ok ? 20000 : 5000);
+    };
+    healthRef.current = setTimeout(tick, 8000);
+    return () => { stopped = true; if (healthRef.current) clearTimeout(healthRef.current); };
+  }, [token, pinStep]);
+
+  // ---- Backup polling: socket uzilgan paytda faol buyurtmani REST orqali olamiz ----
+  useEffect(() => {
+    if (!token || pinStep) return;
+    if (socketConnected) {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+      return;
+    }
+    pollRef.current = setInterval(() => { resumeActiveOrder(); }, 5000);
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+  }, [token, pinStep, socketConnected]);
+
   // Xarita tayyor bo'lgach va joylashuv/buyurtma o'zgarganda — markerlarni
   // qayta yuklamasdan yangilaymiz (lag bo'lmaydi).
   // Barqaror callback — MapPanel memoizatsiyasi buzilmasligi uchun useCallback.
@@ -560,6 +838,19 @@ function AppInner() {
     mapRef.current.injectJavaScript(`window.updateMap(${JSON.stringify(d)});true;`);
   }, [mapReady, myLoc, order?.from_lat, order?.from_lng, order?.to_lat, order?.to_lng]);
 
+  // Socketni kerakli holatga keltiramiz. Socket.IO o'zi (reconnectionAttempts: Infinity)
+  // qayta ulanib turadi — uning backoff jarayonini bekorga uzmaymiz:
+  //   • ulangan      → hech narsa qilmaymiz
+  //   • qayta ulanmoqda (s.active) → connect() bilan yengil turtki beramiz
+  //   • o'lgan/yo'q  → qaytadan yaratamiz
+  function ensureSocket() {
+    const s = socketRef.current;
+    if (!s) { connectSocket(); return; }
+    if (s.connected) return;
+    if (s.active) { try { s.connect(); } catch (e) {} return; }
+    connectSocket();
+  }
+
   function connectSocket() {
     if (socketRef.current?.connected) return; // allaqachon ulangan
     // Eski soketni TO'LIQ tozalaymiz: faqat disconnect() listenerlarni saqlab
@@ -574,14 +865,27 @@ function AppInner() {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: Infinity,
-      reconnectionDelay: 2000,
+      // Exponential backoff: 1s dan boshlanib 30s gacha o'sadi (zaif tarmoqda
+      // serverni bombardimon qilmaydi). randomizationFactor — "thundering herd" oldini oladi.
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 30000,
+      randomizationFactor: 0.5,
+      timeout: 20000,
     });
     socketRef.current = s;
 
-    s.on('connect', () => { console.log('✓ Socket ulandi'); resumeActiveOrder(); });
-    s.on('connect_error', (e) => console.warn('Socket xato:', e.message));
-    // Internet uzilib qayta ulanganda faol buyurtma holatini tiklaymiz (#40)
-    s.on('reconnect', () => { resumeActiveOrder(); });
+    const onUp = () => {
+      NetMonitor.set(true);
+      setSocketConnected(true);
+      resumeActiveOrder();            // faol buyurtma holatini darrov tiklaymiz (#40)
+      OfflineQueue.flush(token);      // navbatdagi amallarni yuboramiz
+      // Oxirgi joylashuvni darrov yuboramiz — server "online" deb bilsin
+      if (lastLocRef.current) { try { s.emit('location', lastLocRef.current); } catch (e) {} }
+    };
+    s.on('connect', () => { console.log('✓ Socket ulandi'); onUp(); });
+    s.on('reconnect', onUp);         // internet uzilib qayta ulanganda
+    s.on('disconnect', () => { setSocketConnected(false); });
+    s.on('connect_error', (e) => { setSocketConnected(false); console.warn('Socket xato:', e.message); });
 
     s.on('new_order', (o) => {
       // Butun handler xavfsiz: noto'g'ri/yetishmaydigan maydonli (masalan ovozli)
@@ -629,11 +933,23 @@ function AppInner() {
     try { await Notifications.scheduleNotificationAsync({ content: { title, body }, trigger: null }); } catch (e) {}
   }
 
+  // Faol buyurtmani serverdan tiklash — server YAGONA haqiqat manbai.
+  // Ilova ochilganda, socket connect/reconnect bo'lganda, internet/foreground
+  // qaytganda chaqiriladi. Tarmoq xatosida lokal holat saqlanadi (tozalanmaydi).
   async function resumeActiveOrder() {
     try {
-      const r = await api('/api/me/active-order', 'GET', null, token);
-      if (r && r.order) setOrder(r.order);
-    } catch (e) {}
+      // Yengil so'rov: bitta urinish, qisqa timeout (poll/reconnect baribir qayta chaqiradi)
+      const r = await api('/api/me/active-order', 'GET', null, token, 8000, { retries: 0 });
+      if (r && r.order) {
+        // Bor buyurtma — eski holat bilan birlashtirib yangilaymiz (flicker bo'lmaydi)
+        setOrder((prev) => (prev && prev.id === r.order.id) ? { ...prev, ...r.order } : r.order);
+      } else if (r) {
+        // Server: faol buyurtma yo'q → lokaldagi eskirgan (fantom) buyurtmani tozalaymiz
+        setOrder((prev) => (prev && ACTIVE_STATUSES.includes(prev.status)) ? null : prev);
+      }
+    } catch (e) {
+      // Tarmoq xatosi — lokal (saqlangan) holatni saqlab qolamiz
+    }
   }
 
   async function loadEarnings() {
@@ -669,11 +985,22 @@ function AppInner() {
     try {
       const accuracy = Location.Accuracy?.High ?? 4;
       watchRef.current = await Location.watchPositionAsync(
-        { accuracy, distanceInterval: 20, timeInterval: 5000 },
+        { accuracy, distanceInterval: 15, timeInterval: 4000 },
         (pos) => {
           const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           setMyLoc(loc);
-          socketRef.current?.emit('location', loc);
+          lastLocRef.current = loc;
+          lastGpsRef.current = Date.now();
+          // Oxirgi joylashuvni saqlaymiz — ilova qayta ochilganda darrov ko'rsatiladi
+          AsyncStorage.setItem('last_loc', JSON.stringify(loc)).catch(() => {});
+          // Adaptiv yuborish: tarmoq yaxshi bo'lsa ~4s, zaif/oflayn bo'lsa ~18s.
+          // (Server baribir sekundiga 1 tagacha cheklaydi; zaif tarmoqda trafikni tejaymiz.)
+          const now = Date.now();
+          const minGap = NetMonitor.online ? 4000 : 18000;
+          if (socketRef.current?.connected && now - lastEmitRef.current >= minGap) {
+            lastEmitRef.current = now;
+            try { socketRef.current.emit('location', loc); } catch (e) {}
+          }
           // Mustaqil taksometr — km hisoblab boradi
           setSoloMeter(prev => {
             if (!prev) return prev;
@@ -763,7 +1090,7 @@ function AppInner() {
   }
 
   async function logout() {
-    await AsyncStorage.multiRemove(['token', 'user', 'pin']);
+    await AsyncStorage.multiRemove(['token', 'user', 'pin', ACTIVE_ORDER_KEY]);
     stopTracking();
     socketRef.current?.removeAllListeners();
     socketRef.current?.disconnect();
@@ -907,9 +1234,10 @@ function AppInner() {
   // ---- BUYURTMA AMALLARI ----
   async function orderAction(action) {
     if (!order) return;
+    const orderId = order.id;
     setLoading(true);
     try {
-      const r = await api(`/api/orders/${order.id}/${action}`, 'POST', {}, token);
+      const r = await api(`/api/orders/${orderId}/${action}`, 'POST', {}, token);
       if (action === 'complete') {
         const finishedOrder = r.order || order;
         const net = Number(finishedOrder.price || 0) - Number(finishedOrder.commission || 0);
@@ -938,7 +1266,28 @@ function AppInner() {
         }
         setOrder((p) => ({ ...p, ...(r.order || {}), status: nextStatus }));
       }
-    } catch (e) { Alert.alert('Xato', e.message); }
+    } catch (e) {
+      if (e && e.network) {
+        // Internet yo'q — amalni navbatga qo'yamiz, qaytganda avtomatik yuboriladi.
+        await OfflineQueue.enqueue({ kind: 'order_action', orderId, action });
+        // Optimistik holat: haydovchi ish jarayonini to'xtatmasdan davom ettiradi
+        if (action === 'complete') {
+          setCompletedTrip(order);
+          setOrder(null); setMeter(null); setChatMessages([]);
+          updatePersistentNotif('Buyurtma kutilmoqda... (oflayn — sinxronlanadi)');
+        } else if (action === 'reject') {
+          setOrder(null); setMeter(null); setChatMessages([]);
+        } else {
+          setOrder((p) => (p ? { ...p, status: statusAfter(action) } : p));
+        }
+        Alert.alert('Oflayn rejim', "Internet yo'q. Amal saqlandi — internet qaytganda avtomatik yuboriladi.");
+      } else if (e && e.status === 409) {
+        // Server: holat allaqachon o'zgargan (amal qo'llangan) — joriy holatni tiklaymiz
+        resumeActiveOrder();
+      } else {
+        Alert.alert('Xato', e.message);
+      }
+    }
     setLoading(false);
   }
 
@@ -1096,6 +1445,18 @@ function AppInner() {
   return (
     <View style={s.flex}>
       <StatusBar style="light" />
+
+      {/* Tarmoq holati banneri — internet yo'q yoki navbat sinxronlanmoqda */}
+      {(!netOnline || queuedCount > 0) && (
+        <View style={[s.netBanner, { top: insets.top, backgroundColor: netOnline ? '#15391F' : '#3A1212' }]}>
+          <Ionicons name={netOnline ? 'sync' : 'cloud-offline-outline'} size={14} color={netOnline ? GREEN : '#FF6B6B'} />
+          <Text style={s.netBannerTxt}>
+            {netOnline
+              ? `Sinxronlanmoqda… (${queuedCount})`
+              : "Internet yo'q. Qayta ulanish kutilmoqda…"}
+          </Text>
+        </View>
+      )}
 
       {tab === 'home' ? (
         <View style={s.flex}>
@@ -2301,6 +2662,12 @@ const s = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.75)', padding: 12, borderRadius: 14,
   },
+  netBanner: {
+    position: 'absolute', left: 0, right: 0, zIndex: 999,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    paddingVertical: 6, paddingHorizontal: 12,
+  },
+  netBannerTxt: { color: '#fff', fontSize: 12, fontWeight: '600' },
   topName: { color: '#fff', fontSize: 16, fontWeight: '600' },
   statusDot: { fontSize: 13, marginTop: 2 },
   logoutTxt: { color: '#FFC700', fontSize: 14 },

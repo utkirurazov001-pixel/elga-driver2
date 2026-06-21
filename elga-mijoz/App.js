@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Modal, Linking, FlatList,
-  Animated, Easing, Image, Dimensions,
+  Animated, Easing, Image, Dimensions, AppState,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,6 +21,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
 
 const BASE = 'https://api.elga.uz';
+
+// Faol (tugamagan) buyurtma holatlari — bularda buyurtma "tirik" hisoblanadi.
+// completed/cancelled/paid — yakuniy holatlar (faol emas).
+const ACTIVE_STATUSES = ['searching', 'assigned', 'accepted', 'arrived', 'in_progress'];
+
+// Faol buyurtma lokal saqlanadigan kalit (crash/kill/OS-restart'da yo'qolmaydi).
+const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
+
+// Ixtiyoriy NetInfo — internet qaytishini tez aniqlash uchun. Standalone (EAS) buildda
+// to'liq ishlaydi; Expo Go yoki modul o'rnatilmagan bo'lsa xavfsiz o'tkazib yuboriladi
+// (ilova qulamaydi — AppState + socket reconnect baribir holatni tiklaydi).
+let NetInfo = null;
+try { NetInfo = require('@react-native-community/netinfo').default; } catch (e) { NetInfo = null; }
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -431,6 +444,7 @@ function AppInner() {
   }, [mapReady, pickup, myLoc, dest, driverLoc, nearby, order, orderStep]);
   const tokenRef = useRef(null);
   const nearbyTimer = useRef(null);
+  const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => { tokenRef.current = token; }, [token]);
 
@@ -448,6 +462,12 @@ function AppInner() {
         if (t && u) {
           setToken(t); setUser(JSON.parse(u));
           if (p) { setStoredPin(p); setPinStep('enter'); }
+          // Crash recovery: oxirgi faol buyurtmani lokaldan DARHOL ko'rsatamiz
+          // (internet kelguncha bo'sh ekran chiqmaydi). Keyin server bilan sinxron.
+          try {
+            const ao = await AsyncStorage.getItem(ACTIVE_ORDER_KEY);
+            if (ao) { const o = JSON.parse(ao); if (o && ACTIVE_STATUSES.includes(o.status)) { setOrder(o); setOrderStep(null); } }
+          } catch (e) {}
         }
         if (hp) setHomePlace(JSON.parse(hp));
         if (wp) setWorkPlace(JSON.parse(wp));
@@ -484,6 +504,49 @@ function AppInner() {
       socketRef.current?.removeAllListeners();
       socketRef.current?.disconnect();
       if (nearbyTimer.current) clearInterval(nearbyTimer.current);
+    };
+  }, [token, pinStep]);
+
+  // ---- Faol buyurtmani lokal saqlash (crash recovery) ----
+  // app kill / crash / OS restart bo'lsa ham buyurtma yo'qolmaydi.
+  useEffect(() => {
+    if (order && ACTIVE_STATUSES.includes(order.status)) {
+      AsyncStorage.setItem(ACTIVE_ORDER_KEY, JSON.stringify(order)).catch(() => {});
+    } else {
+      AsyncStorage.removeItem(ACTIVE_ORDER_KEY).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id, order?.status]);
+
+  // ---- Foreground / internet qaytganda faol buyurtmani tiklash (#40) ----
+  // Telefon bloklanib ochilsa, boshqa ilovadan qaytilsa, internet uzilib qaytsa ishlaydi.
+  useEffect(() => {
+    if (!token || pinStep) return;
+    const onAppState = (next) => {
+      const prev = appStateRef.current;
+      appStateRef.current = next;
+      if (prev && /inactive|background/.test(prev) && next === 'active') {
+        ensureSocketConnected();
+        resumeActiveOrder();
+      }
+    };
+    const appSub = AppState.addEventListener('change', onAppState);
+
+    let netUnsub = null;
+    if (NetInfo) {
+      try {
+        let wasOffline = false;
+        netUnsub = NetInfo.addEventListener((state) => {
+          const isOnline = !!state.isConnected && state.isInternetReachable !== false;
+          if (isOnline && wasOffline) { ensureSocketConnected(); resumeActiveOrder(); }
+          wasOffline = !isOnline;
+        });
+      } catch (e) {}
+    }
+
+    return () => {
+      try { appSub.remove(); } catch (e) {}
+      try { netUnsub && netUnsub(); } catch (e) {}
     };
   }, [token, pinStep]);
 
@@ -740,11 +803,30 @@ function AppInner() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
+  // Socket uzilib qolgan bo'lsa qayta ulaymiz (foreground / internet qaytganda).
+  function ensureSocketConnected() {
+    const s = socketRef.current;
+    if (!s) { connectSocket(); return; }
+    if (!s.connected) { try { s.connect(); } catch (e) {} }
+  }
+
+  // Faol buyurtmani serverdan tiklash — server YAGONA haqiqat manbai.
+  // Ilova ochilganda, socket connect/reconnect, internet/foreground qaytganda chaqiriladi.
+  // Tarmoq xatosida lokal holat saqlanadi (tozalanmaydi).
   async function resumeActiveOrder() {
     try {
       const r = await api('/api/me/active-order', 'GET', null, tokenRef.current || token);
-      if (r?.order) { setOrder(r.order); setOrderStep(null); }
-    } catch (e) {}
+      if (r?.order) {
+        setOrder((prev) => (prev && prev.id === r.order.id) ? { ...prev, ...r.order } : r.order);
+        setOrderStep(null);
+      } else if (r) {
+        // Server: faol buyurtma yo'q → lokaldagi eskirgan buyurtmani tozalaymiz
+        setOrder((prev) => (prev && ACTIVE_STATUSES.includes(prev.status)) ? null : prev);
+        setOrderStep((s) => (s === null ? 'dest' : s));
+      }
+    } catch (e) {
+      // Tarmoq xatosi — lokal (saqlangan) holatni saqlab qolamiz
+    }
   }
 
   // Faol buyurtma ekranini ochish. Avval 409 javobidagi active_order'dan,
@@ -1112,7 +1194,7 @@ function AppInner() {
   }
 
   async function doLogout() {
-    await AsyncStorage.multiRemove(['token', 'user', 'pin']);
+    await AsyncStorage.multiRemove(['token', 'user', 'pin', ACTIVE_ORDER_KEY]);
     socketRef.current?.removeAllListeners();
     socketRef.current?.disconnect();
     setToken(null); setUser(null); setStep('phone');
@@ -1219,7 +1301,7 @@ function AppInner() {
               <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 16 }}>O'tkazib yuborish</Text>
             </TouchableOpacity>
           : <TouchableOpacity activeOpacity={0.7} onPress={async () => {
-              await AsyncStorage.multiRemove(['token', 'user', 'pin']);
+              await AsyncStorage.multiRemove(['token', 'user', 'pin', ACTIVE_ORDER_KEY]);
               setToken(null); setUser(null); setStoredPin(null);
               setPinStep(null); setPinInput(''); setStep('phone');
             }}>

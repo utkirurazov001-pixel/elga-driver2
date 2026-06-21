@@ -45,12 +45,35 @@ router.get(
     const labels: string[] = [];
     const completed: number[] = [];
     const cancelled: number[] = [];
+    const end = new Date(2026, 5, 21); // oxirgi kun
     for (let i = n - 1; i >= 0; i--) {
-      labels.push(String(21 - (i % 28)).padStart(2, '0'));
-      completed.push(300 + Math.round(Math.sin(i) * 80 + i * 18));
-      cancelled.push(40 + Math.round(Math.cos(i) * 14 + i * 3));
+      const d = new Date(end);
+      d.setDate(end.getDate() - i);
+      labels.push(String(d.getDate()).padStart(2, '0'));
+      const idx = n - 1 - i;
+      completed.push(300 + Math.round(Math.sin(idx) * 80 + idx * 18));
+      cancelled.push(40 + Math.round(Math.abs(Math.cos(idx)) * 14 + idx * 3));
     }
     return ok(res, { labels, completed, cancelled });
+  }),
+);
+
+// GET /stats/heatmap — talab issiqligi (shahar + mo'ljal bo'yicha buyurtmalar)
+router.get(
+  '/heatmap',
+  asyncHandler(async (_req, res) => {
+    const byCity: Record<string, number> = {};
+    const byPlace: Record<string, { city: string; place: string; count: number }> = {};
+    store.orders.forEach((o) => {
+      byCity[o.from_city] = (byCity[o.from_city] ?? 0) + 1;
+      const key = `${o.from_city}|${o.from_place}`;
+      if (!byPlace[key]) byPlace[key] = { city: o.from_city, place: o.from_place, count: 0 };
+      byPlace[key].count++;
+    });
+    return ok(res, {
+      cities: Object.entries(byCity).map(([city, count]) => ({ city, count })),
+      places: Object.values(byPlace).sort((a, b) => b.count - a.count).slice(0, 30),
+    });
   }),
 );
 

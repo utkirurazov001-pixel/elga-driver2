@@ -54,7 +54,7 @@
         get('/finance/withdrawals?limit=100'), get('/finance/transactions?limit=100'),
         get('/complaints?limit=100'), get('/loyalty/rewards'), get('/loyalty/promo-codes'),
         get('/cities'), get('/places?limit=100'), get('/audit?limit=100'), get('/tariffs'),
-        get('/stats/dashboard')
+        get('/stats/dashboard'), get('/zones'), get('/campaigns'), get('/corporate')
       ]).then(function(r){
         var D = window.DB;
         D.drivers     = (r[0].data||[]).map(mapDriver);
@@ -71,6 +71,9 @@
         D.tariffs     = (r[11].data||[]).map(mapTariff);
         var dash = r[12].data;
         if(dash) applyDash(dash);
+        if((r[13].data||[]).length) D.zones = r[13].data.map(mapZone);
+        if((r[14].data||[]).length) D.campaigns = r[14].data.map(mapCampaign);
+        if((r[15].data||[]).length) D.corporate = r[15].data.map(mapCorp);
         self.live = true;
         return true;
       });
@@ -86,7 +89,7 @@
   function mapOrder(o){
     o.client_ini=ini(o.client);
     o.from = o.from_city+' · '+o.from_place; o.to = o.to_city+' · '+o.to_place;
-    o.park = o.park; o.tariff=tlabel(o.tariff); o.payment=o.payment; return o;
+    o.tariff=tlabel(o.tariff); return o;
   }
   function mapWithdrawal(w){ w.driver_ini=ini(w.driver); w.provider=cap(w.provider); return w; }
   function mapTxn(t){ t.provider=cap(t.provider); return t; }
@@ -97,6 +100,9 @@
   function mapPlace(p){ return {id:p.id, city:p.city, name:p.name, count:p.count, source:p.source, added_at:p.added_at||p.created_at||''}; }
   function mapAudit(a){ return a; }
   function mapTariff(t){ return {id:t.id, name:tlabel(t.name), base:t.base_fare, per_km:t.per_km, per_min:t.per_min, min_fare:t.min_fare, surge:t.surge_multiplier, commission:t.commission_percent, active:t.is_active}; }
+  function mapZone(z){ return {id:z.id, name:z.name, city:z.city, polygon:z.polygon, surge:z.surge, active:z.is_active}; }
+  function mapCampaign(c){ var seg=c.segment||{}; var s=(seg.city?seg.city+' · ':'')+(seg.tier?tlabel(seg.tier)+' mijozlar':'Barcha mijozlar'); return {id:c.id, title:c.title, channel:c.channel, segment:s, body:c.body, status:c.status, recipients:c.recipients, created_at:c.created_at}; }
+  function mapCorp(c){ return {id:c.id, name:c.name, contact:c.contact, phone:c.phone, balance:c.balance, employees:c.employees, rides:c.rides, active:c.is_active}; }
 
   function applyDash(d){
     var L = window.LiveKPI; if(!L) return;
@@ -107,6 +113,16 @@
     L.cancel_rate = d.cancel_rate;
     L.commission = +(d.commission_today/1e6).toFixed(2);
   }
+
+  /* Yozish amali — live rejimda backendga yuboradi, demo'da no-op.
+     Promise qaytaradi: {ok:true,data} yoki {ok:false,message}. */
+  window.apiAction = function(method, path, body){
+    if(!(window.ELGA && window.ELGA.live)) return Promise.resolve({ok:true, demo:true});
+    return window.ELGA.request(method, path, body).then(function(r){
+      if(r.status>=200 && r.status<300 && r.body && r.body.success) return {ok:true, data:r.body.data};
+      return {ok:false, message:(r.body && r.body.error && r.body.error.message) || 'Server xatosi'};
+    }).catch(function(){ return {ok:false, message:'Tarmoq xatosi'}; });
+  };
 
   window.ELGA = ELGA;
 })();

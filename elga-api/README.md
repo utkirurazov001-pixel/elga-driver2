@@ -38,6 +38,27 @@ admin panel darhol ulanib real ishlaydi. To'ldirilsa, Prisma + PostgreSQL ga o't
 | GET | `/v1/loyalty/rewards` · `/promo-codes` · POST `/loyalty/adjust` | turli |
 | GET | `/v1/cities` · `/v1/places` (+POST) · `/v1/audit` | turli |
 
+### Operatsion funksiyalar (Uber/Yandex uslubi)
+
+| Metod | Yo'l | Tavsif |
+|------|------|--------|
+| POST | `/v1/pricing/estimate` | Narx kalkulyatori (base+km+min+surge+tun) |
+| GET | `/v1/pricing/surge` | Dinamik surge (talab/taklif) |
+| POST | `/v1/orders/:id/auto-assign` | Avtomatik eng yaqin bo'sh haydovchi |
+| POST | `/v1/orders/:id/reassign` · `/rate` | Qayta tayinlash · baho+sharh |
+| GET | `/v1/drivers/leaderboard` · `/:id/score` | Top haydovchilar · scoring |
+| GET | `/v1/drivers/:id/wallet` · `/reviews` · `/shifts/recent` | Hamyon · sharhlar · smenalar |
+| POST | `/v1/drivers/:id/online` | Smena (online toggle) |
+| GET | `/v1/drivers/documents/expiring` | Hujjat muddati eslatmasi |
+| GET/POST | `/v1/zones` · `/zones/locate` | Geo-zona poligonlari (point-in-polygon) |
+| GET | `/v1/stats/heatmap` | Talab heatmap |
+| GET/POST | `/v1/campaigns` | Segmentlangan push/SMS kampaniya |
+| GET | `/v1/reports?type=daily\|monthly` | Agregatsiya hisobot |
+| GET/POST | `/v1/corporate` (+`/:id/invoice`) | B2B akkaunt + hisob-faktura |
+| GET/PATCH | `/v1/work-rules` | Komissiya qoidalari (tarif/haydovchi) |
+| POST | `/v1/loyalty/redeem` · `/promo-codes/validate` | Almashtirish · promo tekshirish |
+| GET | `/v1/clients/:id/orders` | Mijoz safar tarixi |
+
 Javob konverti **doimo**: `{ success, data, error, meta }`.
 
 ## Xavfsizlik (TZ §9)

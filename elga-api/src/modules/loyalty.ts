@@ -25,8 +25,51 @@ router.patch(
   }),
 );
 
-// Promo-kodlar
-router.get('/promo-codes', asyncHandler(async (_req, res) => ok(res, store.promos)));
+// POST /loyalty/redeem — ballni sovg'aga almashtirish (idempotent emas demo)
+const redeemSchema = z.object({ client_id: z.string().min(1), reward_id: z.string().min(1) });
+router.post(
+  '/redeem',
+  requireRole('super_admin', 'operator'),
+  validate(redeemSchema),
+  asyncHandler(async (req, res) => {
+    const b = req.body as z.infer<typeof redeemSchema>;
+    const c = store.findClient(b.client_id);
+    if (!c) throw ApiError.notFound('Mijoz topilmadi');
+    const r = store.rewards.find((x) => x.id === b.reward_id);
+    if (!r || !r.is_active) throw ApiError.notFound('Sovg\'a topilmadi yoki nofaol');
+    if (r.stock <= 0) throw ApiError.conflict('Sovg\'a zaxirasi tugagan');
+    if (c.points < r.cost_points) throw ApiError.badRequest('Ball yetarli emas');
+    c.points -= r.cost_points;
+    r.stock -= 1;
+    const code = `ELGA-${1000 + Math.floor(Math.random() * 9000)}`;
+    store.addAudit({ user_id: req.user!.sub, user: req.user!.login, role: req.user!.role, action: 'loyalty.redeem', entity: 'redemptions', entity_id: c.id, detail: `${r.title} (−${r.cost_points} ball)`, ip: req.ip ?? '' });
+    return ok(res, { client_id: c.id, reward: r.title, points_left: c.points, code });
+  }),
+);
+
+// Promo-kodlar (super_admin, operator)
+router.get('/promo-codes', requireRole('super_admin', 'operator'), asyncHandler(async (_req, res) => ok(res, store.promos)));
+
+// POST /promo-codes/validate — promo-kod tekshirish va qo'llash
+const validateSchema = z.object({ code: z.string().min(1), order_amount: z.number().int().nonnegative() });
+router.post(
+  '/promo-codes/validate',
+  validate(validateSchema),
+  asyncHandler(async (req, res) => {
+    const b = req.body as z.infer<typeof validateSchema>;
+    const p = store.promos.find((x) => x.code.toUpperCase() === b.code.toUpperCase());
+    if (!p) throw ApiError.notFound('Promo-kod topilmadi');
+    if (!p.is_active) throw ApiError.badRequest('Promo-kod nofaol');
+    if (p.used_count >= p.usage_limit) throw ApiError.badRequest('Promo-kod limiti tugagan');
+    if (b.order_amount < p.min_order) throw ApiError.badRequest(`Minimal buyurtma ${p.min_order} so'm`);
+    let discount = 0;
+    let points = 0;
+    if (p.type === 'percent') discount = Math.round((b.order_amount * p.value) / 100);
+    else if (p.type === 'fixed') discount = p.value;
+    else points = p.value;
+    return ok(res, { code: p.code, type: p.type, discount, points, final_amount: Math.max(0, b.order_amount - discount) });
+  }),
+);
 
 const adjustSchema = z.object({
   client_id: z.string().min(1),
