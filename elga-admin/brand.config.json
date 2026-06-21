@@ -1,0 +1,67 @@
+{
+  "$schema": "https://elga.uz/schemas/brand-config-v1.json",
+  "brand": "ELGA TAXI",
+  "version": "1.0",
+  "dispatcher": "1226",
+  "tagline": "HAR DOIM YONINGIZDA!",
+  "legalEntity": "X/K Abdulfayz-Angor",
+  "region": { "districts": ["Angor", "Muzrabot", "Jarqo'rg'on", "Sherobod", "Termiz", "Denov"], "region": "Surxondaryo", "country": "O'zbekiston" },
+
+  "logo": {
+    "lockup": "EL + GA + TAXI",
+    "EL": { "color": "#FFCC00", "weight": 800 },
+    "GA": { "color": "#FFFFFF", "weight": 800 },
+    "TAXI": { "color": "#FFCC00", "tracking": "wide" },
+    "motif": "checkered taxi pattern (shaxmat naqsh)",
+    "background": "#15171C",
+    "style": "italic, bold, speed-line glow"
+  },
+
+  "pillars": [
+    { "key": "TEZ", "label": "Tez", "desc": "Tez yetib boramiz", "icon": "clock" },
+    { "key": "XAVFSIZ", "label": "Xavfsiz", "desc": "Siz uchun muhim", "icon": "shield" },
+    { "key": "ISHONCHLI", "label": "Ishonchli", "desc": "Ishonchli xizmat", "icon": "verified" }
+  ],
+
+  "colors": {
+    "gold": "#FFCC00",
+    "goldDark": "#C9A24B",
+    "goldSoft": "rgba(255,204,0,0.12)",
+    "dark": "#15171C",
+    "white": "#FFFFFF",
+    "success": "#22C55E",
+    "danger": "#EF4444",
+    "warning": "#F59E0B",
+    "info": "#3B82F6"
+  },
+
+  "typography": {
+    "primary": "Manrope",
+    "mono": "JetBrains Mono",
+    "weights": [400, 500, 600, 700, 800]
+  },
+
+  "livery": {
+    "body": "#FFFFFF",
+    "stripe": "black + gold diagonal",
+    "roofSign": "ELGA TAXI 1226 + park_number",
+    "doorBranding": "ELGA TAXI logo + ☎ 1226 + park_number (masalan 326)",
+    "exampleVehicle": "Chevrolet Cobalt / Nexia"
+  },
+
+  "loyalty": {
+    "tagline": "Bonuslar sizni kutmoqda!",
+    "rules": [
+      "Har safar ballar yig'ish",
+      "Ballaringizni sovg'alarga almashtiring",
+      "Maxsus chegirmalar va takliflar"
+    ],
+    "tiers": ["bronze", "silver", "gold"]
+  },
+
+  "usage": {
+    "adminLogin": "logo lockup + slogan 'HAR DOIM YONINGIZDA!' + 1226 anchor",
+    "primaryColor": "#FFCC00",
+    "neverChange": ["dispatcher 1226", "slogan", "logo lockup"]
+  }
+}
