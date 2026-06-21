@@ -1,0 +1,359 @@
+// ELGA TAXI 1226 — Prisma schema (production · PostgreSQL)
+// TZ §3 MA'LUMOTLAR MODELI (DATA-01 .. DATA-21).
+// In-memory skelet ishga tushadi; DATABASE_URL berilganda shu schema migratsiya qilinadi.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role { super_admin operator finance_admin dispatcher moderator }
+enum DriverStatus { free busy offline blocked }
+enum KycStatus { pending approved rejected }
+enum DocType { license passport tech_passport }
+enum OrderStatus { new searching assigned arriving in_progress completed cancelled }
+enum RouteType { intra inter }
+enum PaymentMethod { cash payme click balance }
+enum PaymentStatus { pending paid refunded }
+enum CancelBy { client driver operator system }
+enum ActorType { admin driver client system }
+enum TariffName { ekonom komfort biznes }
+enum TxnType { ride_payment commission topup withdrawal refund }
+enum TxnStatus { pending success failed }
+enum Provider { payme click cash balance }
+enum WithdrawalStatus { pending approved rejected paid }
+enum ComplaintStatus { new in_review resolved }
+enum LoyaltyTier { bronze silver gold }
+enum PointType { earn redeem expire adjust }
+enum RewardType { discount gift free_ride }
+enum RedemptionStatus { pending fulfilled cancelled }
+enum PromoType { percent fixed points }
+
+// DATA-01
+model AdminUser {
+  id            String    @id @default(uuid())
+  login         String    @unique
+  password_hash String
+  full_name     String
+  phone         String
+  role          Role
+  is_active     Boolean   @default(true)
+  last_login_at DateTime?
+  two_fa_secret String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  audit_logs    AuditLog[]
+}
+
+// DATA-02
+model Driver {
+  id           String          @id @default(uuid())
+  full_name    String
+  phone        String          @unique
+  status       DriverStatus    @default(offline)
+  car_make     String
+  car_model    String
+  car_plate    String          @unique
+  car_color    String
+  tariff_id    String?
+  tariff       Tariff?         @relation(fields: [tariff_id], references: [id])
+  rating       Decimal         @default(5.0)
+  orders_count Int             @default(0)
+  balance      Int             @default(0)
+  kyc_status   KycStatus       @default(pending)
+  city         String
+  created_at   DateTime        @default(now())
+  updated_at   DateTime        @updatedAt
+  documents    DriverDocument[]
+  location     DriverLocation?
+  orders       Order[]
+  withdrawals  Withdrawal[]
+  vehicle      FleetVehicle?
+}
+
+// DATA-03
+model DriverDocument {
+  id          String    @id @default(uuid())
+  driver_id   String
+  driver      Driver    @relation(fields: [driver_id], references: [id])
+  type        DocType
+  file_url    String
+  status      KycStatus @default(pending)
+  verified_by String?
+  verified_at DateTime?
+  created_at  DateTime  @default(now())
+}
+
+// DATA-04
+model DriverLocation {
+  driver_id  String   @id
+  driver     Driver   @relation(fields: [driver_id], references: [id])
+  lat        Float
+  lng        Float
+  heading    Float    @default(0)
+  speed      Float    @default(0)
+  updated_at DateTime @updatedAt
+}
+
+// DATA-05
+model Client {
+  id            String   @id @default(uuid())
+  full_name     String
+  phone         String   @unique
+  is_blocked    Boolean  @default(false)
+  orders_count  Int      @default(0)
+  total_spent   Int      @default(0)
+  registered_at DateTime @default(now())
+  orders        Order[]
+  loyalty       LoyaltyAccount?
+  redemptions   Redemption[]
+}
+
+// DATA-06
+model Order {
+  id             String        @id @default(uuid())
+  public_id      String        @unique
+  client_id      String
+  client         Client        @relation(fields: [client_id], references: [id])
+  driver_id      String?
+  driver         Driver?       @relation(fields: [driver_id], references: [id])
+  from_city      String
+  from_place     String
+  from_lat       Float?
+  from_lng       Float?
+  to_city        String
+  to_place       String
+  to_lat         Float?
+  to_lng         Float?
+  route_type     RouteType     @default(intra)
+  tariff_id      String
+  tariff         Tariff        @relation(fields: [tariff_id], references: [id])
+  distance_km    Decimal
+  duration_min   Int
+  price          Int
+  commission     Int
+  payment_method PaymentMethod @default(cash)
+  payment_status PaymentStatus @default(pending)
+  status         OrderStatus   @default(new)
+  cancel_reason  String?
+  cancel_by      CancelBy?
+  created_at     DateTime      @default(now())
+  assigned_at    DateTime?
+  started_at     DateTime?
+  completed_at   DateTime?
+  history        OrderStatusHistory[]
+}
+
+// DATA-07
+model OrderStatusHistory {
+  id              String     @id @default(uuid())
+  order_id        String
+  order           Order      @relation(fields: [order_id], references: [id])
+  status          OrderStatus
+  changed_by_type ActorType
+  changed_by_id   String?
+  created_at      DateTime   @default(now())
+}
+
+// DATA-08
+model Tariff {
+  id                 String     @id @default(uuid())
+  name               TariffName
+  city               String?
+  base_fare          Int
+  per_km             Int
+  per_min            Int
+  min_fare           Int
+  surge_multiplier   Decimal    @default(1.0)
+  commission_percent Int        @default(15)
+  is_active          Boolean    @default(true)
+  drivers            Driver[]
+  orders             Order[]
+}
+
+// DATA-09
+model Transaction {
+  id             String    @id @default(uuid())
+  type           TxnType
+  order_id       String?
+  driver_id      String?
+  client_id      String?
+  amount         Int
+  provider       Provider
+  provider_txn_id String?
+  status         TxnStatus @default(pending)
+  created_at     DateTime  @default(now())
+}
+
+// DATA-10
+model Withdrawal {
+  id           String           @id @default(uuid())
+  driver_id    String
+  driver       Driver           @relation(fields: [driver_id], references: [id])
+  amount       Int
+  provider     Provider
+  status       WithdrawalStatus @default(pending)
+  requested_at DateTime         @default(now())
+  processed_by String?
+  processed_at DateTime?
+  note         String?
+}
+
+// DATA-11
+model Complaint {
+  id          String          @id @default(uuid())
+  order_id    String?
+  source_type ActorType
+  source_id   String?
+  category    String
+  description String
+  status      ComplaintStatus @default(new)
+  assigned_to String?
+  resolution  String?
+  created_at  DateTime        @default(now())
+  resolved_at DateTime?
+}
+
+// DATA-12
+model Notification {
+  id             String   @id @default(uuid())
+  recipient_type ActorType
+  recipient_id   String?
+  type           String
+  title          String
+  body           String
+  is_read        Boolean  @default(false)
+  created_at     DateTime @default(now())
+}
+
+// DATA-13 — immutable (faqat INSERT)
+model AuditLog {
+  id          String     @id @default(uuid())
+  user_id     String?
+  user        AdminUser? @relation(fields: [user_id], references: [id])
+  action      String
+  entity_type String
+  entity_id   String
+  meta        Json?
+  ip          String?
+  user_agent  String?
+  created_at  DateTime   @default(now())
+}
+
+// DATA-14
+model PaymeTransaction {
+  id                    String   @id @default(uuid())
+  paycom_transaction_id String   @unique
+  order_id              String
+  amount                Int
+  state                 Int
+  create_time           BigInt?
+  perform_time          BigInt?
+  cancel_time           BigInt?
+  reason                Int?
+  created_at            DateTime @default(now())
+}
+
+// DATA-15
+model CityZone {
+  id        String  @id @default(uuid())
+  name      String  @unique
+  region    String  @default("Surxondaryo")
+  is_active Boolean @default(true)
+  places    Place[]
+}
+
+// Manzil lug'ati (to'liq manzilli model — to'planadi)
+model Place {
+  id         String   @id @default(uuid())
+  city       String
+  cityZone   CityZone @relation(fields: [city], references: [name])
+  name       String
+  count      Int      @default(1)
+  source     String   @default("seed")
+  created_at DateTime @default(now())
+  @@unique([city, name])
+}
+
+// DATA-16
+model LoyaltyAccount {
+  id             String      @id @default(uuid())
+  client_id      String      @unique
+  client         Client      @relation(fields: [client_id], references: [id])
+  balance_points Int         @default(0)
+  lifetime_points Int        @default(0)
+  tier           LoyaltyTier @default(bronze)
+  updated_at     DateTime    @updatedAt
+  transactions   PointTransaction[]
+}
+
+// DATA-17
+model PointTransaction {
+  id                 String         @id @default(uuid())
+  loyalty_account_id String
+  loyalty_account    LoyaltyAccount @relation(fields: [loyalty_account_id], references: [id])
+  order_id           String?
+  type               PointType
+  points             Int
+  reason             String?
+  created_at         DateTime       @default(now())
+}
+
+// DATA-18
+model Reward {
+  id          String       @id @default(uuid())
+  title       String
+  description String
+  cost_points Int
+  type        RewardType
+  value       Int          @default(0)
+  stock       Int          @default(0)
+  is_active   Boolean      @default(true)
+  image_url   String?
+  redemptions Redemption[]
+}
+
+// DATA-19
+model Redemption {
+  id           String           @id @default(uuid())
+  client_id    String
+  client       Client           @relation(fields: [client_id], references: [id])
+  reward_id    String
+  reward       Reward           @relation(fields: [reward_id], references: [id])
+  points_spent Int
+  status       RedemptionStatus @default(pending)
+  code         String           @unique
+  created_at   DateTime         @default(now())
+}
+
+// DATA-20
+model PromoCode {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  type        PromoType
+  value       Int
+  min_order   Int       @default(0)
+  usage_limit Int       @default(0)
+  used_count  Int       @default(0)
+  valid_from  DateTime?
+  valid_to    DateTime?
+  is_active   Boolean   @default(true)
+}
+
+// DATA-21
+model FleetVehicle {
+  id          String  @id @default(uuid())
+  driver_id   String  @unique
+  driver      Driver  @relation(fields: [driver_id], references: [id])
+  park_number Int     @unique
+  make        String
+  model       String
+  plate       String
+  color       String
+  roof_sign   String  @default("ELGA TAXI 1226")
+  is_active   Boolean @default(true)
+}

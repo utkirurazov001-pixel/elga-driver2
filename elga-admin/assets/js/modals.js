@@ -15,7 +15,9 @@
       body:'<div class="grid g-half" style="align-items:start;gap:20px">'+
         '<div>'+dl([
           ['Mijoz', o.client],['Telefon','<span class="mono">'+o.client_phone+'</span>'],
-          ['Yo\'nalish', o.from+' → '+o.to],['Tarif', U.tariff(o.tariff)],
+          ['Olish','<b>'+(o.from||'')+'</b>'],['Tushirish','<b>'+(o.to||'')+'</b>'],
+          ['Safar turi', o.route_type==='inter'?'<span class="tg gold">Shaharlararo</span>':'<span class="tg neutral">Shahar ichi</span>'],
+          ['Tarif', U.tariff(o.tariff)],
           ['Masofa', o.distance+' km'],['Davomiyligi', o.duration+' daq'],
           ['Haydovchi', o.driver||'—'],['Park', o.park?o.park:'—'],
           ['To\'lov', pay],['Summa','<b class="mono">'+window.money(o.price)+' so\'m</b>'],
@@ -142,27 +144,50 @@
     });
   };
 
-  /* ---- YANGI BUYURTMA ---- */
+  /* ---- YANGI BUYURTMA (to'liq manzilli) ---- */
   window.newOrderModal = function(){
     var cityOpts = window.DB.CITIES.map(function(c){return '<option>'+c+'</option>';}).join('');
     var tarOpts = window.DB.TARIFFS.map(function(t){return '<option>'+t+'</option>';}).join('');
+    var allPlaces = window.DB.places.map(function(p){return p.name;}).filter(function(v,i,a){return a.indexOf(v)===i;});
+    var dl = '<datalist id="placeList">'+allPlaces.map(function(n){return '<option value="'+n+'">';}).join('')+'</datalist>';
     U.modal({
-      title:'Yangi buyurtma', sub:'Qo\'lda buyurtma yaratish (operator / dispetcher)',
-      body:'<div class="form-grid">'+
+      title:'Yangi buyurtma', sub:'Qo\'lda buyurtma · to\'liq manzil (operator / dispetcher)', wide:true,
+      body:dl+'<div class="form-grid">'+
         '<div class="field full"><label>Mijoz telefoni</label><input class="input mono" data-r placeholder="+998 90 123 45 67"></div>'+
-        '<div class="field"><label>Qayerdan</label><select class="input">'+cityOpts+'</select></div>'+
-        '<div class="field"><label>Qayerga</label><select class="input">'+cityOpts+'</select></div>'+
-        '<div class="field"><label>Tarif</label><select class="input">'+tarOpts+'</select></div>'+
-        '<div class="field"><label>To\'lov</label><select class="input"><option>Naqd</option><option>Payme</option><option>Click</option><option>Balans</option></select></div>'+
-        '<div class="field full"><label>Manzil izohi</label><input class="input" placeholder="Ko\'cha, uy, mo\'ljal..."></div>'+
-      '</div>',
+        '<div class="field"><label>Olish — shahar</label><select class="input" data-fc>'+cityOpts+'</select></div>'+
+        '<div class="field"><label>Olish — mo\'ljal / manzil</label><input class="input" list="placeList" data-fp placeholder="Masalan: Elektroset, 15 bayroq..."></div>'+
+        '<div class="field"><label>Tushirish — shahar</label><select class="input" data-tc>'+cityOpts+'</select></div>'+
+        '<div class="field"><label>Tushirish — mo\'ljal / manzil</label><input class="input" list="placeList" data-tp placeholder="Masalan: Markaziy bozor..."></div>'+
+        '<div class="field"><label>Tarif</label><select class="input" data-tar>'+tarOpts+'</select></div>'+
+        '<div class="field"><label>To\'lov</label><select class="input" data-pay><option value="cash">Naqd</option><option value="payme">Payme</option><option value="click">Click</option><option value="balance">Balans</option></select></div>'+
+      '</div>'+
+      '<div class="hint" style="margin-top:10px">Yangi mo\'ljal kiritsangiz — u manzillar lug\'atiga avtomatik qo\'shiladi (to\'planib boradi).</div>',
       foot:'<button class="btn" data-close>Bekor</button><button class="btn btn-primary" data-ok>Yaratish va qidirish</button>',
       onMount:function(back,close){
         back.querySelector('[data-close]').addEventListener('click',close);
         back.querySelector('[data-ok]').addEventListener('click',function(){
           var ph=back.querySelector('[data-r]').value.trim();
+          var fc=back.querySelector('[data-fc]').value, fp=back.querySelector('[data-fp]').value.trim()||'Markaz';
+          var tc=back.querySelector('[data-tc]').value, tp=back.querySelector('[data-tp]').value.trim()||'Markaz';
+          var tar=back.querySelector('[data-tar]').value, pay=back.querySelector('[data-pay]').value;
           if(!ph){ U.toast('Xato','Mijoz telefonini kiriting','error'); return; }
-          close(); U.toast('Buyurtma yaratildi','Haydovchi qidirilmoqda...');
+          // manzillarni lug'atga qo'shish (to'planadi)
+          window.DB.addPlace(fc,fp); window.DB.addPlace(tc,tp);
+          var inter = fc!==tc;
+          var price = inter ? (35+Math.floor(Math.random()*70))*1000 : (12+Math.floor(Math.random()*26))*1000;
+          var id = '#'+(10621+Math.floor(Math.random()*900));
+          window.DB.orders.unshift({
+            id:id, client:'Qo\'lda kiritilgan', client_id:'-', client_ini:'QK', client_phone:ph,
+            driver:null, driver_id:null, park:null,
+            from_city:fc, from_place:fp, to_city:tc, to_place:tp,
+            from:fc+' · '+fp, to:tc+' · '+tp, route_type: inter?'inter':'intra',
+            tariff:tar, distance: inter?(20+Math.random()*60).toFixed(1):(1.5+Math.random()*8).toFixed(1),
+            duration: inter?40:12, price:price, commission:Math.round(price*0.15),
+            payment:pay, payment_status:'pending', status:'searching', created_at:'hozir', cancel_reason:null, _new:true
+          });
+          if(window.Bus) window.Bus.emit('order:new', window.DB.orders[0]);
+          close(); U.toast('Buyurtma yaratildi', id+' · '+fc+' · '+fp+' → '+tc+' · '+tp+' · haydovchi qidirilmoqda');
+          window.rerenderPage && window.rerenderPage();
         });
       }
     });
@@ -329,6 +354,28 @@
           if(!p.code){ U.toast('Xato','Kod kiriting','error'); return; }
           if(!id){ p.id='PR'+(window.DB.promos.length+1); p.active=true; p.used=0; window.DB.promos.push(p); }
           close(); U.toast('Saqlandi','Promo-kod yangilandi'); rerender&&rerender();
+        });
+      }
+    });
+  };
+
+  /* ---- MO'LJAL QO'SHISH ---- */
+  window.addPlaceModal = function(){
+    var cityOpts = window.DB.CITIES.map(function(c){return '<option>'+c+'</option>';}).join('');
+    U.modal({
+      title:'Yangi mo\'ljal qo\'shish', sub:'Manzil lug\'atiga qo\'shiladi',
+      body:'<div class="form-grid">'+
+        '<div class="field"><label>Shahar</label><select class="input" data-c>'+cityOpts+'</select></div>'+
+        '<div class="field"><label>Mo\'ljal / manzil nomi</label><input class="input" data-n placeholder="Masalan: Elektroset"></div>'+
+        '</div>',
+      foot:'<button class="btn" data-close>Bekor</button><button class="btn btn-primary" data-ok>Qo\'shish</button>',
+      onMount:function(back,close){
+        back.querySelector('[data-close]').addEventListener('click',close);
+        back.querySelector('[data-ok]').addEventListener('click',function(){
+          var c=back.querySelector('[data-c]').value, n=back.querySelector('[data-n]').value.trim();
+          if(!n){ U.toast('Xato','Mo\'ljal nomini kiriting','error'); return; }
+          window.DB.addPlace(c,n); close(); U.toast('Qo\'shildi', c+' · '+n+' lug\'atga qo\'shildi');
+          window.rerenderPage && window.rerenderPage();
         });
       }
     });

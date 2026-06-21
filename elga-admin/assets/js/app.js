@@ -65,11 +65,32 @@
     document.getElementById('loginForm').addEventListener('submit',function(e){
       e.preventDefault();
       var u=document.getElementById('lg').value.trim();
+      var pw=document.getElementById('pw').value;
       if(!u){ window.UI.toast('Xato','Login kiriting','error'); return; }
-      sessionStorage.setItem('elga_admin_in','1');
-      renderShell();
-      navigate('grid');
-      window.UI.toast('Xush kelibsiz!', ME.full_name+' · '+window.roleLabel(ME.role));
+      var btn=e.target.querySelector('button[type="submit"]');
+      btn.disabled=true; btn.style.opacity='.7'; var old=btn.innerHTML; btn.innerHTML=window.icon('refresh',16)+' Tekshirilmoqda...';
+
+      function enterDemo(msg){
+        window.ELGA && (window.ELGA.live=false);
+        sessionStorage.setItem('elga_admin_in','1');
+        renderShell(); navigate('grid');
+        window.UI.toast('Demo rejimi', msg||'Backend topilmadi — namuna ma\'lumot','info');
+      }
+      function enterLive(){
+        window.ELGA.bootstrap().then(function(){
+          if(window.ELGA.me){ ME.full_name=window.ELGA.me.full_name; ME.role=window.ELGA.me.role; ME.ini=(ME.full_name.split(' ').map(function(x){return x[0];}).join('').slice(0,2)); }
+          sessionStorage.setItem('elga_admin_in','1');
+          renderShell(); navigate('grid');
+          window.UI.toast('Backendga ulandi', 'api.elga.uz · jonli ma\'lumot · 1226');
+        }).catch(function(){ enterDemo('Ma\'lumot yuklanmadi — namuna rejimi'); });
+      }
+
+      if(!window.ELGA){ enterDemo(); return; }
+      window.ELGA.login(u, pw).then(function(res){
+        if(res.ok){ enterLive(); }
+        else if(res.type==='auth'){ btn.disabled=false; btn.style.opacity='1'; btn.innerHTML=old; window.UI.toast('Kirish xato', res.message||'Login yoki parol noto\'g\'ri','error'); }
+        else { enterDemo(); } // network — backend yo'q
+      });
     });
   }
 
@@ -104,12 +125,138 @@
         app.appendChild(bd);
       }
     });
-    app.querySelector('#bellBtn').addEventListener('click',function(){ navigate('bell'); });
-    app.querySelector('#profileBtn').addEventListener('click',function(){ navigate('cog','general'); });
-    app.querySelector('#logout').addEventListener('click',function(){
-      sessionStorage.removeItem('elga_admin_in'); renderLogin();
-    });
+    app.querySelector('#bellBtn').addEventListener('click',function(e){ e.stopPropagation(); openNotifPanel(this); });
+    app.querySelector('#profileBtn').addEventListener('click',function(e){ e.stopPropagation(); openProfileMenu(this); });
+    app.querySelector('#logout').addEventListener('click',doLogout);
+    var ts=app.querySelector('.top-search input'); if(ts) ts.addEventListener('focus',function(){ this.blur(); openPalette(); });
+
+    // Real-time dvigatel — faqat demo rejimda (live'da keyin real Socket.IO)
+    if(window.RealtimeEngine && !(window.ELGA && window.ELGA.live)) window.RealtimeEngine.start();
+    // Global jonli obunalar (badge'lar, qo'ng'iroq nuqtasi)
+    if(window.Bus){
+      window.Bus.on('notice:new', function(){
+        var dot=document.querySelector('#bellBtn .dot'); if(dot) dot.style.display='block';
+        window.refreshBadges();
+      });
+      window.Bus.on('order:new', function(o){
+        if(current.route==='grid' || current.route==='radio') return; // o'sha sahifa o'zi ko'rsatadi
+      });
+    }
   }
+
+  function doLogout(){
+    if(window.RealtimeEngine) window.RealtimeEngine.stop();
+    sessionStorage.removeItem('elga_admin_in'); renderLogin();
+  }
+
+  /* ---- Popover yordamchisi ---- */
+  function popover(anchor, html, width){
+    closePopovers();
+    var r=anchor.getBoundingClientRect();
+    var p=document.createElement('div');
+    p.className='popover';
+    p.style.cssText='position:fixed;top:'+(r.bottom+8)+'px;right:'+(window.innerWidth-r.right)+'px;width:'+(width||320)+'px;'+
+      'background:var(--surface);border:1px solid var(--border-strong);border-radius:14px;box-shadow:0 20px 50px rgba(0,0,0,.5);z-index:250;overflow:hidden;animation:rise .15s';
+    p.innerHTML=html;
+    document.body.appendChild(p);
+    setTimeout(function(){ document.addEventListener('click', onDoc); },0);
+    function onDoc(e){ if(!p.contains(e.target)){ closePopovers(); } }
+    p._onDoc=onDoc;
+    return p;
+  }
+  function closePopovers(){
+    document.querySelectorAll('.popover').forEach(function(p){ if(p._onDoc) document.removeEventListener('click',p._onDoc); p.remove(); });
+  }
+
+  function openNotifPanel(anchor){
+    var items = window.DB.notifications.slice(0,6).map(function(n){
+      var tone = n.tone==='danger'?'':(n.tone==='gold'?'gold':'info');
+      return '<div class="cmp" style="padding:12px 16px;border-bottom:1px solid var(--border);'+(n.read?'opacity:.6':'')+'">'+
+        '<div class="ic '+tone+'">'+window.icon(n.icon,16)+'</div>'+
+        '<div><div class="tt">'+n.title+'</div><div class="ds">'+n.body+'</div></div><div class="tm">'+n.created_at+'</div></div>';
+    }).join('');
+    var p=popover(anchor,
+      '<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'+
+      '<b style="font-size:14px">Bildirishnomalar</b><span class="tg gold" style="padding:2px 8px">'+window.DB.notifications.filter(function(n){return !n.read;}).length+' yangi</span></div>'+
+      '<div style="max-height:380px;overflow-y:auto">'+items+'</div>'+
+      '<div class="foot-link" data-all>Barchasini ko\'rish →</div>', 340);
+    p.querySelector('[data-all]').addEventListener('click',function(){ closePopovers(); navigate('bell'); });
+    var dot=document.querySelector('#bellBtn .dot'); if(dot) dot.style.display='none';
+  }
+
+  function openProfileMenu(anchor){
+    var p=popover(anchor,
+      '<div style="padding:16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:center">'+
+        '<div class="av" style="width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,var(--gold),var(--gold-dark));display:grid;place-items:center;font-weight:800;color:#15171C">'+ME.ini+'</div>'+
+        '<div><div style="font-weight:700">'+ME.full_name+'</div><div class="muted" style="font-size:12px">'+ME.phone+'</div>'+
+        '<div class="tg gold" style="margin-top:4px;padding:2px 8px;font-size:10px">'+window.roleLabel(ME.role)+'</div></div></div>'+
+      '<div style="padding:8px">'+
+        menuItem('cog','Sozlamalar','set')+menuItem('shield','Rollar va ruxsatlar','roles')+
+        menuItem('refresh','Demo ma\'lumotni tiklash','reset')+
+        '<div style="height:1px;background:var(--border);margin:6px 0"></div>'+
+        '<div class="pm-item" data-act="logout" style="display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:9px;cursor:pointer;color:var(--danger);font-weight:600">'+window.icon('logout',16)+'Chiqish</div>'+
+      '</div>', 280);
+    p.querySelectorAll('.pm-item').forEach(function(it){ it.addEventListener('mouseenter',function(){it.style.background='var(--surface-2)';}); it.addEventListener('mouseleave',function(){it.style.background='';}); });
+    p.querySelectorAll('[data-act]').forEach(function(it){ it.addEventListener('click',function(){
+      var a=it.getAttribute('data-act'); closePopovers();
+      if(a==='set') navigate('cog','general');
+      else if(a==='roles') navigate('cog','roles');
+      else if(a==='reset'){ window.UI.toast('Tiklandi','Sahifa yangilanmoqda...'); setTimeout(function(){ location.reload(); },700); }
+      else if(a==='logout') doLogout();
+    }); });
+  }
+  function menuItem(ic,label,act){
+    return '<div class="pm-item" data-act="'+act+'" style="display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:9px;cursor:pointer;font-weight:600">'+window.icon(ic,16)+label+'</div>';
+  }
+
+  /* ---- Command palette (⌘K) ---- */
+  function openPalette(){
+    var all=[];
+    NAV.forEach(function(g){ g[1].forEach(function(it){
+      all.push({label:it[1], group:g[0], route:it[0], sub:null, ic:it[2]});
+      if(it[4]) it[4].forEach(function(s){ all.push({label:it[1]+' · '+s[1], group:g[0], route:it[0], sub:s[0], ic:it[2]}); });
+    }); });
+    var back=document.createElement('div');
+    back.className='modal-back'; back.style.alignItems='flex-start'; back.style.paddingTop='12vh';
+    back.innerHTML='<div class="modal" style="max-width:560px">'+
+      '<div style="display:flex;align-items:center;gap:11px;padding:16px 20px;border-bottom:1px solid var(--border)">'+
+      window.icon('search',18)+'<input id="palInput" placeholder="Bo\'lim yoki amal qidiring..." style="flex:1;background:none;border:none;outline:none;color:var(--text);font-family:inherit;font-size:15px"><kbd style="font-family:JetBrains Mono;font-size:10px;color:var(--text-faint);border:1px solid var(--border-strong);border-radius:5px;padding:2px 6px">ESC</kbd></div>'+
+      '<div id="palList" style="max-height:50vh;overflow-y:auto;padding:8px"></div></div>';
+    function close(){ back.remove(); document.removeEventListener('keydown',onKey); }
+    function onKey(e){ if(e.key==='Escape') close();
+      else if(e.key==='ArrowDown'){ e.preventDefault(); move(1); }
+      else if(e.key==='ArrowUp'){ e.preventDefault(); move(-1); }
+      else if(e.key==='Enter'){ var s=back.querySelector('.pal-row.sel'); if(s) s.click(); }
+    }
+    var sel=0, shown=[];
+    function renderList(q){
+      q=(q||'').toLowerCase();
+      shown=all.filter(function(x){return !q || x.label.toLowerCase().indexOf(q)>=0 || x.group.toLowerCase().indexOf(q)>=0;}).slice(0,8);
+      sel=0;
+      var list=back.querySelector('#palList');
+      list.innerHTML = shown.length? shown.map(function(x,i){
+        return '<div class="pal-row'+(i===0?' sel':'')+'" data-i="'+i+'" style="display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:10px;cursor:pointer">'+
+          '<span style="color:var(--gold);display:grid">'+window.icon(x.ic,17)+'</span>'+
+          '<div><div style="font-weight:700;font-size:13.5px">'+x.label+'</div><div class="muted" style="font-size:11px">'+x.group+'</div></div></div>';
+      }).join('') : '<div class="empty" style="padding:30px">'+window.icon('search',32)+'<b>Hech narsa topilmadi</b></div>';
+      list.querySelectorAll('.pal-row').forEach(function(row){
+        row.addEventListener('mouseenter',function(){ setSel(parseInt(row.getAttribute('data-i'),10)); });
+        row.addEventListener('click',function(){ var x=shown[parseInt(row.getAttribute('data-i'),10)]; close(); navigate(x.route,x.sub); });
+      });
+    }
+    function setSel(i){ sel=i; back.querySelectorAll('.pal-row').forEach(function(r,idx){ r.classList.toggle('sel',idx===i); r.style.background=idx===i?'var(--surface-2)':''; }); }
+    function move(d){ var n=shown.length; if(!n)return; setSel((sel+d+n)%n); back.querySelectorAll('.pal-row')[sel].scrollIntoView({block:'nearest'}); }
+    back.addEventListener('click',function(e){ if(e.target===back) close(); });
+    document.addEventListener('keydown',onKey);
+    document.body.appendChild(back);
+    renderList('');
+    var inp=back.querySelector('#palInput'); inp.focus();
+    inp.addEventListener('input',function(){ renderList(inp.value); });
+  }
+  window.openPalette = openPalette;
+  document.addEventListener('keydown',function(e){
+    if((e.metaKey||e.ctrlKey) && (e.key==='k'||e.key==='K')){ e.preventDefault(); if(sessionStorage.getItem('elga_admin_in')) openPalette(); }
+  });
 
   function sidebarHTML(){
     var groups = NAV.map(function(g){
@@ -166,7 +313,18 @@
   }
 
   /* ---------------- NAVIGATE ---------------- */
+  // Sahifa obunalari (real-time) — har navigatsiyada tozalanadi
+  window.PAGE_SUBS = [];
+  window.addPageSub = function(off){ if(typeof off==='function') window.PAGE_SUBS.push(off); };
+  function clearPageSubs(){
+    (window.PAGE_SUBS||[]).forEach(function(off){ try{off();}catch(e){} });
+    window.PAGE_SUBS = [];
+    (window._leafletMaps||[]).forEach(function(m){ try{m.remove();}catch(e){} });
+    window._leafletMaps = [];
+  }
+
   function navigate(route, sub){
+    clearPageSubs();
     current.route=route; current.sub=sub||null;
     var app=document.getElementById('app');
     // aktiv holat
@@ -187,6 +345,7 @@
     var fn = window.PAGES[route];
     var node = fn ? fn({route:route, sub:sub, navigate:navigate}) : placeholder(m.label);
     page.appendChild(node);
+    if(node._onMount){ try{ node._onMount(); }catch(e){ console.error(e); } }
     page.scrollTop=0; window.scrollTo(0,0);
   }
   window.adminNavigate = navigate;
@@ -233,6 +392,7 @@
       var r=window.DB.redemptions.find(function(x){return x.id===t.getAttribute('data-fulfill');});
       if(r){ r.status='fulfilled'; window.UI.toast('Berildi','Sovg\'a berildi: '+r.reward); window.rerenderPage(); }
     }
+    else if(t=e.target.closest('[data-add-place]')){ window.addPlaceModal(); }
     else if(t=e.target.closest('[data-adjust]')){ window.adjustPoints(null); }
     else if(t=e.target.closest('[data-adj]')){ window.adjustPoints(t.getAttribute('data-adj')); }
     else if(t=e.target.closest('[data-edit-promo]')){ window.promoModal(t.getAttribute('data-edit-promo'), window.rerenderPage); }

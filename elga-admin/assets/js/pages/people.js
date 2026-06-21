@@ -15,9 +15,10 @@
   function driversList(ctx){
     return window.listPage({
       title:'Haydovchilar', sub:'Ro\'yxat · '+window.DB.drivers.length+' ta haydovchi',
-      actions:'<button class="btn btn-primary" data-x="new">'+window.icon('plus',16)+'Yangi haydovchi</button>',
+      actions:'<button class="btn" data-export>'+window.icon('download',16)+'CSV eksport</button>'+
+              '<button class="btn btn-primary" data-x="new">'+window.icon('plus',16)+'Yangi haydovchi</button>',
       placeholder:'Ism, telefon yoki davlat raqami...',
-      perPage:10,
+      perPage:10, exportName:'elga-haydovchilar', liveEvents:['driver:status'],
       filters:function(st){return [
         {key:'status', value:st.status||'', options:[window.opt('','Barcha holatlar'),
           window.opt('free','Bo\'sh'),window.opt('busy','Buyurtmada'),window.opt('offline','Oflayn'),window.opt('blocked','Bloklangan')]},
@@ -25,22 +26,21 @@
         {key:'kyc', value:st.kyc||'', options:[window.opt('','Barcha KYC'),
           window.opt('approved','Tasdiqlangan'),window.opt('pending','Kutilmoqda'),window.opt('rejected','Rad etilgan')]}
       ];},
-      getData:function(st){
-        var rows = window.DB.drivers.filter(function(d){
+      rows:function(st){
+        return window.DB.drivers.filter(function(d){
           return U.matches(d,st.q,['full_name','phone','car_plate','car_model']) &&
             (!st.status||d.status===st.status)&&(!st.city||d.city===st.city)&&(!st.kyc||d.kyc_status===st.kyc);
         });
-        return {rows:U.paginate(rows,st.page,10), total:rows.length};
       },
       columns:[
-        {th:'Haydovchi', render:function(d){return U.cust(d.full_name,d.ini,d.phone);}},
-        {th:'Avtomobil', render:function(d){return d.car_make+' '+d.car_model+'<br><span class="muted mono" style="font-size:11px">'+d.car_plate+'</span>';}},
-        {th:'Park', render:function(d){return U.park(d.park_number);}},
-        {th:'Tarif', render:function(d){return U.tariff(d.tariff);}},
-        {th:'Reyting', render:function(d){return '<span class="mono">★ '+d.rating+'</span>';}},
-        {th:'Balans', cls:'sum', render:function(d){return window.money(d.balance);}},
-        {th:'KYC', render:function(d){return U.kycTag(d.kyc_status);}},
-        {th:'Holat', render:function(d){return U.driverTag(d.status);}}
+        {th:'Haydovchi', sortKey:'full_name', csv:function(d){return d.full_name;}, render:function(d){return U.cust(d.full_name,d.ini,d.phone);}},
+        {th:'Avtomobil', csv:function(d){return d.car_make+' '+d.car_model+' '+d.car_plate;}, render:function(d){return d.car_make+' '+d.car_model+'<br><span class="muted mono" style="font-size:11px">'+d.car_plate+'</span>';}},
+        {th:'Park', sortKey:'park_number', csv:function(d){return d.park_number;}, render:function(d){return U.park(d.park_number);}},
+        {th:'Tarif', sortKey:'tariff', csv:function(d){return d.tariff;}, render:function(d){return U.tariff(d.tariff);}},
+        {th:'Reyting', sortKey:'rating', csv:function(d){return d.rating;}, render:function(d){return '<span class="mono">★ '+d.rating+'</span>';}},
+        {th:'Balans', cls:'sum', sortKey:'balance', csv:function(d){return d.balance;}, render:function(d){return window.money(d.balance);}},
+        {th:'KYC', sortKey:'kyc_status', csv:function(d){return d.kyc_status;}, render:function(d){return U.kycTag(d.kyc_status);}},
+        {th:'Holat', sortKey:'status', csv:function(d){return d.status;}, render:function(d){return U.driverTag(d.status);}}
       ],
       onRowClick:function(d, rerender){ window.driverDetail(d, rerender); }
     });
@@ -104,26 +104,26 @@
     return window.listPage({
       title:'Mijozlar', sub:'Ro\'yxat · '+window.DB.clients.length+' ta mijoz',
       placeholder:'Ism yoki telefon...',
-      perPage:10,
+      perPage:10, exportName:'elga-mijozlar',
+      actions:'<button class="btn" data-export>'+window.icon('download',16)+'CSV eksport</button>',
       filters:function(st){return [
         {key:'tier', value:st.tier||'', options:[window.opt('','Barcha darajalar'),
           window.opt('gold','Gold'),window.opt('silver','Silver'),window.opt('bronze','Bronze')]},
         {key:'blocked', value:st.blocked||'', options:[window.opt('','Hammasi'),window.opt('no','Faol'),window.opt('yes','Bloklangan')]}
       ];},
-      getData:function(st){
-        var rows = window.DB.clients.filter(function(c){
+      rows:function(st){
+        return window.DB.clients.filter(function(c){
           return U.matches(c,st.q,['full_name','phone']) && (!st.tier||c.tier===st.tier) &&
             (!st.blocked || (st.blocked==='yes'?c.is_blocked:!c.is_blocked));
         });
-        return {rows:U.paginate(rows,st.page,10), total:rows.length};
       },
       columns:[
-        {th:'Mijoz', render:function(c){return U.cust(c.full_name,c.ini,c.phone,true);}},
-        {th:'Buyurtmalar', render:function(c){return c.orders_count;}},
-        {th:'Sarflagan', cls:'sum', render:function(c){return window.money(c.total_spent);}},
-        {th:'Daraja', render:function(c){return '<span class="tier-badge '+c.tier+'" style="display:inline-grid;width:28px;height:22px;font-size:9px;border-radius:6px">'+c.tier.slice(0,3).toUpperCase()+'</span>';}},
-        {th:'Ball', render:function(c){return '<span class="mono gold">'+c.points+'</span>';}},
-        {th:'Ro\'yxatdan', render:function(c){return '<span class="muted">'+c.registered_at+'</span>';}},
+        {th:'Mijoz', sortKey:'full_name', csv:function(c){return c.full_name;}, render:function(c){return U.cust(c.full_name,c.ini,c.phone,true);}},
+        {th:'Buyurtmalar', sortKey:'orders_count', csv:function(c){return c.orders_count;}, render:function(c){return c.orders_count;}},
+        {th:'Sarflagan', cls:'sum', sortKey:'total_spent', csv:function(c){return c.total_spent;}, render:function(c){return window.money(c.total_spent);}},
+        {th:'Daraja', sortKey:'tier', csv:function(c){return c.tier;}, render:function(c){return '<span class="tier-badge '+c.tier+'" style="display:inline-grid;width:28px;height:22px;font-size:9px;border-radius:6px">'+c.tier.slice(0,3).toUpperCase()+'</span>';}},
+        {th:'Ball', sortKey:'points', csv:function(c){return c.points;}, render:function(c){return '<span class="mono gold">'+c.points+'</span>';}},
+        {th:'Ro\'yxatdan', csv:function(c){return c.registered_at;}, render:function(c){return '<span class="muted">'+c.registered_at+'</span>';}},
         {th:'Holat', render:function(c){return c.is_blocked?U.genTag('rejected').replace('Rad etilgan','Bloklangan'):U.genTag('true');}},
         {th:'', cls:'right', render:function(c){return '<button class="btn btn-sm '+(c.is_blocked?'btn-success':'btn-danger')+'" data-block="'+c.id+'">'+(c.is_blocked?'Blokdan chiqarish':'Bloklash')+'</button>';}}
       ],
