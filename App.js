@@ -13,6 +13,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import * as Speech from 'expo-speech';
 import * as KeepAwake from 'expo-keep-awake';
@@ -284,6 +285,75 @@ const OfflineQueue = {
 };
 
 const fmt = (n) => Number(n || 0).toLocaleString('ru-RU');
+
+// ============================================================
+//  FON (BACKGROUND) GPS — ilova fonda/ekran o'chiq bo'lganda ham haydovchi
+//  joylashuvini yuboradi. Socket fonda ishonchsiz, shuning uchun HTTP orqali
+//  POST /api/drivers/location ga yuboramiz (mavjud endpoint). Foreground'da
+//  socket allaqachon yuboradi — fonda ikkilantirmaymiz.
+//  Hammasi try/catch — fon vazifasi hech qachon ilovani yiqitmaydi.
+// ============================================================
+const BG_LOCATION_TASK = 'elga-bg-location';
+
+try {
+  if (!TaskManager.isTaskDefined(BG_LOCATION_TASK)) {
+    TaskManager.defineTask(BG_LOCATION_TASK, async ({ data, error }) => {
+      if (error) return;
+      try {
+        // Foreground'da socket yuboradi — fonda takror yubormaymiz
+        if (AppState.currentState === 'active') return;
+        const online = await AsyncStorage.getItem('drv_online');
+        if (online !== '1') return;
+        const token = await AsyncStorage.getItem('token');
+        if (!token) return;
+        const locs = (data && data.locations) || [];
+        const last = locs[locs.length - 1];
+        if (!last || !last.coords) return;
+        const lat = last.coords.latitude, lng = last.coords.longitude;
+        await fetch(BASE + '/api/drivers/location', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ lat, lng }),
+        }).catch(() => {});
+        AsyncStorage.setItem('last_loc', JSON.stringify({ lat, lng })).catch(() => {});
+      } catch (e) {}
+    });
+  }
+} catch (e) {}
+
+async function startBackgroundLocation() {
+  try {
+    if (typeof Location.startLocationUpdatesAsync !== 'function') return; // SDK qo'llamasa
+    // Fon ruxsati ixtiyoriy — berilmasa foreground watch baribir ishlaydi
+    let granted = true;
+    try {
+      const { status } = await Location.requestBackgroundPermissionsAsync();
+      granted = status === 'granted';
+    } catch (e) { granted = false; }
+    if (!granted) return;
+    const already = await Location.hasStartedLocationUpdatesAsync(BG_LOCATION_TASK).catch(() => false);
+    if (already) return;
+    await Location.startLocationUpdatesAsync(BG_LOCATION_TASK, {
+      accuracy: Location.Accuracy?.High ?? 4,
+      timeInterval: 15000,     // fonda batareyani tejab ~15s
+      distanceInterval: 30,
+      pausesUpdatesAutomatically: false,
+      showsBackgroundLocationIndicator: true,
+      foregroundService: {
+        notificationTitle: '🚕 ELGA Haydovchi',
+        notificationBody: 'Joylashuv kuzatilmoqda',
+        notificationColor: '#FFC700',
+      },
+    });
+  } catch (e) {}
+}
+
+async function stopBackgroundLocation() {
+  try {
+    const already = await Location.hasStartedLocationUpdatesAsync(BG_LOCATION_TASK).catch(() => false);
+    if (already) await Location.stopLocationUpdatesAsync(BG_LOCATION_TASK);
+  } catch (e) {}
+}
 
 // Matnni xavfsiz string'ga keltirish — obyekt/null kelib qolsa ham React
 // "Objects are not valid as a React child" deb qulamaydi (ayniqsa ovozli
@@ -589,6 +659,7 @@ function AppInner() {
   const [netOnline, setNetOnline] = useState(true);        // internet bormi (reachability)
   const [socketConnected, setSocketConnected] = useState(false); // realtime kanal ulanganmi
   const [queuedCount, setQueuedCount] = useState(0);        // oflayn navbatdagi amallar soni
+  const [gpsStale, setGpsStale] = useState(false);          // GPS 30s+ yangilanmadi ("arvoh"/signal yo'q)
 
   const socketRef = useRef(null);
   const watchRef = useRef(null);
@@ -743,6 +814,16 @@ function AppInner() {
     pollRef.current = setInterval(() => { resumeActiveOrder(); }, 5000);
     return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
   }, [token, pinStep, socketConnected]);
+
+  // ---- GPS "arvoh" aniqlash (#33): 30s+ yangilanmasa "signal yo'q" ko'rsatkichi ----
+  useEffect(() => {
+    if (!online) { setGpsStale(false); return; }
+    const iv = setInterval(() => {
+      const elapsed = Date.now() - (lastGpsRef.current || 0);
+      setGpsStale(elapsed > 30000);
+    }, 10000);
+    return () => clearInterval(iv);
+  }, [online]);
 
   // Xarita tayyor bo'lgach va joylashuv/buyurtma o'zgarganda — markerlarni
   // qayta yuklamasdan yangilaymiz (lag bo'lmaydi).
@@ -1004,6 +1085,8 @@ function AppInner() {
   async function logout() {
     await AsyncStorage.multiRemove(['token', 'user', 'pin', ACTIVE_ORDER_KEY]);
     stopTracking();
+    AsyncStorage.setItem('drv_online', '0').catch(() => {});
+    stopBackgroundLocation();
     socketRef.current?.disconnect();
     keepAwakeOff();
     hidePersistentNotif();
@@ -1058,12 +1141,17 @@ function AppInner() {
           socketRef.current?.emit('location', loc);
         }
         startTracking();
+        // Fon GPS: ilova fonda/ekran o'chiq bo'lsa ham joylashuv yuborilsin
+        AsyncStorage.setItem('drv_online', '1').catch(() => {});
+        startBackgroundLocation();
         keepAwakeOn();
         showPersistentNotif('Buyurtma kutilmoqda...');
       } else {
         await api('/api/drivers/status', 'POST', { online: false }, token);
         setOnline(false);
         stopTracking();
+        AsyncStorage.setItem('drv_online', '0').catch(() => {});
+        stopBackgroundLocation();
         keepAwakeOff();
         hidePersistentNotif();
       }
@@ -1366,6 +1454,14 @@ function AppInner() {
               ? `Sinxronlanmoqda… (${queuedCount})`
               : "Internet yo'q. Qayta ulanish kutilmoqda…"}
           </Text>
+        </View>
+      )}
+
+      {/* GPS "arvoh" ko'rsatkichi — internet bor, lekin GPS 30s+ yangilanmadi (#33) */}
+      {online && gpsStale && netOnline && queuedCount === 0 && (
+        <View style={[s.netBanner, { top: insets.top, backgroundColor: '#3A2E12' }]}>
+          <Ionicons name="locate-outline" size={14} color={YELLOW} />
+          <Text style={s.netBannerTxt}>GPS signal yo'q — joylashuv yangilanmayapti</Text>
         </View>
       )}
 
