@@ -9,6 +9,12 @@ import tariffs from './modules/tariffs';
 import complaints from './modules/complaints';
 import loyalty from './modules/loyalty';
 import system from './modules/system';
+import pricing from './modules/pricing';
+import zones from './modules/zones';
+import campaigns from './modules/campaigns';
+import reports from './modules/reports';
+import corporate from './modules/corporate';
+import rules from './modules/rules';
 
 const router = Router();
 
@@ -21,6 +27,12 @@ router.use('/finance', finance);
 router.use('/tariffs', tariffs);
 router.use('/complaints', complaints);
 router.use('/loyalty', loyalty);
+router.use('/pricing', pricing);
+router.use('/zones', zones);
+router.use('/campaigns', campaigns);
+router.use('/reports', reports);
+router.use('/corporate', corporate);
+router.use('/work-rules', rules);
 router.use('/', system); // /cities, /places, /audit
 
 export default router;
