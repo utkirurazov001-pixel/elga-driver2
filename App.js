@@ -16,6 +16,9 @@ import * as Notifications from 'expo-notifications';
 import * as Speech from 'expo-speech';
 import * as KeepAwake from 'expo-keep-awake';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+// Ovozli buyurtma base64'ini vaqtinchalik faylga yozish uchun (legacy API —
+// base64 yozishda eng ishonchli yo'l). expo-audio file URI'ni o'ynaydi.
+import * as FileSystem from 'expo-file-system/legacy';
 // expo-updates: Expo Go muhitida ishlatilmaydi (OTA faqat standalone APK uchun)
 import { WebView } from 'react-native-webview';
 import { io } from 'socket.io-client';
@@ -375,9 +378,13 @@ function AppInner() {
   const [booting, setBooting] = useState(true);
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
-  // 🎙 Mijozning ovozli buyurtmasini tinglash (WebView orqali — xavfsiz, qo'shimcha paketsiz)
-  const [voiceUri, setVoiceUri] = useState(null);
-  const [voiceLoading, setVoiceLoading] = useState(false);
+  // 🎙 Mijozning ovozli buyurtmasini tinglash (expo-audio + temp fayl orqali).
+  // Hech qachon ilovani yiqitmaydi — xato bo'lsa faqat status o'zgaradi.
+  const [voiceModal, setVoiceModal] = useState(false);
+  // 'idle' | 'loading' | 'playing' | 'empty' | 'error'
+  const [voiceStatus, setVoiceStatus] = useState('idle');
+  const voicePlayerRef = useRef(null);
+  const orderForVoiceId = useRef(null); // "Qayta eshitish" uchun joriy buyurtma id
 
   // Login
   const [phone, setPhone] = useState('');
@@ -740,21 +747,73 @@ function AppInner() {
   }
 
   // ---- 🎙 Mijoz ovozli buyurtmasini tinglash ----
+  // Joriy ovoz pleyerini xavfsiz to'xtatish/bo'shatish
+  function stopVoicePlayer() {
+    try { voicePlayerRef.current?.remove?.(); } catch (_) {}
+    voicePlayerRef.current = null;
+  }
+
+  // Server bergan ovoz qiymatini (URL / data-URI / xom base64) o'ynaladigan
+  // URI'ga aylantiramiz. Xom base64 bo'lsa vaqtinchalik faylga yozamiz —
+  // expo-audio data: URI'ni ishonchli o'ynamasligi mumkin. Har bir qadam himoyalangan.
+  async function buildVoiceUri(raw) {
+    if (typeof raw !== 'string' || !raw.trim()) return null;
+    let v = raw.trim();
+    // Tayyor o'ynaladigan manbalar
+    if (/^https?:\/\//i.test(v) || /^file:\/\//i.test(v)) return v;
+    // data:audio/...;base64,XXXX  yoki  xom base64
+    let ext = 'm4a', base64 = v;
+    const m = v.match(/^data:audio\/([a-z0-9.+-]+);base64,(.*)$/i);
+    if (m) { ext = (m[1] || 'm4a').toLowerCase().replace('mpeg', 'mp3').replace('x-m4a', 'm4a'); base64 = m[2] || ''; }
+    if (!base64) return null;
+    try {
+      const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+      if (!dir) return null;
+      const fileUri = `${dir}elga-voice-${Date.now()}.${ext}`;
+      await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: 'base64' });
+      return fileUri;
+    } catch (e) {
+      console.warn('[voice file]', e?.message);
+      return null;
+    }
+  }
+
+  // Ovozni o'ynash — HECH QACHON throw qilmaydi. Xato bo'lsa status 'error'/'empty'.
   async function playVoiceOrder(orderId) {
-    if (voiceLoading) return;
-    setVoiceLoading(true);
+    if (voiceStatus === 'loading') return;
+    orderForVoiceId.current = orderId;
+    setVoiceModal(true);
+    setVoiceStatus('loading');
     try {
       const r = await api(`/api/orders/${orderId}/voice`, 'GET', null, token, 45000);
-      // Faqat haqiqiy (bo'sh bo'lmagan) string URL bo'lsa o'ynatamiz — null/obyekt
-      // kelib qolsa WebView'ni buzmaymiz.
-      const uri = typeof r?.voice === 'string' ? r.voice.trim() : '';
-      if (uri) setVoiceUri(uri);
-      else Alert.alert('Ovoz', 'Ovozli xabar topilmadi');
+      const raw = (r && typeof r.voice === 'string') ? r.voice : '';
+      if (!raw) { setVoiceStatus('empty'); return; }
+      const uri = await buildVoiceUri(raw);
+      if (!uri) { setVoiceStatus('error'); return; }
+      stopVoicePlayer();
+      const player = createAudioPlayer({ uri });
+      voicePlayerRef.current = player;
+      try {
+        player.addListener('playbackStatusUpdate', (st) => {
+          if (st?.didJustFinish) { setVoiceStatus('idle'); stopVoicePlayer(); }
+        });
+      } catch (_) {}
+      player.play();
+      setVoiceStatus('playing');
     } catch (e) {
-      Alert.alert('Ovoz', "Ovozni yuklab bo'lmadi");
+      console.warn('[playVoiceOrder]', e?.message);
+      setVoiceStatus('error');
     }
-    setVoiceLoading(false);
   }
+
+  function closeVoiceModal() {
+    stopVoicePlayer();
+    setVoiceStatus('idle');
+    setVoiceModal(false);
+  }
+
+  // Ilova yopilganda/komponent o'chganda pleyerni bo'shatamiz
+  useEffect(() => () => stopVoicePlayer(), []);
 
   // ---- BUYURTMA AMALLARI ----
   async function orderAction(action) {
@@ -1117,6 +1176,7 @@ function AppInner() {
                 order={order} loading={loading} meter={meter}
                 onAction={orderAction} onNavigate={navigateTo}
                 onCall={callCustomer} onChat={() => { loadChatHistory(order.id); setChatModal(true); }}
+                onPlayVoice={playVoiceOrder} voiceBusy={voiceStatus === 'loading'}
               />
             </ScrollView>
           )}
@@ -1129,21 +1189,35 @@ function AppInner() {
         <DriverProfile user={user} earnings={earnings} onLogout={logout} insets={insets} token={token} />
       )}
 
-      {/* ===== 🎙 OVOZLI BUYURTMA TINGLASH MODALI (WebView audio) ===== */}
-      <Modal visible={!!voiceUri} transparent animationType="fade" onRequestClose={() => setVoiceUri(null)}>
+      {/* ===== 🎙 OVOZLI BUYURTMA TINGLASH MODALI (expo-audio) ===== */}
+      <Modal visible={voiceModal} transparent animationType="fade" onRequestClose={closeVoiceModal}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
           <View style={{ backgroundColor: CARD, borderRadius: 16, padding: 20 }}>
-            <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700', marginBottom: 14 }}>🎙 Mijoz ovozli buyurtmasi</Text>
-            {voiceUri ? (
-              <WebView
-                style={{ height: 70, backgroundColor: 'transparent' }}
-                originWhitelist={['*']}
-                source={{ html: `<body style="margin:0;background:transparent;display:flex;align-items:center"><audio controls autoplay style="width:100%" src="${String(voiceUri).replace(/"/g, '&quot;')}"></audio></body>` }}
-                mediaPlaybackRequiresUserAction={false}
-                allowsInlineMediaPlayback
-              />
+            <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700', marginBottom: 16 }}>🎙 Mijoz ovozli buyurtmasi</Text>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 }}>
+              {voiceStatus === 'loading' ? (
+                <><ActivityIndicator color={YELLOW} /><Text style={{ color: GRAY1, fontSize: 14 }}>Yuklanmoqda...</Text></>
+              ) : voiceStatus === 'playing' ? (
+                <><Ionicons name="volume-high" size={22} color={GREEN} /><Text style={{ color: WHITE, fontSize: 14 }}>O'ynalmoqda...</Text></>
+              ) : voiceStatus === 'empty' ? (
+                <><Ionicons name="alert-circle-outline" size={22} color={GRAY1} /><Text style={{ color: GRAY1, fontSize: 14 }}>Ovozli xabar topilmadi</Text></>
+              ) : voiceStatus === 'error' ? (
+                <><Ionicons name="warning-outline" size={22} color={RED} /><Text style={{ color: GRAY1, fontSize: 14 }}>Ovozni o'ynab bo'lmadi</Text></>
+              ) : (
+                <><Ionicons name="checkmark-circle-outline" size={22} color={GREEN} /><Text style={{ color: GRAY1, fontSize: 14 }}>Tugadi</Text></>
+              )}
+            </View>
+
+            {/* Qayta eshitish (xato yoki tugagan holatda) */}
+            {orderForVoiceId.current && (voiceStatus === 'error' || voiceStatus === 'idle') ? (
+              <TouchableOpacity onPress={() => playVoiceOrder(orderForVoiceId.current)} activeOpacity={0.8}
+                style={{ marginTop: 16, paddingVertical: 12, alignItems: 'center', backgroundColor: CARD2, borderRadius: 10, borderWidth: 1, borderColor: BORDER }}>
+                <Text style={{ color: YELLOW, fontWeight: '700', fontSize: 15 }}>↻ Qayta eshitish</Text>
+              </TouchableOpacity>
             ) : null}
-            <TouchableOpacity onPress={() => setVoiceUri(null)} style={{ marginTop: 16, paddingVertical: 12, alignItems: 'center', backgroundColor: YELLOW, borderRadius: 10 }} activeOpacity={0.85}>
+
+            <TouchableOpacity onPress={closeVoiceModal} style={{ marginTop: 12, paddingVertical: 12, alignItems: 'center', backgroundColor: YELLOW, borderRadius: 10 }} activeOpacity={0.85}>
               <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Yopish</Text>
             </TouchableOpacity>
           </View>
@@ -1279,7 +1353,7 @@ function CountdownBar() {
 }
 
 // ---- Buyurtma paneli (holat tugmalari) ----
-function OrderPanel({ order, loading, meter, onAction, onNavigate, onCall, onChat }) {
+function OrderPanel({ order, loading, meter, onAction, onNavigate, onCall, onChat, onPlayVoice, voiceBusy }) {
   const st = order.status;
   const isNew = st === 'searching' || st === 'assigned';
   const showCustomer = ['accepted', 'arrived', 'in_progress'].includes(st) && !!order.customer_phone;
@@ -1316,13 +1390,22 @@ function OrderPanel({ order, loading, meter, onAction, onNavigate, onCall, onCha
               </Text>
             </View>
           </View>
-          {/* 🎙 Ovozli buyurtma — mijoz manzilni gapirgan, haydovchi tinglaydi */}
+          {/* 🔊 Ovozli buyurtma — mijoz manzilni gapirgan. Ovoz o'ynalmasa ham
+              buyurtma ko'rinaveradi va qabul qilinadi. */}
           {order.is_voice ? (
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: CARD2, borderWidth: 1, borderColor: YELLOW, borderRadius: 12, paddingVertical: 12, marginBottom: 12 }}
-              onPress={() => playVoiceOrder(order.id)} disabled={voiceLoading} activeOpacity={0.8}>
-              {voiceLoading ? <ActivityIndicator color={YELLOW} /> : <Text style={{ color: YELLOW, fontSize: 15, fontWeight: '700' }}>🎙 Ovozli buyurtma — Tinglash</Text>}
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: CARD2, borderWidth: 1, borderColor: YELLOW, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12 }}>
+              <View style={{ backgroundColor: '#1A1400', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '700' }}>🔊 Ovozli</Text>
+              </View>
+              <Text style={{ color: GRAY1, fontSize: 12, flex: 1 }}>Mijoz manzilni gapirgan</Text>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: YELLOW, borderRadius: 9, paddingVertical: 8, paddingHorizontal: 14 }}
+                onPress={() => onPlayVoice && onPlayVoice(order.id)} disabled={voiceBusy} activeOpacity={0.8}>
+                {voiceBusy
+                  ? <ActivityIndicator color="#000" size="small" />
+                  : <Text style={{ color: '#000', fontSize: 14, fontWeight: '700' }}>▶ Eshitish</Text>}
+              </TouchableOpacity>
+            </View>
           ) : null}
           <View style={s.row}>
             <TouchableOpacity style={[s.btnHalf, { backgroundColor: CARD2, borderWidth: 1, borderColor: BORDER }]}
