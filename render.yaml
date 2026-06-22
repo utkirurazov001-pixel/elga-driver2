@@ -6,8 +6,11 @@ services:
     runtime: node
     rootDir: elga-api
     plan: starter
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
+    # prisma generate — Prisma Client yaratiladi (aks holda runtime'da yiqiladi)
+    buildCommand: npm ci && npx prisma generate && npm run build
+    # db push — schema'dagi 22 jadval DB'ga yaratiladi (migration fayllari yo'q).
+    # --accept-data-loss YO'Q → mavjud ma'lumot xavfsiz, faqat additiv o'zgarish.
+    startCommand: npx prisma db push --skip-generate && npm start
     healthCheckPath: /health
     autoDeploy: true
     envVars:
@@ -16,7 +19,9 @@ services:
       - key: PORT
         value: 3000
       - key: CORS_ORIGIN
-        value: https://app.elga.uz
+        # Vergul bilan ajratilgan origin'lar (env.ts split qiladi).
+        # github.io — jonli admin paneli (GitHub Pages).
+        value: https://app.elga.uz,https://utkirurazov001-pixel.github.io
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
