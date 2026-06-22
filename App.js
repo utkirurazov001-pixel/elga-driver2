@@ -472,6 +472,54 @@ window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify(
 </script></body></html>`;
 }
 
+// ---- Crash monitoring (yengil, tashqi SDK'siz, production-ready) ----
+// Sentry/Crashlytics o'rnatish uchun native sozlama + DSN kerak; uni qo'shilguncha
+// quyidagi best-effort reporter fatal xatolarni serverga (mavjud bo'lsa) yuboradi
+// va eng muhimi — global handler ASYNC/timer/socket ichidagi fatal JS xatolar
+// JS kontekstini jimgina o'ldirib qo'yishining oldini oladi.
+let _lastCrashTs = 0;
+function reportCrash(kind, error, stack) {
+  try {
+    const now = Date.now();
+    if (now - _lastCrashTs < 3000) return; // spamga qarshi throttle
+    _lastCrashTs = now;
+    const payload = {
+      kind,
+      message: String(error?.message || error || 'unknown'),
+      stack: String(error?.stack || stack || '').slice(0, 4000),
+      platform: Platform.OS,
+      ts: new Date().toISOString(),
+    };
+    // Backend endpoint mavjud bo'lsa qabul qiladi; bo'lmasa jim o'tadi.
+    // Cheksiz osilib qolmasligi uchun AbortController bilan timeout.
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    fetch(`${BASE}/api/client-error`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+    }).catch(() => {}).finally(() => clearTimeout(t));
+  } catch (e) {}
+}
+
+// Global JS xato ushlagich — ErrorBoundary faqat RENDER xatolarini ushlaydi;
+// bu esa async/timer/socket ichidagi fatal xatolarni ushlab, ilovani jimgina
+// qulashdan saqlaydi (eski handler ham chaqiriladi).
+(function installGlobalErrorHandler() {
+  try {
+    const g = global;
+    if (g.__elgaErrHandlerInstalled || !g.ErrorUtils?.getGlobalHandler) return;
+    g.__elgaErrHandlerInstalled = true;
+    const prev = g.ErrorUtils.getGlobalHandler();
+    g.ErrorUtils.setGlobalHandler((error, isFatal) => {
+      console.warn('[GlobalError]', isFatal ? 'FATAL' : 'non-fatal', error?.message);
+      reportCrash(isFatal ? 'fatal' : 'error', error);
+      if (typeof prev === 'function') prev(error, isFatal);
+    });
+  } catch (e) {}
+})();
+
 // ErrorBoundary — render paytida kutilmagan xato bo'lsa (masalan, buyurtma
 // obyektida noto'g'ri maydon), butun ilova OQ EKRANga aylanib qulamasligi uchun.
 // Xato ushlanadi va foydalanuvchiga "Qayta urinish" tugmasi ko'rsatiladi.
@@ -484,8 +532,9 @@ class ErrorBoundary extends React.Component {
     return { hasError: true };
   }
   componentDidCatch(error, info) {
-    // Faqat log — ilova qulamaydi
+    // Log + masofaviy hisobot (best-effort). Ilova qulamaydi.
     console.warn('[ErrorBoundary]', error?.message, info?.componentStack);
+    reportCrash('render', error, info?.componentStack);
   }
   reset = () => this.setState({ hasError: false });
   render() {
@@ -606,6 +655,31 @@ function BootLogo() {
   );
 }
 
+// MapPanel — xaritani AppInner ning yuqori chastotali qayta-renderlaridan ajratamiz.
+// AppInner da GPS (har 5 sek), taksometr (`meter`), `soloMeter` va `wait_update`
+// holatlari tez-tez yangilanadi va har safar butun daraxtni qayta render qiladi.
+// WebView'ni React.memo bilan o'rab, faqat barqaror proplar (source/style/onReady)
+// berib, xarita ostki daraxti shu yangilanishlarda QAYTA RENDER BO'LMAYDI.
+// Xarita o'zi imperativ `injectJavaScript` orqali yangilanishda davom etadi.
+const MapPanel = React.memo(React.forwardRef(function MapPanel({ source, style, onReady }, ref) {
+  return (
+    <WebView
+      ref={ref}
+      style={style}
+      originWhitelist={['*']}
+      source={source}
+      onMessage={(e) => {
+        try {
+          const m = JSON.parse(e.nativeEvent.data);
+          if (m.type === 'mapReady') onReady && onReady();
+        } catch (err) {}
+      }}
+      javaScriptEnabled
+      domStorageEnabled
+    />
+  );
+}));
+
 function AppInner() {
   const insets = useSafeAreaInsets();
   const [booting, setBooting] = useState(true);
@@ -639,6 +713,8 @@ function AppInner() {
   const [myLoc, setMyLoc] = useState(null);
   const [order, setOrder] = useState(null);
   const [earnings, setEarnings] = useState(null);
+  // GPS callback'i stale closure'siz joriy buyurtmani o'qisin (har renderda yangilanadi)
+  orderRef.current = order;
   const [trips, setTrips] = useState(null);
   const [tab, setTab] = useState('home'); // home | earnings | history | profile
 
@@ -669,6 +745,10 @@ function AppInner() {
   const lastLocRef = useRef(null);   // oxirgi GPS — qayta ulanganda darrov yuboramiz
   const lastEmitRef = useRef(0);     // GPS socket emit throttle (adaptiv interval)
   const lastGpsRef = useRef(0);      // oxirgi GPS vaqti ("arvoh" aniqlash uchun)
+  const lastUiLocRef = useRef(null); // state'ga (xaritaga) oxirgi yuborilgan joylashuv — re-render throttle
+  const lastUiAtRef = useRef(0);     // state oxirgi yangilangan vaqt
+  const orderRef = useRef(null);     // joriy buyurtma (GPS callback stale closure'siz o'qishi uchun)
+  const watchActiveRef = useRef(false); // joriy GPS watch faol-buyurtma rejimidami
   const pollRef = useRef(null);      // backup polling intervali
   const healthRef = useRef(null);    // reachability heartbeat timeri
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
@@ -711,6 +791,9 @@ function AppInner() {
       resumeActiveOrder();
     })();
     return () => {
+      // Listenerlarni ham olib tashlaymiz — aks holda disconnect'dan keyin
+      // qayta ulanishda eski handlerlar takror ishlab ketishi mumkin.
+      socketRef.current?.removeAllListeners();
       socketRef.current?.disconnect();
       watchRef.current?.remove?.();
       try { if (typeof KeepAwake?.deactivateKeepAwakeAsync === 'function') KeepAwake.deactivateKeepAwakeAsync('driver').catch(() => {}); } catch (e) {}
@@ -827,6 +910,11 @@ function AppInner() {
 
   // Xarita tayyor bo'lgach va joylashuv/buyurtma o'zgarganda — markerlarni
   // qayta yuklamasdan yangilaymiz (lag bo'lmaydi).
+  // Barqaror callback — MapPanel memoizatsiyasi buzilmasligi uchun useCallback.
+  // Xarita tayyor bo'lganda faqat mapReady ni o'rnatadi; markerlarni quyidagi
+  // effekt (mapReady deps) yuboradi.
+  const onMapReady = useCallback(() => setMapReady(true), []);
+
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const d = {
@@ -852,7 +940,13 @@ function AppInner() {
 
   function connectSocket() {
     if (socketRef.current?.connected) return; // allaqachon ulangan
-    socketRef.current?.disconnect();
+    // Eski soketni TO'LIQ tozalaymiz: faqat disconnect() listenerlarni saqlab
+    // qoladi va reconnection:Infinity tufayli eski soket qayta ulanib, takroriy
+    // 'new_order' (ikki marta vibratsiya/e'lon) yuborishi mumkin edi. (memory leak / duplicate events)
+    if (socketRef.current) {
+      socketRef.current.removeAllListeners();
+      socketRef.current.disconnect();
+    }
     const s = io(BASE, {
       auth: { token },
       transports: ['websocket', 'polling'],
@@ -913,7 +1007,11 @@ function AppInner() {
       setChatMessages((prev) => [...prev, msg]);
       if (!chatModal) notify('💬 Mijoz', msg.text || '');
     });
-    s.on('meter', (m) => setMeter(m));
+    // Faqat o'zgargan qiymatda yangilaymiz — bekorga re-render qilmaymiz
+    s.on('meter', (m) => setMeter((prev) => {
+      if (prev && m && prev.km === m.km && prev.minutes === m.minutes && prev.fare === m.fare) return prev;
+      return m;
+    }));
     // Jonli kutish haqi — backend 'arrived' holatida har 3 sek yuboradi
     s.on('wait_update', (d) => {
       setOrder((p) => p ? { ...p, wait_fee: d.waitFee || 0, price: d.totalFare || p.price } : p);
@@ -973,28 +1071,60 @@ function AppInner() {
     } catch (e) {}
   };
 
+  // Faol buyurtma bormi (GPS callback ichida ref orqali, stale closure'siz)
+  function isOrderActive() {
+    const o = orderRef.current;
+    return !!(o && ACTIVE_STATUSES.includes(o.status));
+  }
+
   // ---- GPS kuzatuv (onlayn bo'lganda socket orqali yuboriladi) ----
+  // Adaptiv: GPS apparat so'rovi va re-render/emit chastotasi faol buyurtma va
+  // tarmoq holatiga qarab o'zgaradi. Bu batareyani tejaydi va bekorga re-render
+  // (FPS pasayishi) qilmaydi:
+  //   • faol buyurtma  → ~4s, har 10 m da yangilanish
+  //   • bo'sh (idle)   → ~20s, har 40 m da yangilanish (kam re-render, kam batareya)
+  //   • zaif tarmoq    → emit ~15s (trafik tejaladi)
   async function startTracking() {
     try {
       const accuracy = Location.Accuracy?.High ?? 4;
+      const active = isOrderActive();
+      watchActiveRef.current = active;
+      // Apparat so'rov chastotasi: faol 4s/15m, idle 20s/40m (spec bo'yicha)
+      const hwTime = active ? 4000 : 20000;
+      const hwDist = active ? 15 : 40;
       watchRef.current = await Location.watchPositionAsync(
-        { accuracy, distanceInterval: 15, timeInterval: 4000 },
+        { accuracy, distanceInterval: hwDist, timeInterval: hwTime },
         (pos) => {
           const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setMyLoc(loc);
+          const now = Date.now();
           lastLocRef.current = loc;
-          lastGpsRef.current = Date.now();
+          lastGpsRef.current = now;
+
+          const act = isOrderActive();
+          // Re-render throttle: state'ni (xarita markerini) faqat sezilarli
+          // siljishda yoki vaqt o'tганда yangilaymiz — har GPS callback'da emas.
+          const moveThresh = act ? 0.010 : 0.040; // km (10 m / 40 m)
+          const uiGap = act ? 3000 : 20000;
+          const prevUi = lastUiLocRef.current;
+          const movedKm = prevUi ? haversineKm(prevUi.lat, prevUi.lng, loc.lat, loc.lng) : Infinity;
+          if (!prevUi || movedKm >= moveThresh || now - lastUiAtRef.current >= uiGap) {
+            lastUiLocRef.current = loc;
+            lastUiAtRef.current = now;
+            setMyLoc(loc);
+          }
+
           // Oxirgi joylashuvni saqlaymiz — ilova qayta ochilganda darrov ko'rsatiladi
           AsyncStorage.setItem('last_loc', JSON.stringify(loc)).catch(() => {});
-          // Adaptiv yuborish: tarmoq yaxshi bo'lsa ~4s, zaif/oflayn bo'lsa ~18s.
-          // (Server baribir sekundiga 1 tagacha cheklaydi; zaif tarmoqda trafikni tejaymiz.)
-          const now = Date.now();
-          const minGap = NetMonitor.online ? 4000 : 18000;
+
+          // Adaptiv socket emit: faol+online ~4s, idle ~20s, zaif tarmoq ~15s.
+          // (Server baribir sekundiga 1 tagacha cheklaydi.)
+          const minGap = !NetMonitor.online ? 15000 : (act ? 4000 : 20000);
           if (socketRef.current?.connected && now - lastEmitRef.current >= minGap) {
             lastEmitRef.current = now;
             try { socketRef.current.emit('location', loc); } catch (e) {}
           }
-          // Mustaqil taksometr — km hisoblab boradi
+
+          // Mustaqil taksometr — km hisoblab boradi (har GPS nuqtasida aniqlik uchun)
           setSoloMeter(prev => {
             if (!prev) return prev;
             let addKm = 0;
@@ -1012,6 +1142,17 @@ function AppInner() {
     watchRef.current?.remove?.();
     watchRef.current = null;
   }
+
+  // Faol buyurtma holati o'zgarganda GPS kuzatuvini mos chastotaga qayta moslaymiz
+  // (idle ↔ faol). Watch ishlamayotgan bo'lsa tegmaymiz.
+  useEffect(() => {
+    const active = isOrderActive();
+    if (watchRef.current && active !== watchActiveRef.current) {
+      stopTracking();
+      startTracking();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.status]);
 
   // ---- Mustaqil taksometr ----
   function startSoloMeter() {
@@ -1087,6 +1228,7 @@ function AppInner() {
     stopTracking();
     AsyncStorage.setItem('drv_online', '0').catch(() => {});
     stopBackgroundLocation();
+    socketRef.current?.removeAllListeners();
     socketRef.current?.disconnect();
     keepAwakeOff();
     hidePersistentNotif();
@@ -1467,29 +1609,10 @@ function AppInner() {
 
       {tab === 'home' ? (
         <View style={s.flex}>
-          {/* Xarita */}
-          <WebView
-            ref={mapRef}
-            style={s.map}
-            originWhitelist={['*']}
-            source={mapSource}
-            onMessage={(e) => {
-              try {
-                const m = JSON.parse(e.nativeEvent.data);
-                if (m.type === 'mapReady') {
-                  setMapReady(true);
-                  // Xarita yangi yuklandi — joriy ma'lumotni darhol yuboramiz
-                  const d = {
-                    myLat: myLoc?.lat ?? null, myLng: myLoc?.lng ?? null,
-                    pickLat: order?.from_lat ?? null, pickLng: order?.from_lng ?? null,
-                    dropLat: order?.to_lat ?? null, dropLng: order?.to_lng ?? null,
-                  };
-                  mapRef.current?.injectJavaScript(`window.updateMap(${JSON.stringify(d)});true;`);
-                }
-              } catch (err) {}
-            }}
-            javaScriptEnabled domStorageEnabled
-          />
+          {/* Xarita — memoizatsiya qilingan (GPS/meter yangilanishlarida qayta render bo'lmaydi).
+              `mapReady` true bo'lgach, quyidagi useEffect (mapReady deps) joriy
+              joylashuv/buyurtma markerlarini imperativ ravishda yuboradi. */}
+          <MapPanel ref={mapRef} style={s.map} source={mapSource} onReady={onMapReady} />
 
           {/* ── Yuqori panel: avatar + ism/reyting + online tugmasi ── */}
           <View style={[s.topBar, { top: insets.top + 6 }]}>

@@ -10,6 +10,14 @@
       ['bag','Buyurtmalar','bag',null],
       ['map','Jonli xarita','map',null]
     ]],
+    ['Operatsiya', [
+      ['pricing','Narx kalkulyatori','cash',null],
+      ['surge','Surge & talab','trend',null],
+      ['scoring','Scoring & reyting','star',null],
+      ['shifts','Smenalar','clock',null],
+      ['docs','Hujjat muddati','audit',null],
+      ['reviews','Reyting & sharhlar','verified',null]
+    ]],
     ['Foydalanuvchilar', [
       ['car','Haydovchilar','car',null,[['list','Ro\'yxat'],['kyc','KYC tasdiqlash'],['fleet','Avtopark (park raqami)']]],
       ['users','Mijozlar','users',null],
@@ -20,13 +28,16 @@
       ['finance','Moliya hisoboti','finance',null],
       ['cash','Pul yechish','cash',{t:'gold',n:5}],
       ['wallet','Tranzaksiyalar','wallet',null],
-      ['tag','Tariflar','tag',null]
+      ['tag','Tariflar','tag',null],
+      ['reports2','Hisobotlar','chart',null],
+      ['corporate','Korporativ (B2B)','building',null]
     ]],
     ['Sadoqat dasturi', [
       ['star','Ball hisoblari','star',null],
       ['gift','Sovg\'alar katalogi','gift',null],
       ['repeat','Almashtirishlar','repeat',null],
-      ['ticket','Promo-kodlar','ticket',null]
+      ['ticket','Promo-kodlar','ticket',null],
+      ['campaigns','Kampaniyalar','send',null]
     ]],
     ['Tizim', [
       ['pin','Shaharlar / Zonalar','pin',null],
@@ -398,6 +409,9 @@
       var r=window.DB.redemptions.find(function(x){return x.id===t.getAttribute('data-fulfill');});
       if(r){ r.status='fulfilled'; window.UI.toast('Berildi','Sovg\'a berildi: '+r.reward); window.rerenderPage(); }
     }
+    else if(t=e.target.closest('[data-invoice]')){ window.invoiceModal(t.getAttribute('data-invoice')); }
+    else if(t=e.target.closest('[data-new-co]')){ window.corporateModal && window.corporateModal(); }
+    else if(t=e.target.closest('[data-auto]')){ window.autoAssign(t.getAttribute('data-auto')); }
     else if(t=e.target.closest('[data-add-place]')){ window.addPlaceModal(); }
     else if(t=e.target.closest('[data-adjust]')){ window.adjustPoints(null); }
     else if(t=e.target.closest('[data-adj]')){ window.adjustPoints(t.getAttribute('data-adj')); }

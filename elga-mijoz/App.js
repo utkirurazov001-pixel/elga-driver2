@@ -3,7 +3,7 @@
 //  Xarita: OpenStreetMap (Leaflet WebView)
 //  Server: https://api.elga.uz
 // ============================================================
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Modal, Linking, FlatList,
@@ -358,6 +358,26 @@ function BootLogo() {
   );
 }
 
+// ClientMap — xaritani AppInner ning yuqori chastotali qayta-renderlaridan ajratamiz.
+// driver_location (har ~2 sek), order_update, meter holatlari tez-tez yangilanadi va
+// har safar butun daraxtni qayta render qilib, WebView elementini ham qayta moslashtirardi.
+// React.memo + forwardRef bilan barqaror proplar (source/style/onMessage) berib,
+// xarita ostki daraxti bu yangilanishlarda QAYTA RENDER BO'LMAYDI. Xarita imperativ
+// injectJavaScript (pushMap) orqali yangilanishda davom etadi.
+const ClientMap = React.memo(React.forwardRef(function ClientMap({ source, style, onMessage }, ref) {
+  return (
+    <WebView
+      ref={ref}
+      style={style}
+      originWhitelist={['*']}
+      source={source}
+      onMessage={onMessage}
+      javaScriptEnabled
+      domStorageEnabled
+    />
+  );
+}));
+
 function AppInner() {
   const insets = useSafeAreaInsets();
   const [booting, setBooting] = useState(true);
@@ -493,6 +513,7 @@ function AppInner() {
   const [netOnline, setNetOnline] = useState(true);       // internet bormi (banner uchun)
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
   const mapDataRef = useRef({});                          // joriy xarita ma'lumoti (so'nggi)
+  const orderStepRef = useRef(null);                      // onWebViewMessage barqaror bo'lishi uchun (orderStep ref orqali o'qiladi)
   const [mapReady, setMapReady] = useState(false);
 
   // Xarita tayyor bo'lgach va joylashuv/haydovchi/manzil o'zgarganda — markerlarni
@@ -560,6 +581,7 @@ function AppInner() {
       startPinHalo();
     })();
     return () => {
+      socketRef.current?.removeAllListeners();
       socketRef.current?.disconnect();
       if (nearbyTimer.current) clearInterval(nearbyTimer.current);
     };
@@ -792,6 +814,15 @@ function AppInner() {
   }
 
   function connectSocket() {
+    if (socketRef.current?.connected) return; // allaqachon ulangan — takror yaratmaymiz
+    // Eski soketni TO'LIQ tozalaymiz. Aks holda effekt qayta ishga tushganda
+    // (masalan pinStep o'zgarsa) eski soket listenerlari bilan qoladi va
+    // reconnection:Infinity tufayli qayta ulanib, 'driver_location'/'meter'
+    // hodisalarini IKKI marta yuboradi — markerlar va re-renderlar takrorlanadi. (duplicate events / memory leak)
+    if (socketRef.current) {
+      socketRef.current.removeAllListeners();
+      socketRef.current.disconnect();
+    }
     // Exponential backoff: 1s → 30s (zaif tarmoqda serverni bombardimon qilmaydi)
     const s = io(BASE, {
       auth: { token }, transports: ['websocket', 'polling'],
@@ -823,7 +854,8 @@ function AppInner() {
       if (o.status === 'cancelled') { notify('Buyurtma bekor qilindi', ''); resetOrder(); }
     });
     s.on('driver_location', (loc) => {
-      setDriverLoc(loc);
+      // Bir xil koordinata kelsa re-render qilmaymiz (xarita ham o'zgarmaydi)
+      setDriverLoc((prev) => (prev && loc && prev.lat === loc.lat && prev.lng === loc.lng) ? prev : loc);
       setOrder((prev) => {
         if (prev && prev.status === 'accepted' && !arrivedNotified.current && loc.lat && loc.lng && prev.from_lat) {
           const d = distKm(loc.lat, loc.lng, prev.from_lat, prev.from_lng);
@@ -846,8 +878,11 @@ function AppInner() {
     });
     // Jonli taximetr (in_progress, hisoblagich) — backend har 5 sekunda yuboradi
     s.on('meter', (d) => {
-      setLiveKm(d.km || 0); setLiveFare(d.fare || 0); setLiveMin(d.minutes || 0);
-      setOrder((prev) => prev ? { ...prev, price: d.fare || prev.price } : prev);
+      // Faqat o'zgargan qiymatda yangilaymiz — bekorga re-render qilmaymiz
+      setLiveKm((p) => p === (d.km || 0) ? p : (d.km || 0));
+      setLiveFare((p) => p === (d.fare || 0) ? p : (d.fare || 0));
+      setLiveMin((p) => p === (d.minutes || 0) ? p : (d.minutes || 0));
+      setOrder((prev) => (prev && d.fare && prev.price !== d.fare) ? { ...prev, price: d.fare } : prev);
     });
   }
 
@@ -938,12 +973,15 @@ function AppInner() {
     webviewRef.current.injectJavaScript(`window.updateMap(${JSON.stringify(mapDataRef.current)});true;`);
   }
 
-  async function onWebViewMessage(e) {
+  // Barqaror handler (useCallback []) — ClientMap memoizatsiyasi buzilmasligi uchun.
+  // Joriy orderStep ni orderStepRef orqali o'qiymiz; pushMap faqat ref'lardan
+  // foydalanadi, shuning uchun birinchi render closure'i ham har doim to'g'ri ishlaydi.
+  const onWebViewMessage = useCallback(async (e) => {
     try {
       const msg = JSON.parse(e.nativeEvent.data);
       if (msg.type === 'mapReady') { setMapReady(true); pushMap(); return; }
       if (msg.type === 'mapClick') {
-        if (orderStep === 'confirm') {
+        if (orderStepRef.current === 'confirm') {
           const addr = await reverseGeocode(msg.lat, msg.lng);
           setPickup({ lat: msg.lat, lng: msg.lng, address: addr });
         }
@@ -953,7 +991,7 @@ function AppInner() {
         setPickup({ lat: msg.lat, lng: msg.lng, address: addr });
       }
     } catch (_) {}
-  }
+  }, []);
 
   // ---- Manzil qidirish ----
   async function searchPlaces(q) {
@@ -1277,6 +1315,7 @@ function AppInner() {
 
   async function doLogout() {
     await AsyncStorage.multiRemove(['token', 'user', 'pin', ACTIVE_ORDER_KEY]);
+    socketRef.current?.removeAllListeners();
     socketRef.current?.disconnect();
     setToken(null); setUser(null); setStep('phone');
     setPhone(''); setCode(''); setName('');
@@ -1496,6 +1535,8 @@ function AppInner() {
   const mapBase = pickup || myLoc;
   const hasMap = !!mapBase;       // dest/tariff/confirm ekranlari uchun
   const hasMapActive = !!order;   // faol buyurtma ekrani uchun
+  // onWebViewMessage barqaror (useCallback) — joriy orderStep ni ref orqali o'qiydi.
+  orderStepRef.current = orderStep;
   // Joriy holatga qarab xarita ma'lumotini tayyorlaymiz (so'nggi qiymat ref'da turadi).
   mapDataRef.current = order ? {
     lat: mapBase?.lat ?? 0, lng: mapBase?.lng ?? 0,
@@ -1538,14 +1579,11 @@ function AppInner() {
         order ? (
           <View style={s.fill}>
             {hasMapActive ? (
-              <WebView
+              <ClientMap
                 ref={webviewRef}
                 style={s.mapFull}
-                originWhitelist={['*']}
                 source={mapSource}
                 onMessage={onWebViewMessage}
-                javaScriptEnabled
-                domStorageEnabled
               />
             ) : (
               <View style={[s.fill, s.center]}>
@@ -1692,14 +1730,11 @@ function AppInner() {
           /* ── DEST STEP ── */
           <View style={s.fill}>
             {hasMap ? (
-              <WebView
+              <ClientMap
                 ref={webviewRef}
                 style={s.mapFull}
-                originWhitelist={['*']}
                 source={mapSource}
                 onMessage={onWebViewMessage}
-                javaScriptEnabled
-                domStorageEnabled
               />
             ) : (
               <View style={[s.fill, s.center]}>
@@ -1934,14 +1969,11 @@ function AppInner() {
           /* ── CONFIRM STEP ── */
           <View style={s.fill}>
             {hasMap ? (
-              <WebView
+              <ClientMap
                 ref={webviewRef}
                 style={s.mapFull}
-                originWhitelist={['*']}
                 source={mapSource}
                 onMessage={onWebViewMessage}
-                javaScriptEnabled
-                domStorageEnabled
               />
             ) : (
               <View style={[s.fill, s.center]}>
@@ -1979,14 +2011,11 @@ function AppInner() {
           /* ── TARIFF STEP ── */
           <View style={s.fill}>
             {hasMap ? (
-              <WebView
+              <ClientMap
                 ref={webviewRef}
                 style={s.mapFull}
-                originWhitelist={['*']}
                 source={mapSource}
                 onMessage={onWebViewMessage}
-                javaScriptEnabled
-                domStorageEnabled
               />
             ) : (
               <View style={[s.fill, s.center]}>
