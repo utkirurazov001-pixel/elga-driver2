@@ -59,6 +59,20 @@ admin panel darhol ulanib real ishlaydi. To'ldirilsa, Prisma + PostgreSQL ga o't
 | POST | `/v1/loyalty/redeem` · `/promo-codes/validate` | Almashtirish · promo tekshirish |
 | GET | `/v1/clients/:id/orders` | Mijoz safar tarixi |
 
+### To'lov · Real-time · Xavfsizlik (yangi)
+
+| Metod | Yo'l | Tavsif |
+|------|------|--------|
+| POST | `/v1/payments/payme` | Payme Merchant JSON-RPC (Check/Create/Perform/Cancel/Check/Statement) · Basic auth |
+| POST | `/v1/payments/click/prepare` · `/complete` | Click Shop API · MD5 imzo tekshiruvi |
+| POST | `/v1/auth/2fa/setup` · `/2fa/verify` | TOTP 2FA (otpauth URL) |
+| GET/POST | `/v1/admin/users` (+PATCH/DELETE `/:id`) | Xodimlar CRUD (super_admin) |
+| WS | `socket.io` (JWT auth) | `order:new`, `order:updated`, `driver:location`, `driver:status`, `kpi:update` |
+
+- **Test**: `npm test` (Vitest + Supertest, 17 ta) — auth, RBAC, narx, auto-assign, 2-bosqich withdrawal, Payme, Click, 2FA, admin CRUD
+- **CI**: `.github/workflows/ci.yml` — typecheck + test + build (har PR'da)
+- **Deploy**: `render.yaml` (api + PostgreSQL 16 + Redis) · `Dockerfile`
+
 Javob konverti **doimo**: `{ success, data, error, meta }`.
 
 ## Xavfsizlik (TZ §9)

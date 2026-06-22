@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "seed": "tsx prisma/seed.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
@@ -25,6 +26,7 @@
     "jsonwebtoken": "^9.0.2",
     "pino": "^9.3.2",
     "pino-http": "^10.2.0",
+    "socket.io": "^4.7.5",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -34,8 +36,12 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.14.0",
+    "@types/supertest": "^6.0.2",
     "prisma": "^5.18.0",
+    "socket.io-client": "^4.7.5",
+    "supertest": "^7.0.0",
     "tsx": "^4.16.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.5"
   }
 }

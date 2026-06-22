@@ -41,31 +41,108 @@ Notifications.setNotificationHandler({
   }),
 });
 
-async function api(path, method = 'GET', body = null, token = null, timeoutMs = 15000) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers.Authorization = 'Bearer ' + token;
-  // Sekin/uzilgan internetda so'rov cheksiz osilib qolmasin — timeout (ilova qotmaydi)
+// ============================================================
+//  TARMOQ QATLAMI — zaif/uzilgan internetga chidamli (haydovchi ilovasi bilan bir xil)
+//  • deviceId / requestId / Idempotency-Key — takror so'rovlardan himoya
+//  • avtomatik qayta urinish (exponential backoff): 1s → 2s → 4s
+//  • global onlayn/oflayn holat (NetMonitor) — UI banner shu yerga obuna
+//  Sof JS — yangi native modul yo'q, OTA orqali yetkaziladi.
+// ============================================================
+
+// Soda UUID — crypto.randomUUID bo'lmagan RN muhitida ham ishlaydi
+function uuid() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+// Qurilma identifikatori — bir marta yaratiladi va saqlanadi (duplicate himoyasi)
+let _deviceId = null;
+async function getDeviceId() {
+  if (_deviceId) return _deviceId;
+  try {
+    let id = await AsyncStorage.getItem('device_id');
+    if (!id) { id = uuid(); await AsyncStorage.setItem('device_id', id); }
+    _deviceId = id;
+  } catch (e) { _deviceId = uuid(); }
+  return _deviceId;
+}
+
+// Global tarmoq holati — UI shu yerga obuna bo'lib bannerni ko'rsatadi
+const NetMonitor = {
+  online: true,
+  _subs: new Set(),
+  set(v) {
+    if (this.online === v) return;
+    this.online = v;
+    this._subs.forEach((fn) => { try { fn(v); } catch (e) {} });
+  },
+  subscribe(fn) { this._subs.add(fn); return () => this._subs.delete(fn); },
+};
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// /health ni yengil so'rov bilan tekshirish (reachability probe)
+async function pingHealth(timeoutMs = 6000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  let res;
   try {
-    res = await fetch(BASE + path, {
-      method, headers, body: body ? JSON.stringify(body) : undefined, signal: ctrl.signal,
-    });
+    const res = await fetch(BASE + '/health', { method: 'GET', signal: ctrl.signal });
+    clearTimeout(timer);
+    return res.ok;
   } catch (e) {
     clearTimeout(timer);
-    const err = new Error(e.name === 'AbortError' ? "Internet sekin — qayta urinib ko'ring" : "Ulanish yo'q — internetni tekshiring");
-    err.network = true;
-    throw err;
+    return false;
   }
-  clearTimeout(timer);
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const err = new Error(data.error || 'Xato: ' + res.status);
-    err.data = data; err.status = res.status;
-    throw err;
+}
+
+async function api(path, method = 'GET', body = null, token = null, timeoutMs = 15000, opts = {}) {
+  // opts: { retries, idempotencyKey, deviceId }
+  // GET — idempotent, xavfsiz qayta urinadi. POST faqat idempotencyKey berilsa qayta
+  // urinadi (server idempotency middleware / holat-tekshiruvi dubldan himoya qiladi).
+  const isGet = method === 'GET';
+  const maxRetries = opts.retries != null
+    ? opts.retries
+    : (isGet || opts.idempotencyKey ? 2 : 0);
+
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = 'Bearer ' + token;
+  const did = opts.deviceId || _deviceId;
+  if (did) headers['X-Device-Id'] = did;
+  headers['X-Request-Id'] = uuid();
+  headers['X-Client-Ts'] = String(Date.now());
+  if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
+
+  let lastErr = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    // Sekin/uzilgan internetda so'rov cheksiz osilib qolmasin — timeout (ilova qotmaydi)
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    let res;
+    try {
+      res = await fetch(BASE + path, {
+        method, headers, body: body ? JSON.stringify(body) : undefined, signal: ctrl.signal,
+      });
+    } catch (e) {
+      clearTimeout(timer);
+      lastErr = new Error(e.name === 'AbortError' ? "Internet sekin — qayta urinilmoqda" : "Ulanish yo'q — internetni tekshiring");
+      lastErr.network = true;
+      if (attempt < maxRetries) { await sleep(Math.min(8000, 1000 * Math.pow(2, attempt))); continue; }
+      NetMonitor.set(false);
+      throw lastErr;
+    }
+    clearTimeout(timer);
+    NetMonitor.set(true);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const err = new Error(data.error || 'Xato: ' + res.status);
+      err.data = data; err.status = res.status;
+      throw err;
+    }
+    return data;
   }
-  return data;
+  throw lastErr || new Error('Tarmoq xatosi');
 }
 
 const fmt = (n) => Number(n || 0).toLocaleString('ru-RU');
@@ -431,6 +508,9 @@ function AppInner() {
 
   const socketRef = useRef(null);
   const webviewRef = useRef(null);
+  const creatingOrderRef = useRef(false);                 // ikki marta buyurtma yaratilmasin (double-tap)
+  const healthTimerRef = useRef(null);                    // reachability heartbeat timeri
+  const [netOnline, setNetOnline] = useState(true);       // internet bormi (banner uchun)
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
   const mapDataRef = useRef({});                          // joriy xarita ma'lumoti (so'nggi)
   const orderStepRef = useRef(null);                      // onWebViewMessage barqaror bo'lishi uchun (orderStep ref orqali o'qiladi)
@@ -538,6 +618,7 @@ function AppInner() {
         let wasOffline = false;
         netUnsub = NetInfo.addEventListener((state) => {
           const isOnline = !!state.isConnected && state.isInternetReachable !== false;
+          NetMonitor.set(isOnline); // bannerni tez yangilaydi
           if (isOnline && wasOffline) { ensureSocketConnected(); resumeActiveOrder(); }
           wasOffline = !isOnline;
         });
@@ -548,6 +629,27 @@ function AppInner() {
       try { appSub.remove(); } catch (e) {}
       try { netUnsub && netUnsub(); } catch (e) {}
     };
+  }, [token, pinStep]);
+
+  // ---- Tarmoq holatiga obuna + reachability heartbeat (banner uchun) ----
+  useEffect(() => {
+    getDeviceId();
+    const unsub = NetMonitor.subscribe((v) => setNetOnline(v));
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!token || pinStep) return;
+    let stopped = false;
+    const tick = async () => {
+      const ok = await pingHealth();
+      if (stopped) return;
+      NetMonitor.set(ok);
+      if (ok) ensureSocketConnected();
+      healthTimerRef.current = setTimeout(tick, ok ? 20000 : 5000);
+    };
+    healthTimerRef.current = setTimeout(tick, 8000);
+    return () => { stopped = true; if (healthTimerRef.current) clearTimeout(healthTimerRef.current); };
   }, [token, pinStep]);
 
   // ---- Yaqindagi mashinalar ----
@@ -721,11 +823,16 @@ function AppInner() {
       socketRef.current.removeAllListeners();
       socketRef.current.disconnect();
     }
-    const s = io(BASE, { auth: { token }, transports: ['websocket', 'polling'], reconnection: true, reconnectionAttempts: Infinity, reconnectionDelay: 2000 });
+    // Exponential backoff: 1s → 30s (zaif tarmoqda serverni bombardimon qilmaydi)
+    const s = io(BASE, {
+      auth: { token }, transports: ['websocket', 'polling'],
+      reconnection: true, reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000, reconnectionDelayMax: 30000, randomizationFactor: 0.5, timeout: 20000,
+    });
     socketRef.current = s;
     // Qayta ulanganda faol buyurtma holatini serverdan qayta tiklaymiz (#40 — internet uzilsa holat yo'qolmaydi)
-    s.on('reconnect', () => { resumeActiveOrder(); });
-    s.on('connect', () => { resumeActiveOrder(); });
+    s.on('reconnect', () => { NetMonitor.set(true); resumeActiveOrder(); });
+    s.on('connect', () => { NetMonitor.set(true); resumeActiveOrder(); });
     s.on('order_update', (o) => {
       setOrder((prev) => prev ? { ...prev, ...o } : o);
       if (o.status === 'accepted') {
@@ -990,11 +1097,15 @@ function AppInner() {
   async function createOrder() {
     const from = pickup || myLoc;
     if (!from || !dest) return;
+    if (creatingOrderRef.current) return; // ikki marta bosilsa — ikkinchisini e'tiborsiz qoldiramiz
+    creatingOrderRef.current = true;
     setLoading(true);
     try {
+      // Idempotency-Key: tarmoq uzilib qayta urinilsa ham AYNAN BITTA buyurtma yaratiladi
+      // (server idempotency middleware bir xil kalitga keshlangan javobni qaytaradi).
       const r = await api('/api/orders', 'POST', {
         from, to: dest, car_class: carClass, payment_method: payMethod,
-      }, token);
+      }, token, 15000, { idempotencyKey: uuid(), retries: 2 });
       const o = r.order || r;
       setOrder(o);
       setOrderStep(null);
@@ -1010,6 +1121,7 @@ function AppInner() {
         Alert.alert('Xato', e.message);
       }
     }
+    creatingOrderRef.current = false;
     setLoading(false);
   }
 
@@ -1071,12 +1183,15 @@ function AppInner() {
   async function sendVoiceOrder(uri) {
     const from = pickup || myLoc;
     if (!from) { Alert.alert('Joylashuv', 'Olib ketish joyi aniqlanmadi'); return; }
+    if (creatingOrderRef.current) return; // ikki marta yuborilmasin
+    creatingOrderRef.current = true;
     setLoading(true);
     try {
       const voice = await fileToDataUrl(uri);
+      // Idempotency-Key: qayta urinilsa ham bitta buyurtma (dubl bo'lmaydi)
       const r = await api('/api/orders', 'POST', {
         from, metered: true, voice, payment_method: payMethod,
-      }, token, 45000); // ovoz katta — sekin internetga uzunroq timeout
+      }, token, 45000, { idempotencyKey: uuid(), retries: 1 }); // ovoz katta — sekin internetga uzunroq timeout
       const o = r.order || r;
       setOrder(o); setOrderStep(null); setVoiceModal(false); setVoiceSec(0);
       notify('Ovozli buyurtma berildi 🎙', 'Haydovchi qidirilmoqda...');
@@ -1090,6 +1205,7 @@ function AppInner() {
         Alert.alert('Xato', e.message);
       }
     }
+    creatingOrderRef.current = false;
     setLoading(false);
   }
 
@@ -1441,6 +1557,20 @@ function AppInner() {
   return (
     <View style={s.fill}>
       <StatusBar style="light" />
+
+      {/* Tarmoq holati banneri — internet yo'q bo'lsa ko'rinadi */}
+      {!netOnline && (
+        <View style={{
+          position: 'absolute', top: insets.top, left: 0, right: 0, zIndex: 999,
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+          paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#3A1212',
+        }}>
+          <Ionicons name="cloud-offline-outline" size={14} color="#FF6B6B" />
+          <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
+            Internet yo'q. Qayta ulanish kutilmoqda…
+          </Text>
+        </View>
+      )}
 
       {/* ===== BUYURTMA TAB ===== */}
       {tab === 'order' && (

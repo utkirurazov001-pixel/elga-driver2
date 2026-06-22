@@ -28,6 +28,7 @@ export function createApp(): Express {
     }),
   );
   app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: false })); // Click callback (form-urlencoded)
   app.use(cookieParser());
   app.use(pinoHttp({ logger }));
 

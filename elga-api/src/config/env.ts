@@ -29,6 +29,16 @@ export const env = {
   databaseUrl: str('DATABASE_URL', ''),
   redisUrl: str('REDIS_URL', ''),
 
+  payme: {
+    merchantId: str('PAYME_MERCHANT_ID', ''),
+    key: str('PAYME_KEY', 'test-payme-key'),
+  },
+  click: {
+    serviceId: str('CLICK_SERVICE_ID', ''),
+    merchantId: str('CLICK_MERCHANT_ID', ''),
+    secret: str('CLICK_SECRET', 'test-click-secret'),
+  },
+
   seed: {
     adminLogin: str('SEED_ADMIN_LOGIN', 'admin'),
     adminPassword: str('SEED_ADMIN_PASSWORD', 'elga1226'),
