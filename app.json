@@ -20,9 +20,7 @@
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 3000
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.2",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "uz.elga.haydovchi",

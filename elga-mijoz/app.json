@@ -12,9 +12,7 @@
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 3000
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.0.1",
     "android": {
       "package": "uz.elga.mijoz",
       "permissions": [
