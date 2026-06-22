@@ -643,6 +643,8 @@ function AppInner() {
   const [myLoc, setMyLoc] = useState(null);
   const [order, setOrder] = useState(null);
   const [earnings, setEarnings] = useState(null);
+  // GPS callback'i stale closure'siz joriy buyurtmani o'qisin (har renderda yangilanadi)
+  orderRef.current = order;
   const [trips, setTrips] = useState(null);
   const [tab, setTab] = useState('home'); // home | earnings | history | profile
 
@@ -672,6 +674,10 @@ function AppInner() {
   const lastLocRef = useRef(null);   // oxirgi GPS — qayta ulanganda darrov yuboramiz
   const lastEmitRef = useRef(0);     // GPS socket emit throttle (adaptiv interval)
   const lastGpsRef = useRef(0);      // oxirgi GPS vaqti ("arvoh" aniqlash uchun)
+  const lastUiLocRef = useRef(null); // state'ga (xaritaga) oxirgi yuborilgan joylashuv — re-render throttle
+  const lastUiAtRef = useRef(0);     // state oxirgi yangilangan vaqt
+  const orderRef = useRef(null);     // joriy buyurtma (GPS callback stale closure'siz o'qishi uchun)
+  const watchActiveRef = useRef(false); // joriy GPS watch faol-buyurtma rejimidami
   const pollRef = useRef(null);      // backup polling intervali
   const healthRef = useRef(null);    // reachability heartbeat timeri
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
@@ -920,7 +926,11 @@ function AppInner() {
       setChatMessages((prev) => [...prev, msg]);
       if (!chatModal) notify('💬 Mijoz', msg.text || '');
     });
-    s.on('meter', (m) => setMeter(m));
+    // Faqat o'zgargan qiymatda yangilaymiz — bekorga re-render qilmaymiz
+    s.on('meter', (m) => setMeter((prev) => {
+      if (prev && m && prev.km === m.km && prev.minutes === m.minutes && prev.fare === m.fare) return prev;
+      return m;
+    }));
     // Jonli kutish haqi — backend 'arrived' holatida har 3 sek yuboradi
     s.on('wait_update', (d) => {
       setOrder((p) => p ? { ...p, wait_fee: d.waitFee || 0, price: d.totalFare || p.price } : p);
@@ -980,28 +990,60 @@ function AppInner() {
     } catch (e) {}
   };
 
+  // Faol buyurtma bormi (GPS callback ichida ref orqali, stale closure'siz)
+  function isOrderActive() {
+    const o = orderRef.current;
+    return !!(o && ACTIVE_STATUSES.includes(o.status));
+  }
+
   // ---- GPS kuzatuv (onlayn bo'lganda socket orqali yuboriladi) ----
+  // Adaptiv: GPS apparat so'rovi va re-render/emit chastotasi faol buyurtma va
+  // tarmoq holatiga qarab o'zgaradi. Bu batareyani tejaydi va bekorga re-render
+  // (FPS pasayishi) qilmaydi:
+  //   • faol buyurtma  → ~4s, har 10 m da yangilanish
+  //   • bo'sh (idle)   → ~20s, har 40 m da yangilanish (kam re-render, kam batareya)
+  //   • zaif tarmoq    → emit ~15s (trafik tejaladi)
   async function startTracking() {
     try {
       const accuracy = Location.Accuracy?.High ?? 4;
+      const active = isOrderActive();
+      watchActiveRef.current = active;
+      // Apparat so'rov chastotasi: faol 4s/15m, idle 20s/40m (spec bo'yicha)
+      const hwTime = active ? 4000 : 20000;
+      const hwDist = active ? 15 : 40;
       watchRef.current = await Location.watchPositionAsync(
-        { accuracy, distanceInterval: 15, timeInterval: 4000 },
+        { accuracy, distanceInterval: hwDist, timeInterval: hwTime },
         (pos) => {
           const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setMyLoc(loc);
+          const now = Date.now();
           lastLocRef.current = loc;
-          lastGpsRef.current = Date.now();
+          lastGpsRef.current = now;
+
+          const act = isOrderActive();
+          // Re-render throttle: state'ni (xarita markerini) faqat sezilarli
+          // siljishda yoki vaqt o'tганда yangilaymiz — har GPS callback'da emas.
+          const moveThresh = act ? 0.010 : 0.040; // km (10 m / 40 m)
+          const uiGap = act ? 3000 : 20000;
+          const prevUi = lastUiLocRef.current;
+          const movedKm = prevUi ? haversineKm(prevUi.lat, prevUi.lng, loc.lat, loc.lng) : Infinity;
+          if (!prevUi || movedKm >= moveThresh || now - lastUiAtRef.current >= uiGap) {
+            lastUiLocRef.current = loc;
+            lastUiAtRef.current = now;
+            setMyLoc(loc);
+          }
+
           // Oxirgi joylashuvni saqlaymiz — ilova qayta ochilganda darrov ko'rsatiladi
           AsyncStorage.setItem('last_loc', JSON.stringify(loc)).catch(() => {});
-          // Adaptiv yuborish: tarmoq yaxshi bo'lsa ~4s, zaif/oflayn bo'lsa ~18s.
-          // (Server baribir sekundiga 1 tagacha cheklaydi; zaif tarmoqda trafikni tejaymiz.)
-          const now = Date.now();
-          const minGap = NetMonitor.online ? 4000 : 18000;
+
+          // Adaptiv socket emit: faol+online ~4s, idle ~20s, zaif tarmoq ~15s.
+          // (Server baribir sekundiga 1 tagacha cheklaydi.)
+          const minGap = !NetMonitor.online ? 15000 : (act ? 4000 : 20000);
           if (socketRef.current?.connected && now - lastEmitRef.current >= minGap) {
             lastEmitRef.current = now;
             try { socketRef.current.emit('location', loc); } catch (e) {}
           }
-          // Mustaqil taksometr — km hisoblab boradi
+
+          // Mustaqil taksometr — km hisoblab boradi (har GPS nuqtasida aniqlik uchun)
           setSoloMeter(prev => {
             if (!prev) return prev;
             let addKm = 0;
@@ -1019,6 +1061,17 @@ function AppInner() {
     watchRef.current?.remove?.();
     watchRef.current = null;
   }
+
+  // Faol buyurtma holati o'zgarganda GPS kuzatuvini mos chastotaga qayta moslaymiz
+  // (idle ↔ faol). Watch ishlamayotgan bo'lsa tegmaymiz.
+  useEffect(() => {
+    const active = isOrderActive();
+    if (watchRef.current && active !== watchActiveRef.current) {
+      stopTracking();
+      startTracking();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.status]);
 
   // ---- Mustaqil taksometr ----
   function startSoloMeter() {

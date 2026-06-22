@@ -747,7 +747,8 @@ function AppInner() {
       if (o.status === 'cancelled') { notify('Buyurtma bekor qilindi', ''); resetOrder(); }
     });
     s.on('driver_location', (loc) => {
-      setDriverLoc(loc);
+      // Bir xil koordinata kelsa re-render qilmaymiz (xarita ham o'zgarmaydi)
+      setDriverLoc((prev) => (prev && loc && prev.lat === loc.lat && prev.lng === loc.lng) ? prev : loc);
       setOrder((prev) => {
         if (prev && prev.status === 'accepted' && !arrivedNotified.current && loc.lat && loc.lng && prev.from_lat) {
           const d = distKm(loc.lat, loc.lng, prev.from_lat, prev.from_lng);
@@ -770,8 +771,11 @@ function AppInner() {
     });
     // Jonli taximetr (in_progress, hisoblagich) — backend har 5 sekunda yuboradi
     s.on('meter', (d) => {
-      setLiveKm(d.km || 0); setLiveFare(d.fare || 0); setLiveMin(d.minutes || 0);
-      setOrder((prev) => prev ? { ...prev, price: d.fare || prev.price } : prev);
+      // Faqat o'zgargan qiymatda yangilaymiz — bekorga re-render qilmaymiz
+      setLiveKm((p) => p === (d.km || 0) ? p : (d.km || 0));
+      setLiveFare((p) => p === (d.fare || 0) ? p : (d.fare || 0));
+      setLiveMin((p) => p === (d.minutes || 0) ? p : (d.minutes || 0));
+      setOrder((prev) => (prev && d.fare && prev.price !== d.fare) ? { ...prev, price: d.fare } : prev);
     });
   }
 
