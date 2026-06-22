@@ -57,6 +57,7 @@
   function renderLogin(){
     var app=document.getElementById('app');
     app.className='';
+    var savedBase=''; try{ savedBase=localStorage.getItem('elga_api_base')||''; }catch(e){}
     app.innerHTML =
       '<div class="login"><div class="login-card">'+
         '<div class="login-anchor"><b>1226</b><span>DISPETCHER</span></div>'+
@@ -70,9 +71,10 @@
           '<div class="field"><label>Login</label><input class="input" id="lg" value="admin" autocomplete="username"></div>'+
           '<div class="field"><label>Parol</label><input class="input" id="pw" type="password" value="elga1226" autocomplete="current-password"></div>'+
           '<div class="field"><label>2FA kod <span class="muted" style="font-weight:500">(agar yoqilgan bo\'lsa)</span></label><input class="input mono" id="otp" placeholder="000000" maxlength="6" autocomplete="one-time-code"></div>'+
+          '<div class="field"><label>Server manzili <span class="muted" style="font-weight:500">(backend API — jonli rejim uchun)</span></label><input class="input mono" id="apibase" placeholder="https://elga-api.onrender.com/v1" value="'+savedBase+'"></div>'+
           '<button class="btn btn-primary" type="submit">'+window.icon('lock',16)+' Tizimga kirish</button>'+
         '</form>'+
-        '<div class="login-demo">Demo kirish: <b>admin</b> / <b>elga1226</b><br>app.elga.uz · super_admin roli</div>'+
+        '<div class="login-demo">Server manzili kiritilsa — jonli backend. Bo\'sh qolsa — demo rejim (<b>admin</b> / <b>elga1226</b>).</div>'+
       '</div></div>';
     document.getElementById('loginForm').addEventListener('submit',function(e){
       e.preventDefault();
@@ -99,6 +101,9 @@
       }
 
       var otp=(document.getElementById('otp')||{}).value;
+      var apibase=((document.getElementById('apibase')||{}).value||'').trim();
+      if(apibase && window.ELGA && window.ELGA.setBase) window.ELGA.setBase(apibase);
+      else if(!apibase){ try{ localStorage.removeItem('elga_api_base'); }catch(e){} }
       if(!window.ELGA){ enterDemo(); return; }
       window.ELGA.login(u, pw, otp).then(function(res){
         if(res.ok){ enterLive(); }
