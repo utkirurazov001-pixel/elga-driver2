@@ -15,10 +15,13 @@ import campaigns from './modules/campaigns';
 import reports from './modules/reports';
 import corporate from './modules/corporate';
 import rules from './modules/rules';
+import payments from './modules/payments';
+import admin from './modules/admin';
 
 const router = Router();
 
 router.use('/auth', auth);
+router.use('/admin/users', admin);
 router.use('/stats', stats);
 router.use('/drivers', drivers);
 router.use('/clients', clients);
@@ -33,6 +36,7 @@ router.use('/campaigns', campaigns);
 router.use('/reports', reports);
 router.use('/corporate', corporate);
 router.use('/work-rules', rules);
+router.use('/payments', payments); // /payments/payme, /payments/click/*
 router.use('/', system); // /cities, /places, /audit
 
 export default router;
