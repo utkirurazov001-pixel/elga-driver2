@@ -31,9 +31,9 @@
     post: function(path, body){ return this.request('POST', path, body); },
 
     // Login: muvaffaqiyat → {ok:true}; xato turlari: 'auth' | 'network'
-    login: function(login, password){
+    login: function(login, password, code){
       var self=this;
-      return this.post('/auth/login', {login:login, password:password})
+      return this.post('/auth/login', {login:login, password:password, code:code||undefined})
         .then(function(res){
           if(res.status>=200 && res.status<300 && res.body.success){
             self.token = res.body.data.access_token;
@@ -113,6 +113,25 @@
     L.cancel_rate = d.cancel_rate;
     L.commission = +(d.commission_today/1e6).toFixed(2);
   }
+
+  /* Socket.IO jonli ulanish (live rejimda real-time) */
+  ELGA.connectSocket = function(){
+    if(typeof io==='undefined' || !this.token) return;
+    try{
+      var origin = baseUrl().replace(/\/v1$/,'');
+      var s = io(origin, {auth:{token:this.token}, transports:['websocket','polling']});
+      this.socket = s;
+      s.on('order:new', function(o){ try{ o.from=o.from_city+' · '+o.from_place; o.to=o.to_city+' · '+o.to_place; o.client_ini=(o.client||'').split(' ').map(function(x){return x[0];}).join('').slice(0,2); window.DB.orders.unshift(o); if(window.DB.orders.length>240)window.DB.orders.pop(); window.Bus&&window.Bus.emit('order:new',o);}catch(e){} });
+      s.on('order:updated', function(o){ window.Bus&&window.Bus.emit('order:updated',o); });
+      s.on('driver:status', function(d){ window.Bus&&window.Bus.emit('driver:status',d); });
+      s.on('driver:location', function(list){
+        var full=[]; (list||[]).forEach(function(p){ var d=window.DB.drivers.find(function(x){return x.id===p.id;}); if(d){ d.lat=p.lat; d.lng=p.lng; if(p.status)d.status=p.status; full.push(d); } });
+        window.Bus&&window.Bus.emit('driver:location', full.length?full:list);
+      });
+      s.on('kpi:update', function(k){ if(k&&k.orders_today!=null){ var L=window.LiveKPI; L.orders_today=k.orders_today; L.active_drivers=k.active_drivers; L.revenue_today=+(k.revenue_today/1e6).toFixed(2); } window.Bus&&window.Bus.emit('kpi:update', window.LiveKPI); });
+    }catch(e){}
+  };
+  ELGA.disconnectSocket = function(){ if(this.socket){ try{this.socket.disconnect();}catch(e){} this.socket=null; } };
 
   /* Yozish amali — live rejimda backendga yuboradi, demo'da no-op.
      Promise qaytaradi: {ok:true,data} yoki {ok:false,message}. */

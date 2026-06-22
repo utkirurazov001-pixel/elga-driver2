@@ -10,12 +10,14 @@ import { validate } from '../middleware/validate';
 import { authenticate } from '../middleware/auth';
 import { maskPhone } from '../utils/mask';
 import { env } from '../config/env';
+import { generateSecret, otpauthUrl, verifyTotp } from '../utils/totp';
 
 const router = Router();
 
 const loginSchema = z.object({
   login: z.string().min(2),
   password: z.string().min(4),
+  code: z.string().optional(), // 2FA TOTP (yoqilgan bo'lsa)
 });
 
 // 5 ta xato urinishdan keyin 15 daqiqa blok (AUTH-05) — soddalashtirilgan in-memory
@@ -25,7 +27,7 @@ router.post(
   '/login',
   validate(loginSchema),
   asyncHandler(async (req, res) => {
-    const { login, password } = req.body as z.infer<typeof loginSchema>;
+    const { login, password, code } = req.body as z.infer<typeof loginSchema>;
     const a = attempts[login];
     if (a && a.until > Date.now()) throw ApiError.forbidden('Juda ko\'p urinish — 15 daqiqadan keyin urinib ko\'ring');
 
@@ -37,6 +39,11 @@ router.post(
       if (rec.count >= 5) rec.until = Date.now() + 15 * 60 * 1000;
       attempts[login] = rec;
       throw ApiError.unauthorized('Login yoki parol xato');
+    }
+    // 2FA — yoqilgan bo'lsa kod majburiy (AUTH-04)
+    if (user.two_fa_enabled && user.two_fa_secret) {
+      if (!code) throw new ApiError(401, 'TWOFA_REQUIRED', '2FA kodi talab qilinadi');
+      if (!verifyTotp(user.two_fa_secret, code)) throw ApiError.unauthorized('2FA kodi noto\'g\'ri');
     }
     delete attempts[login];
     user.last_login_at = new Date().toISOString();
@@ -84,6 +91,36 @@ router.post(
     store.addAudit({ user_id: req.user!.sub, user: req.user!.login, role: req.user!.role, action: 'auth.logout', entity: 'admin_users', entity_id: req.user!.sub, detail: 'Chiqish', ip: req.ip ?? '' });
     res.clearCookie('refresh_token');
     return ok(res, { message: 'Chiqildi' });
+  }),
+);
+
+// 2FA sozlash — secret + otpauth URL (authenticator ilovasiga) (AUTH-04)
+router.post(
+  '/2fa/setup',
+  authenticate,
+  asyncHandler(async (req, res) => {
+    const u = store.adminUsers.find((x) => x.id === req.user!.sub);
+    if (!u) throw ApiError.notFound('Foydalanuvchi topilmadi');
+    u.two_fa_secret = generateSecret();
+    u.two_fa_enabled = false;
+    return ok(res, { secret: u.two_fa_secret, otpauth_url: otpauthUrl(u.two_fa_secret, u.login) });
+  }),
+);
+
+// 2FA tasdiqlash/yoqish
+const twofaSchema = z.object({ code: z.string().length(6) });
+router.post(
+  '/2fa/verify',
+  authenticate,
+  validate(twofaSchema),
+  asyncHandler(async (req, res) => {
+    const u = store.adminUsers.find((x) => x.id === req.user!.sub);
+    if (!u || !u.two_fa_secret) throw ApiError.badRequest('Avval 2FA sozlang');
+    const { code } = req.body as z.infer<typeof twofaSchema>;
+    if (!verifyTotp(u.two_fa_secret, code)) throw ApiError.unauthorized('Kod noto\'g\'ri');
+    u.two_fa_enabled = true;
+    store.addAudit({ user_id: u.id, user: u.login, role: u.role, action: 'auth.2fa_enabled', entity: 'admin_users', entity_id: u.id, detail: '2FA yoqildi', ip: req.ip ?? '' });
+    return ok(res, { two_fa_enabled: true });
   }),
 );
 

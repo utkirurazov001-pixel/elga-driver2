@@ -14,6 +14,7 @@ import { haversineKm } from '../utils/geo';
 export interface AdminUser {
   id: string; login: string; password_hash: string; full_name: string;
   phone: string; role: Role; is_active: boolean; last_login_at: string | null;
+  two_fa_secret?: string | null; two_fa_enabled?: boolean;
 }
 export interface DriverDoc { type: string; status: string; expires_at: string; }
 export interface Driver {
@@ -33,6 +34,8 @@ export interface Campaign { id: string; title: string; channel: string; segment:
 export interface Corporate { id: string; name: string; contact: string; phone: string; balance: number; employees: number; rides: number; is_active: boolean; }
 export interface Zone { id: string; name: string; city: string; polygon: Array<[number, number]>; surge: number; is_active: boolean; }
 export interface LedgerEntry { id: string; driver_id: string; type: string; amount: number; balance_after: number; note: string; created_at: string; }
+export interface PaymeTxn { id: string; paycom_id: string; order_id: string; amount: number; state: number; create_time: number; perform_time: number; cancel_time: number; reason: number | null; }
+export interface ClickTxn { id: string; click_trans_id: string; order_id: string; amount: number; status: string; prepare_id: string | null; created_at: number; }
 export interface Client {
   id: string; full_name: string; phone: string; is_blocked: boolean;
   orders_count: number; total_spent: number; tier: 'bronze' | 'silver' | 'gold';
@@ -103,6 +106,8 @@ class MemoryStore {
   corporate: Corporate[] = [];
   zones: Zone[] = [];
   ledger: LedgerEntry[] = [];
+  paymeTxns: PaymeTxn[] = [];
+  clickTxns: ClickTxn[] = [];
   tariffs = [
     { id: 'TF1', name: 'ekonom', base_fare: 8000, per_km: 1500, per_min: 300, min_fare: 12000, surge_multiplier: 1.0, commission_percent: 15, is_active: true },
     { id: 'TF2', name: 'komfort', base_fare: 12000, per_km: 2200, per_min: 450, min_fare: 18000, surge_multiplier: 1.0, commission_percent: 15, is_active: true },

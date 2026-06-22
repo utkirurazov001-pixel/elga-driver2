@@ -15,7 +15,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
-import * as Speech from 'expo-speech';
 import * as KeepAwake from 'expo-keep-awake';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 // Ovozli buyurtma base64'ini vaqtinchalik faylga yozish uchun (legacy API —
@@ -26,6 +25,12 @@ import { WebView } from 'react-native-webview';
 import { io } from 'socket.io-client';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+
+// ─── Ajratilgan modullar (modularizatsiya — App.js'ni yengillashtirish) ───
+import { uuid, sleep, fmt, safeStr, haversineKm, fmtPhone } from './src/utils';
+import { mapHTML } from './src/mapHtml';
+import { speak, announce } from './src/voice';
+import { captureException } from './src/crash';
 
 const BASE = 'https://api.elga.uz';
 
@@ -117,13 +122,7 @@ async function hidePersistentNotif() {
 //  OTA (expo-updates) orqali darrov yetkaziladi (runtimeVersion o'zgarmaydi).
 // ============================================================
 
-// Soda UUID — crypto.randomUUID bo'lmagan RN muhitida ham ishlaydi
-function uuid() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-  });
-}
+// uuid() — ./src/utils dan import qilinadi
 
 // Qurilma identifikatori — bir marta yaratiladi va saqlanadi (duplicate himoyasi)
 let _deviceId = null;
@@ -149,7 +148,7 @@ const NetMonitor = {
   subscribe(fn) { this._subs.add(fn); return () => this._subs.delete(fn); },
 };
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// sleep — ./src/utils dan import qilinadi
 
 // /health ni yengil so'rov bilan tekshirish (reachability probe)
 async function pingHealth(timeoutMs = 6000) {
@@ -284,7 +283,10 @@ const OfflineQueue = {
   },
 };
 
-const fmt = (n) => Number(n || 0).toLocaleString('ru-RU');
+// fmt, safeStr — ./src/utils dan import qilinadi
+
+// speak, announce — ./src/voice dan import qilinadi
+// haversineKm, fmtPhone — ./src/utils dan import qilinadi
 
 // ============================================================
 //  FON (BACKGROUND) GPS — ilova fonda/ekran o'chiq bo'lganda ham haydovchi
@@ -355,122 +357,9 @@ async function stopBackgroundLocation() {
   } catch (e) {}
 }
 
-// Matnni xavfsiz string'ga keltirish — obyekt/null kelib qolsa ham React
-// "Objects are not valid as a React child" deb qulamaydi (ayniqsa ovozli
-// buyurtmada manzil maydonlari to'liq bo'lmasligi mumkin).
-const safeStr = (v, fallback = '') => {
-  if (v == null) return fallback;
-  if (typeof v === 'string') return v;
-  if (typeof v === 'number') return String(v);
-  return fallback;
-};
+// safeStr — ./src/utils dan import qilinadi (yuqorida)
 
-// Ovozli e'lonlar telefon "jim" rejimida ham eshitilsin
-setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
-
-// expo-speech ovozini tabiiyroq qilish: qurilmada mavjud o'zbek ovozini
-// tanlaymiz (ko'p qurilmada uz-UZ aniq ko'rsatilmasa robot/aksent bo'lardi).
-// undefined = hali tekshirilmagan, null = topilmadi.
-let _uzVoice = undefined;
-async function loadUzVoice() {
-  if (_uzVoice !== undefined) return _uzVoice;
-  _uzVoice = null;
-  try {
-    const voices = (await Speech.getAvailableVoicesAsync()) || [];
-    const uz = voices.find((v) => /^uz/i.test(v.language || ''))
-            || voices.find((v) => /uzbek/i.test(v.name || ''));
-    if (uz?.identifier) _uzVoice = uz.identifier;
-  } catch (_) {}
-  return _uzVoice;
-}
-loadUzVoice(); // startupda keshlab qo'yamiz
-
-// O'zbek tilida ovozli e'lon (expo-speech) — tabiiyroq sozlamalar bilan
-function speak(text) {
-  try {
-    Speech.stop();
-    const opts = { language: 'uz-UZ', rate: 0.9, pitch: 1.03 };
-    if (_uzVoice) opts.voice = _uzVoice;
-    Speech.speak(String(text || ''), opts);
-  } catch (e) {}
-}
-
-// ---- Backenddan boshqariladigan ovoz ----
-// Server e'lon uchun audio URL bersa (super-admin tabiiy ovoz yozib qo'yadi)
-// — shuni o'ynaymiz; bo'lmasa yoki xato bo'lsa TTS bilan gapiramiz.
-let _annPlayer = null;
-function stopAnnPlayer() {
-  if (_annPlayer) { try { _annPlayer.remove(); } catch (_) {} _annPlayer = null; }
-}
-function playAnnouncementAudio(url) {
-  // true = audio o'ynay boshladi; false = TTS'ga qaytamiz
-  try {
-    if (typeof url !== 'string' || !url.trim()) return false;
-    stopAnnPlayer();
-    const player = createAudioPlayer({ uri: url.trim() });
-    _annPlayer = player;
-    try {
-      player.addListener('playbackStatusUpdate', (st) => {
-        if (st?.didJustFinish) stopAnnPlayer();
-      });
-    } catch (_) {}
-    player.play();
-    return true;
-  } catch (e) {
-    stopAnnPlayer();
-    return false;
-  }
-}
-// Asosiy e'lon funksiyasi: audioUrl bo'lsa audio, bo'lmasa TTS.
-function announce(text, audioUrl) {
-  if (!playAnnouncementAudio(audioUrl)) speak(text);
-}
-
-// Haversine masofasi (km)
-function haversineKm(lat1, lng1, lat2, lng2) {
-  const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-// Telefonni yagona formatda: +998 91 981 11 71
-function fmtPhone(raw) {
-  if (!raw) return '';
-  let d = String(raw).replace(/\D/g, '');
-  if (d.startsWith('998')) d = d.slice(3);
-  if (d.length !== 9) return raw;
-  return `+998 ${d.slice(0, 2)} ${d.slice(2, 5)} ${d.slice(5, 7)} ${d.slice(7, 9)}`;
-}
-
-// ---- Xarita HTML (Leaflet + OSM) ----
-// Xarita BIR MARTA yuklanadi (barqaror HTML). Keyin markerlar/joylashuv
-// injectJavaScript -> window.updateMap(...) orqali yangilanadi — WebView qayta
-// yuklanmaydi (avval har GPS yangilanishida butun xarita qayta yuklanib, ilova
-// qotib qolardi).
-function mapHTML() {
-  return `<!DOCTYPE html><html><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>body,html,#map{margin:0;padding:0;width:100%;height:100%;}</style>
-</head><body><div id="map"></div><script>
-function ic(c){return L.icon({iconUrl:'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-'+c+'.png',shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',iconSize:[25,41],iconAnchor:[12,41],popupAnchor:[1,-34],shadowSize:[41,41]});}
-var greenIcon=ic('green'),redIcon=ic('red');
-var map=L.map('map').setView([41.31,69.24],14);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-var myMarker=null,pickMarker=null,dropMarker=null,centeredOnce=false;
-window.updateMap=function(d){
-  try{
-    if(d.myLat!=null){ if(myMarker){myMarker.setLatLng([d.myLat,d.myLng]);} else {myMarker=L.marker([d.myLat,d.myLng]).addTo(map).bindPopup('Siz');} }
-    if(d.pickLat!=null){ if(pickMarker){pickMarker.setLatLng([d.pickLat,d.pickLng]);} else {pickMarker=L.marker([d.pickLat,d.pickLng],{icon:greenIcon}).addTo(map).bindPopup('Mijoz');} } else if(pickMarker){map.removeLayer(pickMarker);pickMarker=null;}
-    if(d.dropLat!=null){ if(dropMarker){dropMarker.setLatLng([d.dropLat,d.dropLng]);} else {dropMarker=L.marker([d.dropLat,d.dropLng],{icon:redIcon}).addTo(map).bindPopup('Manzil');} } else if(dropMarker){map.removeLayer(dropMarker);dropMarker=null;}
-    var c=d.myLat!=null?[d.myLat,d.myLng]:(d.pickLat!=null?[d.pickLat,d.pickLng]:null);
-    if(c&&!centeredOnce){ map.setView(c,14); centeredOnce=true; }
-  }catch(e){}
-};
-window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'mapReady'}));
-</script></body></html>`;
-}
+// mapHTML — ./src/mapHtml dan import qilinadi
 
 // ---- Crash monitoring (yengil, tashqi SDK'siz, production-ready) ----
 // Sentry/Crashlytics o'rnatish uchun native sozlama + DSN kerak; uni qo'shilguncha
@@ -483,6 +372,9 @@ function reportCrash(kind, error, stack) {
     const now = Date.now();
     if (now - _lastCrashTs < 3000) return; // spamga qarshi throttle
     _lastCrashTs = now;
+    // Sentry yoqilgan bo'lsa (DSN berilgan) — xatoni o'sha yerga ham yuboramiz.
+    // DSN yo'q bo'lsa bu jim o'tadi (no-op).
+    captureException(error || new Error(String(stack || kind)), { kind });
     const payload = {
       kind,
       message: String(error?.message || error || 'unknown'),
@@ -713,8 +605,6 @@ function AppInner() {
   const [myLoc, setMyLoc] = useState(null);
   const [order, setOrder] = useState(null);
   const [earnings, setEarnings] = useState(null);
-  // GPS callback'i stale closure'siz joriy buyurtmani o'qisin (har renderda yangilanadi)
-  orderRef.current = order;
   const [trips, setTrips] = useState(null);
   const [tab, setTab] = useState('home'); // home | earnings | history | profile
 
@@ -748,6 +638,10 @@ function AppInner() {
   const lastUiLocRef = useRef(null); // state'ga (xaritaga) oxirgi yuborilgan joylashuv — re-render throttle
   const lastUiAtRef = useRef(0);     // state oxirgi yangilangan vaqt
   const orderRef = useRef(null);     // joriy buyurtma (GPS callback stale closure'siz o'qishi uchun)
+  // GPS callback'i stale closure'siz joriy buyurtmani o'qisin (har renderda yangilanadi).
+  // MUHIM: bu orderRef E'LON QILINGANDAN KEYIN turishi shart — aks holda Hermes release'da
+  // `undefined.current` bo'lib ilova render'da qulaydi ("Cannot set property 'current' of undefined").
+  orderRef.current = order;
   const watchActiveRef = useRef(false); // joriy GPS watch faol-buyurtma rejimidami
   const pollRef = useRef(null);      // backup polling intervali
   const healthRef = useRef(null);    // reachability heartbeat timeri

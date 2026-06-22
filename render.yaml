@@ -1,0 +1,61 @@
+# Render blueprint — ELGA TAXI 1226 backend (api.elga.uz) + DB + Redis
+# DEP-01/02. Maxfiy kalitlar Render dashboard'da to'ldiriladi (sync:false).
+services:
+  - type: web
+    name: elga-api
+    runtime: node
+    rootDir: elga-api
+    plan: starter
+    # prisma generate — Prisma Client yaratiladi (aks holda runtime'da yiqiladi)
+    buildCommand: npm ci && npx prisma generate && npm run build
+    # db push — schema'dagi 22 jadval DB'ga yaratiladi (migration fayllari yo'q).
+    # --accept-data-loss YO'Q → mavjud ma'lumot xavfsiz, faqat additiv o'zgarish.
+    startCommand: npx prisma db push --skip-generate && npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: CORS_ORIGIN
+        # Vergul bilan ajratilgan origin'lar (env.ts split qiladi).
+        # github.io — jonli admin paneli (GitHub Pages).
+        value: https://app.elga.uz,https://utkirurazov001-pixel.github.io
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: elga-pg
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: elga-redis
+          type: redis
+          property: connectionString
+      - key: PAYME_MERCHANT_ID
+        sync: false
+      - key: PAYME_KEY
+        sync: false
+      - key: CLICK_SERVICE_ID
+        sync: false
+      - key: CLICK_MERCHANT_ID
+        sync: false
+      - key: CLICK_SECRET
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+
+  - type: redis
+    name: elga-redis
+    plan: starter
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+
+databases:
+  - name: elga-pg
+    plan: basic-256mb
+    databaseName: elga
+    postgresMajorVersion: "16"

@@ -9,6 +9,7 @@ import { requireRole } from '../middleware/rbac';
 import { validate } from '../middleware/validate';
 import { pageParams, qstr, matches } from '../utils/query';
 import { CITIES, TARIFFS, DEFAULT_COMMISSION } from '../config/constants';
+import { emitEvent } from '../realtime/io';
 
 const router = Router();
 router.use(authenticate);
@@ -80,6 +81,7 @@ router.post(
     };
     store.orders.unshift(order);
     store.addAudit({ user_id: req.user!.sub, user: req.user!.login, role: req.user!.role, action: 'order.create', entity: 'orders', entity_id: order.id, detail: `${b.from_city}·${b.from_place} → ${b.to_city}·${b.to_place}`, ip: req.ip ?? '' });
+    emitEvent('order:new', order); // WS-01
     return ok(res, order, null, 201);
   }),
 );
@@ -100,6 +102,7 @@ router.post(
     o.driver = d.full_name; o.driver_id = d.id; o.park = d.park_number; o.status = 'assigned';
     d.status = 'busy';
     store.addAudit({ user_id: req.user!.sub, user: req.user!.login, role: req.user!.role, action: 'order.assign', entity: 'orders', entity_id: o.id, detail: `→ ${d.full_name}`, ip: req.ip ?? '' });
+    emitEvent('order:updated', o);
     return ok(res, o);
   }),
 );
@@ -119,6 +122,7 @@ router.post(
     o.driver = d.full_name; o.driver_id = d.id; o.park = d.park_number; o.status = 'assigned';
     d.status = 'busy';
     store.addAudit({ user_id: req.user!.sub, user: req.user!.login, role: req.user!.role, action: 'order.auto_assign', entity: 'orders', entity_id: o.id, detail: `→ ${d.full_name} (${found.distance.toFixed(1)} km)`, ip: req.ip ?? '' });
+    emitEvent('order:updated', o); emitEvent('driver:status', d);
     return ok(res, { order: o, driver: d.full_name, distance_km: +found.distance.toFixed(1) });
   }),
 );
@@ -180,6 +184,7 @@ router.post(
     (o as unknown as Record<string, unknown>).cancel_fee = fee;
     if (o.driver_id) { const d = store.findDriver(o.driver_id); if (d) d.status = 'free'; }
     store.addAudit({ user_id: req.user!.sub, user: req.user!.login, role: req.user!.role, action: 'order.cancel', entity: 'orders', entity_id: o.id, detail: `${b.cancel_by}: ${b.cancel_reason}${fee ? ` (jarima ${fee})` : ''}`, ip: req.ip ?? '' });
+    emitEvent('order:updated', o);
     return ok(res, { order: o, cancel_fee: fee });
   }),
 );

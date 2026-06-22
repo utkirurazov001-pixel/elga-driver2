@@ -185,7 +185,7 @@
         {th:'Rol', render:function(s){return roleChip(s.role);}},
         {th:'Oxirgi kirish', render:function(s){return '<span class="muted">'+s.last_login+'</span>';}},
         {th:'Holat', render:function(s){return s.is_active?U.genTag('true'):U.genTag('false');}},
-        {th:'', cls:'right', render:function(s){return '<div class="row-actions"><button class="btn btn-icon btn-sm" title="Tahrir">'+window.icon('edit',15)+'</button></div>';}}
+        {th:'', cls:'right', render:function(s){return '<div class="row-actions"><button class="btn btn-icon btn-sm" data-edit-staff="'+s.id+'" title="Tahrir">'+window.icon('edit',15)+'</button></div>';}}
       ]
     });
   };
