@@ -605,8 +605,6 @@ function AppInner() {
   const [myLoc, setMyLoc] = useState(null);
   const [order, setOrder] = useState(null);
   const [earnings, setEarnings] = useState(null);
-  // GPS callback'i stale closure'siz joriy buyurtmani o'qisin (har renderda yangilanadi)
-  orderRef.current = order;
   const [trips, setTrips] = useState(null);
   const [tab, setTab] = useState('home'); // home | earnings | history | profile
 
@@ -640,6 +638,10 @@ function AppInner() {
   const lastUiLocRef = useRef(null); // state'ga (xaritaga) oxirgi yuborilgan joylashuv — re-render throttle
   const lastUiAtRef = useRef(0);     // state oxirgi yangilangan vaqt
   const orderRef = useRef(null);     // joriy buyurtma (GPS callback stale closure'siz o'qishi uchun)
+  // GPS callback'i stale closure'siz joriy buyurtmani o'qisin (har renderda yangilanadi).
+  // MUHIM: bu orderRef E'LON QILINGANDAN KEYIN turishi shart — aks holda Hermes release'da
+  // `undefined.current` bo'lib ilova render'da qulaydi ("Cannot set property 'current' of undefined").
+  orderRef.current = order;
   const watchActiveRef = useRef(false); // joriy GPS watch faol-buyurtma rejimidami
   const pollRef = useRef(null);      // backup polling intervali
   const healthRef = useRef(null);    // reachability heartbeat timeri
