@@ -6,8 +6,11 @@ services:
     runtime: node
     rootDir: elga-api
     plan: starter
-    buildCommand: npm ci && npm run build
-    startCommand: npm start
+    # prisma generate — Prisma Client yaratiladi (aks holda runtime'da yiqiladi)
+    buildCommand: npm ci && npx prisma generate && npm run build
+    # db push — schema'dagi 22 jadval DB'ga yaratiladi (migration fayllari yo'q).
+    # --accept-data-loss YO'Q → mavjud ma'lumot xavfsiz, faqat additiv o'zgarish.
+    startCommand: npx prisma db push --skip-generate && npm start
     healthCheckPath: /health
     autoDeploy: true
     envVars:
