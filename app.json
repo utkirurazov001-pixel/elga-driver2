@@ -37,6 +37,7 @@
     },
     "android": {
       "package": "uz.elga.driver",
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0A0A"

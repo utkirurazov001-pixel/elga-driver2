@@ -4,8 +4,17 @@
     "slug": "elga-mijoz",
     "version": "1.0.1",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0A0A0A"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "updates": {
       "url": "https://u.expo.dev/e5561b58-380f-45f6-9cc4-c6af58eaec84",
       "enabled": true,
@@ -13,18 +22,26 @@
       "fallbackToCacheTimeout": 3000
     },
     "runtimeVersion": "1.0.1",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "uz.elga.mijoz",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "ELGA taksini chaqirish uchun joylashuvingizdan foydalanadi.",
+        "NSMicrophoneUsageDescription": "Ovozli buyurtma berish uchun mikrofondan foydalanadi."
+      }
+    },
     "android": {
       "package": "uz.elga.mijoz",
+      "versionCode": 2,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0A0A0A"
+      },
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "POST_NOTIFICATIONS"
-      ],
-      "config": {
-        "googleMaps": {
-          "apiKey": "AIza-SIZNING-GOOGLE-MAPS-KALITINGIZ"
-        }
-      }
+      ]
     },
     "plugins": [
       [
