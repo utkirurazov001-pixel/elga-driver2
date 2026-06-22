@@ -53,6 +53,24 @@
   var current = {route:'grid', sub:null};
   var ME = window.DB.staff[0]; // Utkir Urazov, super_admin
 
+  /* ---------------- ROL-ASOSIDA KO'RINISH (RBAC) ----------------
+     Dispetcher faqat operatsion ish bilan ishlaydi: navbat, buyurtmalar,
+     haydovchilar, mijozlar, shikoyatlar. Moliya / sadoqat / tizim bo'limlari
+     yashiriladi. super_admin (va boshqalar) — to'liq menyu.
+     SIP integratsiyasi (Uztelecom · qisqa 1226) keyin qo'shilganda dispetcher
+     aynan shu ko'rinishdan kiruvchi qo'ng'iroqlarni buyurtmaga aylantiradi. */
+  var ROLE_ROUTES = {
+    dispatcher: ['grid','radio','bag','map','car','users','warn']
+  };
+  function allowedRoutes(){ return ROLE_ROUTES[ME.role] || null; } // null = barcha bo'limlar
+  function isAllowed(route){ var a=allowedRoutes(); return !a || a.indexOf(route)>=0; }
+  function navForRole(){
+    var a=allowedRoutes(); if(!a) return NAV;
+    return NAV.map(function(g){ return [g[0], g[1].filter(function(it){ return a.indexOf(it[0])>=0; })]; })
+              .filter(function(g){ return g[1].length; });
+  }
+  function homeRoute(){ return ME.role==='dispatcher' ? 'radio' : 'grid'; }
+
   /* ---------------- LOGIN ---------------- */
   function renderLogin(){
     var app=document.getElementById('app');
@@ -86,8 +104,12 @@
 
       function enterDemo(msg){
         window.ELGA && (window.ELGA.live=false);
+        // Demo'da login bo'yicha rolni tanlash (masalan: disp1 → dispetcher ko'rinishi)
+        var who = window.DB.staff.filter(function(s){return s.login===u;})[0];
+        if(who){ ME = who; } else { ME = window.DB.staff[0]; }
         sessionStorage.setItem('elga_admin_in','1');
-        renderShell(); navigate('grid');
+        try{ sessionStorage.setItem('elga_demo_user', ME.login); }catch(e){}
+        renderShell(); navigate(homeRoute());
         window.UI.toast('Demo rejimi', msg||'Backend topilmadi — namuna ma\'lumot','info');
       }
       function enterLive(){
@@ -95,7 +117,7 @@
           if(window.ELGA.me){ ME.full_name=window.ELGA.me.full_name; ME.role=window.ELGA.me.role; ME.ini=(ME.full_name.split(' ').map(function(x){return x[0];}).join('').slice(0,2)); }
           window.ELGA.connectSocket && window.ELGA.connectSocket(); // real-time WS
           sessionStorage.setItem('elga_admin_in','1');
-          renderShell(); navigate('grid');
+          renderShell(); navigate(homeRoute());
           window.UI.toast('Backendga ulandi', 'api.elga.uz · jonli ma\'lumot + WS · 1226');
         }).catch(function(){ enterDemo('Ma\'lumot yuklanmadi — namuna rejimi'); });
       }
@@ -166,7 +188,8 @@
   function doLogout(){
     if(window.RealtimeEngine) window.RealtimeEngine.stop();
     if(window.ELGA && window.ELGA.disconnectSocket) window.ELGA.disconnectSocket();
-    sessionStorage.removeItem('elga_admin_in'); renderLogin();
+    sessionStorage.removeItem('elga_admin_in'); sessionStorage.removeItem('elga_demo_user');
+    ME = window.DB.staff[0]; renderLogin();
   }
 
   /* ---- Popover yordamchisi ---- */
@@ -211,7 +234,7 @@
         '<div><div style="font-weight:700">'+ME.full_name+'</div><div class="muted" style="font-size:12px">'+ME.phone+'</div>'+
         '<div class="tg gold" style="margin-top:4px;padding:2px 8px;font-size:10px">'+window.roleLabel(ME.role)+'</div></div></div>'+
       '<div style="padding:8px">'+
-        menuItem('cog','Sozlamalar','set')+menuItem('shield','Rollar va ruxsatlar','roles')+
+        (isAllowed('cog') ? menuItem('cog','Sozlamalar','set')+menuItem('shield','Rollar va ruxsatlar','roles') : '')+
         menuItem('refresh','Demo ma\'lumotni tiklash','reset')+
         '<div style="height:1px;background:var(--border);margin:6px 0"></div>'+
         '<div class="pm-item" data-act="logout" style="display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:9px;cursor:pointer;color:var(--danger);font-weight:600">'+window.icon('logout',16)+'Chiqish</div>'+
@@ -232,7 +255,7 @@
   /* ---- Command palette (⌘K) ---- */
   function openPalette(){
     var all=[];
-    NAV.forEach(function(g){ g[1].forEach(function(it){
+    navForRole().forEach(function(g){ g[1].forEach(function(it){
       all.push({label:it[1], group:g[0], route:it[0], sub:null, ic:it[2]});
       if(it[4]) it[4].forEach(function(s){ all.push({label:it[1]+' · '+s[1], group:g[0], route:it[0], sub:s[0], ic:it[2]}); });
     }); });
@@ -279,7 +302,7 @@
   });
 
   function sidebarHTML(){
-    var groups = NAV.map(function(g){
+    var groups = navForRole().map(function(g){
       var items = g[1].map(function(it){
         var key=it[0], label=it[1], ic=it[2], badge=it[3], sub=it[4];
         var badgeHTML = badge ? '<span class="badge'+(badge.t==='gold'?' gold':'')+'">'+badge.n+'</span>' : '';
@@ -344,6 +367,8 @@
   }
 
   function navigate(route, sub){
+    // RBAC: ruxsat etilmagan bo'limga kirilsa — bosh sahifaga qaytarish
+    if(!isAllowed(route)){ route=homeRoute(); sub=null; }
     clearPageSubs();
     current.route=route; current.sub=sub||null;
     var app=document.getElementById('app');
@@ -438,6 +463,14 @@
   });
 
   /* ---------------- START ---------------- */
-  if(sessionStorage.getItem('elga_admin_in')){ renderShell(); navigate('grid'); }
+  if(sessionStorage.getItem('elga_admin_in')){
+    // demo rolni tiklash (sahifa yangilangach)
+    if(!(window.ELGA && window.ELGA.live)){
+      var savedLogin=''; try{ savedLogin=sessionStorage.getItem('elga_demo_user')||''; }catch(e){}
+      var who = savedLogin && window.DB.staff.filter(function(s){return s.login===savedLogin;})[0];
+      if(who) ME = who;
+    }
+    renderShell(); navigate(homeRoute());
+  }
   else renderLogin();
 })();

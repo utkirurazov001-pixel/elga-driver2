@@ -26,12 +26,24 @@
         ].concat(o.cancel_reason?[['Bekor sababi','<span style="color:var(--danger)">'+o.cancel_reason+'</span>']]:[]))+'</div>'+
         '<div><div class="card-head" style="padding:0 0 12px;border:none"><h3 style="font-size:14px">Holat tarixi</h3></div>'+hist+'</div>'+
       '</div>',
-      foot: (o.status==='new'||o.status==='searching') ?
-        '<button class="btn" data-close>Yopish</button><button class="btn btn-primary" data-assign-modal="'+o.id+'">Haydovchiga tayinlash</button>' :
-        '<button class="btn" data-close>Yopish</button>',
+      foot: (function(){
+        var active = ['assigned','arriving','in_progress'].indexOf(o.status)>=0;
+        var queued = (o.status==='new'||o.status==='searching');
+        if(!active && !queued) return '<button class="btn" data-close>Yopish</button>';
+        var btns='<button class="btn" data-close>Yopish</button>'+
+          '<button class="btn btn-danger" data-cancel-modal>Bekor qilish</button>';
+        btns += queued
+          ? '<button class="btn btn-primary" data-assign-modal>Haydovchiga tayinlash</button>'
+          : '<button class="btn btn-primary" data-reassign-modal>Qayta tayinlash</button>';
+        return btns;
+      })(),
       onMount:function(back,close){
         var a=back.querySelector('[data-assign-modal]');
         if(a) a.addEventListener('click',function(){ close(); window.assignDriver(o); });
+        var ra=back.querySelector('[data-reassign-modal]');
+        if(ra) ra.addEventListener('click',function(){ close(); window.assignDriver(o, true); });
+        var ca=back.querySelector('[data-cancel-modal]');
+        if(ca) ca.addEventListener('click',function(){ close(); window.cancelOrder(o); });
         back.querySelectorAll('[data-close]').forEach(function(b){b.addEventListener('click',close);});
       }
     });
@@ -164,16 +176,24 @@
     });
   };
 
-  /* ---- YANGI BUYURTMA (to'liq manzilli) ---- */
-  window.newOrderModal = function(){
+  /* ---- YANGI BUYURTMA (to'liq manzilli · call-center) ----
+     prefill (ixtiyoriy): {phone, call_id} — kelajakda SIP (Uztelecom · 1226)
+     webhook'i kiruvchi qo'ng'iroqda bu modalni telefon raqami bilan ochib beradi.
+     Backend POST /orders ga yuboriladi (operator/dispatcher/super_admin ruxsati). */
+  window.newOrderModal = function(prefill){
+    prefill = prefill || {};
     var cityOpts = window.DB.CITIES.map(function(c){return '<option>'+c+'</option>';}).join('');
     var tarOpts = window.DB.TARIFFS.map(function(t){return '<option>'+t+'</option>';}).join('');
     var allPlaces = window.DB.places.map(function(p){return p.name;}).filter(function(v,i,a){return a.indexOf(v)===i;});
     var dl = '<datalist id="placeList">'+allPlaces.map(function(n){return '<option value="'+n+'">';}).join('')+'</datalist>';
+    // Kiruvchi qo'ng'iroq belgisi (SIP integratsiyasidan keyin call_id bilan keladi)
+    var callBanner = prefill.call_id ?
+      '<div class="hint" style="margin:0 0 12px;padding:10px 13px;background:var(--gold-soft);border-radius:11px;color:var(--gold)">'+
+      window.icon('bell',15)+' Kiruvchi qo\'ng\'iroq · 1226 · ID '+U.esc(prefill.call_id)+'</div>' : '';
     U.modal({
       title:'Yangi buyurtma', sub:'Qo\'lda buyurtma · to\'liq manzil (operator / dispetcher)', wide:true,
-      body:dl+'<div class="form-grid">'+
-        '<div class="field full"><label>Mijoz telefoni</label><input class="input mono" data-r placeholder="+998 90 123 45 67"></div>'+
+      body:dl+callBanner+'<div class="form-grid">'+
+        '<div class="field full"><label>Mijoz telefoni</label><input class="input mono" data-r value="'+U.esc(prefill.phone||'')+'" placeholder="+998 90 123 45 67"></div>'+
         '<div class="field"><label>Olish — shahar</label><select class="input" data-fc>'+cityOpts+'</select></div>'+
         '<div class="field"><label>Olish — mo\'ljal / manzil</label><input class="input" list="placeList" data-fp placeholder="Masalan: Elektroset, 15 bayroq..."></div>'+
         '<div class="field"><label>Tushirish — shahar</label><select class="input" data-tc>'+cityOpts+'</select></div>'+
@@ -194,27 +214,49 @@
           // manzillarni lug'atga qo'shish (to'planadi)
           window.DB.addPlace(fc,fp); window.DB.addPlace(tc,tp);
           var inter = fc!==tc;
-          var price = inter ? (35+Math.floor(Math.random()*70))*1000 : (12+Math.floor(Math.random()*26))*1000;
-          var id = '#'+(10621+Math.floor(Math.random()*900));
-          window.DB.orders.unshift({
-            id:id, client:'Qo\'lda kiritilgan', client_id:'-', client_ini:'QK', client_phone:ph,
-            driver:null, driver_id:null, park:null,
-            from_city:fc, from_place:fp, to_city:tc, to_place:tp,
-            from:fc+' · '+fp, to:tc+' · '+tp, route_type: inter?'inter':'intra',
-            tariff:tar, distance: inter?(20+Math.random()*60).toFixed(1):(1.5+Math.random()*8).toFixed(1),
-            duration: inter?40:12, price:price, commission:Math.round(price*0.15),
-            payment:pay, payment_status:'pending', status:'searching', created_at:'hozir', cancel_reason:null, _new:true
-          });
-          if(window.Bus) window.Bus.emit('order:new', window.DB.orders[0]);
-          close(); U.toast('Buyurtma yaratildi', id+' · '+fc+' · '+fp+' → '+tc+' · '+tp+' · haydovchi qidirilmoqda');
+          var live = !!(window.ELGA && window.ELGA.live);
+          // Demo'da darhol ko'rsatish; jonli rejimda buyurtma WS (order:new) orqali qaytadi —
+          // shu sababli ikki marta qo'shilmasligi uchun faqat demo'da lokal qo'shamiz.
+          if(!live){
+            var price = inter ? (35+Math.floor(Math.random()*70))*1000 : (12+Math.floor(Math.random()*26))*1000;
+            var id = '#'+(10621+Math.floor(Math.random()*900));
+            window.DB.orders.unshift({
+              id:id, client:'Qo\'lda kiritilgan', client_id:'-', client_ini:'QK', client_phone:ph,
+              driver:null, driver_id:null, park:null,
+              from_city:fc, from_place:fp, to_city:tc, to_place:tp,
+              from:fc+' · '+fp, to:tc+' · '+tp, route_type: inter?'inter':'intra',
+              tariff:tar, distance: inter?(20+Math.random()*60).toFixed(1):(1.5+Math.random()*8).toFixed(1),
+              duration: inter?40:12, price:price, commission:Math.round(price*0.15),
+              payment:pay, payment_status:'pending', status:'searching', created_at:'hozir', cancel_reason:null,
+              source:'call_center', call_id:prefill.call_id||null, _new:true
+            });
+            if(window.Bus) window.Bus.emit('order:new', window.DB.orders[0]);
+          }
+          // Backendga yuborish (jonli rejim). call_id/source SIP keyin ulanganda saqlanadi.
+          window.apiAction('POST','/orders',{
+            client_phone:ph, from_city:fc, from_place:fp, to_city:tc, to_place:tp,
+            tariff:tar.toLowerCase(), payment:pay, source:'call_center', call_id:prefill.call_id||null
+          }).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          close(); U.toast('Buyurtma yaratildi', fc+' · '+fp+' → '+tc+' · '+tp+' · haydovchi qidirilmoqda');
           window.rerenderPage && window.rerenderPage();
         });
       }
     });
   };
 
-  /* ---- HAYDOVCHIGA TAYINLASH ---- */
-  window.assignDriver = function(o){
+  /* ---- KIRUVCHI QO'NG'IROQ (CTI) — kelajakdagi SIP integratsiyasi nuqtasi ----
+     TODO(SIP): Uztelecom SIP / qisqa 1226 webhook'i ulanganda, kiruvchi qo'ng'iroq
+     hodisasi shu funksiyani chaqiradi → buyurtma formasi raqam bilan ochiladi.
+     Hozir real telefoniya ulanmagan; bu faqat tayyor interfeys nuqtasi. */
+  window.incomingCall = function(payload){
+    payload = payload || {};
+    window.UI.toast('Kiruvchi qo\'ng\'iroq', (payload.phone||'Noma\'lum raqam')+' · 1226');
+    window.newOrderModal({ phone:payload.phone||'', call_id:payload.call_id||null });
+  };
+
+  /* ---- HAYDOVCHIGA TAYINLASH / QAYTA TAYINLASH ----
+     isReassign=true bo'lsa — boshqa haydovchiga o'tkazadi (/reassign). */
+  window.assignDriver = function(o, isReassign){
     var free=window.DB.drivers.filter(function(d){return d.status==='free';}).slice(0,8);
     var rows=free.map(function(d){
       return '<tr class="clickable" data-pick="'+d.id+'"><td>'+U.cust(d.full_name,d.ini)+'</td><td>'+U.park(d.park_number)+'</td>'+
@@ -222,7 +264,8 @@
         '<td class="right"><button class="btn btn-primary btn-sm" data-pick="'+d.id+'">Tanlash</button></td></tr>';
     }).join('');
     U.modal({
-      title:'Haydovchiga tayinlash', sub:(o?o.id+' · '+o.from+' → '+o.to:'')+' · bo\'sh haydovchilar',
+      title:isReassign?'Qayta tayinlash':'Haydovchiga tayinlash',
+      sub:(o?o.id+' · '+o.from+' → '+o.to:'')+(isReassign&&o&&o.driver?' · joriy: '+o.driver:'')+' · bo\'sh haydovchilar',
       wide:true,
       body:'<div class="table-wrap"><table><thead><tr><th>Haydovchi</th><th>Park</th><th>Tarif</th><th>Reyting</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>',
       foot:'<button class="btn" data-close>Yopish</button>',
@@ -230,11 +273,38 @@
         back.querySelector('[data-close]').addEventListener('click',close);
         back.querySelectorAll('[data-pick]').forEach(function(b){b.addEventListener('click',function(){
           var d=window.DB.drivers.find(function(x){return x.id===b.getAttribute('data-pick');});
-          if(o){ o.driver=d.full_name; o.driver_id=d.id; o.park=d.park_number; o.status='assigned'; d.status='busy'; }
-          close(); U.toast('Tayinlandi', (o?o.id:'Buyurtma')+' → '+d.full_name);
-          if(o) window.apiAction('POST','/orders/'+encodeURIComponent(o.id)+'/assign',{driver_id:d.id}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          if(o){
+            if(isReassign && o.driver_id){ var prev=window.DB.drivers.find(function(x){return x.id===o.driver_id;}); if(prev) prev.status='free'; }
+            o.driver=d.full_name; o.driver_id=d.id; o.park=d.park_number; o.status='assigned'; d.status='busy';
+          }
+          close(); U.toast(isReassign?'Qayta tayinlandi':'Tayinlandi', (o?o.id:'Buyurtma')+' → '+d.full_name);
+          if(o) window.apiAction('POST','/orders/'+encodeURIComponent(o.id)+'/'+(isReassign?'reassign':'assign'),{driver_id:d.id}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });});
+      }
+    });
+  };
+
+  /* ---- BUYURTMANI BEKOR QILISH ---- */
+  window.cancelOrder = function(o){
+    if(!o) return;
+    U.modal({
+      title:'Buyurtmani bekor qilish', sub:o.id+' · '+(o.from||'')+' → '+(o.to||''),
+      body:'<div class="field full"><label>Bekor qilish sababi (majburiy)</label>'+
+        '<textarea class="input" data-reason placeholder="Masalan: mijoz rad etdi, haydovchi topilmadi..."></textarea>'+
+        '<div class="hint" style="margin-top:6px">Amal audit jurnaliga yoziladi.</div></div>',
+      foot:'<button class="btn" data-close>Yopish</button><button class="btn btn-danger" data-ok>Bekor qilish</button>',
+      onMount:function(back,close){
+        back.querySelector('[data-close]').addEventListener('click',close);
+        back.querySelector('[data-ok]').addEventListener('click',function(){
+          var r=back.querySelector('[data-reason]').value.trim();
+          if(r.length<3){ U.toast('Xato','Sabab kiriting (kamida 3 belgi)','error'); return; }
+          if(o.driver_id){ var d=window.DB.drivers.find(function(x){return x.id===o.driver_id;}); if(d) d.status='free'; }
+          o.status='cancelled'; o.cancel_reason=r;
+          close(); U.toast('Bekor qilindi', o.id+' bekor qilindi','error');
+          window.apiAction('POST','/orders/'+encodeURIComponent(o.id)+'/cancel',{cancel_reason:r,cancel_by:'operator'}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
+        });
       }
     });
   };
