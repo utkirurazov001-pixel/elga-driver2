@@ -75,6 +75,7 @@
           "sounds": []
         }
       ],
+      "expo-task-manager",
       "expo-audio",
       "expo-font",
       "expo-asset"

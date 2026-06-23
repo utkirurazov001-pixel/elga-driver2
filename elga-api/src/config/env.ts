@@ -49,3 +49,25 @@ export const env = {
     return !this.databaseUrl;
   },
 };
+
+// Production'da xavfsizlik kafolati: maxfiy kalitlar dev-default'da qolsa yoki
+// bo'sh bo'lsa — ishga tushmasin (fail-closed). Dev'da default'lar ishlayveradi.
+function validateProdSecrets(): void {
+  if (!env.isProd) return;
+  const checks: Array<[string, string, string]> = [
+    ['JWT_SECRET', env.jwt.accessSecret, 'dev-access-secret'],
+    ['JWT_REFRESH_SECRET', env.jwt.refreshSecret, 'dev-refresh-secret'],
+    ['PAYME_KEY', env.payme.key, 'test-payme-key'],
+    ['CLICK_SECRET', env.click.secret, 'test-click-secret'],
+  ];
+  const bad = checks
+    .filter(([, value, devDefault]) => !value || value === devDefault)
+    .map(([name]) => name);
+  if (bad.length) {
+    throw new Error(
+      `Xavfsizlik: production'da quyidagi maxfiy kalitlar sozlanmagan yoki dev-default qiymatda: ${bad.join(', ')}`
+    );
+  }
+}
+
+validateProdSecrets();
