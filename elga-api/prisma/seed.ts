@@ -19,6 +19,10 @@ const PLACES: Record<string, string[]> = {
 };
 
 async function main() {
+  // Production'da admin paroli muhit o'zgaruvchisidan majburiy olinadi (fail-closed).
+  if (process.env.NODE_ENV === 'production' && !process.env.SEED_ADMIN_PASSWORD) {
+    throw new Error("Xavfsizlik: production'da SEED_ADMIN_PASSWORD muhit o'zgaruvchisi majburiy.");
+  }
   const hash = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD ?? 'elga1226', 12);
   const roles = ['super_admin', 'operator', 'finance_admin', 'dispatcher', 'moderator'] as const;
   const logins = [process.env.SEED_ADMIN_LOGIN ?? 'admin', 'operator1', 'finance1', 'disp1', 'mod1'];

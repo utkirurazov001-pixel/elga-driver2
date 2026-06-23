@@ -5,9 +5,17 @@
    o'zgartirilmaydi — ular window.DB dan o'qiydi).
    ==================================================================== */
 (function(){
+  function defaultBase(){
+    // Lokal/dev hostda ishlatilsa — localhost; aks holda prod (HTTPS).
+    try{
+      var h = location.hostname;
+      if(h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0') return 'http://localhost:3000/v1';
+    }catch(e){}
+    return 'https://api.elga.uz/v1';
+  }
   function baseUrl(){
-    try{ return localStorage.getItem('elga_api_base') || 'http://localhost:3000/v1'; }
-    catch(e){ return 'http://localhost:3000/v1'; }
+    try{ return localStorage.getItem('elga_api_base') || defaultBase(); }
+    catch(e){ return defaultBase(); }
   }
 
   var ELGA = {

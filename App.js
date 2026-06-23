@@ -323,12 +323,42 @@ try {
   }
 } catch (e) {}
 
+// Google Play talabi: fon joylashuvini SO'RASHDAN OLDIN ochiq-oydin (prominent)
+// ma'lumotnoma ko'rsatilishi shart. Bir marta ko'rsatiladi (AsyncStorage).
+const BG_LOCATION_CONSENT_KEY = 'bg_location_consent_v1';
+async function showLocationDisclosure() {
+  try {
+    const accepted = await AsyncStorage.getItem(BG_LOCATION_CONSENT_KEY);
+    if (accepted === '1') return true;
+  } catch (e) {}
+  return new Promise((resolve) => {
+    Alert.alert(
+      'Joylashuv ruxsati',
+      "ELGA buyurtmalarni qabul qilish va bajarish uchun joylashuvingizni FONDA — ilova yopiq yoki ishlatilmayotgan paytda ham — yig'adi. Davom etish uchun roziligingiz kerak.",
+      [
+        { text: 'Bekor', style: 'cancel', onPress: () => resolve(false) },
+        {
+          text: 'Roziman',
+          onPress: async () => {
+            try { await AsyncStorage.setItem(BG_LOCATION_CONSENT_KEY, '1'); } catch (e) {}
+            resolve(true);
+          },
+        },
+      ],
+      { cancelable: false }
+    );
+  });
+}
+
 async function startBackgroundLocation() {
   try {
     if (typeof Location.startLocationUpdatesAsync !== 'function') return; // SDK qo'llamasa
     // Fon ruxsati ixtiyoriy — berilmasa foreground watch baribir ishlaydi
     let granted = true;
     try {
+      // Google Play: fon ruxsatini so'rashdan oldin ochiq-oydin ma'lumotnoma
+      const disclosed = await showLocationDisclosure();
+      if (!disclosed) return; // foydalanuvchi rad etdi — foreground baribir ishlaydi
       const { status } = await Location.requestBackgroundPermissionsAsync();
       granted = status === 'granted';
     } catch (e) { granted = false; }
