@@ -1,5 +1,5 @@
 // ============================================================
-//  ELGA Haydovchi — ilova (React Native / Expo)
+//  Ketdik Haydovchi — ilova (React Native / Expo)
 //  Xarita: OpenStreetMap (Leaflet WebView)
 //  Server: https://api.elga.uz
 // ============================================================
@@ -81,13 +81,13 @@ if (Platform.OS === 'android') {
 
 const PERSISTENT_ID = 'elga-driver-active';
 
-// Fon ko'rsatkichi: ekranning yuqori qismida ELGA logosi bilan doimiy bildirishnoma
+// Fon ko'rsatkichi: ekranning yuqori qismida Ketdik logosi bilan doimiy bildirishnoma
 async function showPersistentNotif(status = 'Buyurtma kutilmoqda...') {
   try {
     await Notifications.scheduleNotificationAsync({
       identifier: PERSISTENT_ID,
       content: {
-        title: '🚕 ELGA Haydovchi',
+        title: '🚕 Ketdik Haydovchi',
         body: status,
         sticky: true,          // Android: siljitib o'chirib bo'lmaydi
         priority: 'low',
@@ -334,7 +334,7 @@ async function showLocationDisclosure() {
   return new Promise((resolve) => {
     Alert.alert(
       'Joylashuv ruxsati',
-      "ELGA buyurtmalarni qabul qilish va bajarish uchun joylashuvingizni FONDA — ilova yopiq yoki ishlatilmayotgan paytda ham — yig'adi. Davom etish uchun roziligingiz kerak.",
+      "Ketdik buyurtmalarni qabul qilish va bajarish uchun joylashuvingizni FONDA — ilova yopiq yoki ishlatilmayotgan paytda ham — yig'adi. Davom etish uchun roziligingiz kerak.",
       [
         { text: 'Bekor', style: 'cancel', onPress: () => resolve(false) },
         {
@@ -372,7 +372,7 @@ async function startBackgroundLocation() {
       pausesUpdatesAutomatically: false,
       showsBackgroundLocationIndicator: true,
       foregroundService: {
-        notificationTitle: '🚕 ELGA Haydovchi',
+        notificationTitle: '🚕 Ketdik Haydovchi',
         notificationBody: 'Joylashuv kuzatilmoqda',
         notificationColor: '#FFC700',
       },
@@ -493,14 +493,14 @@ export default function App() {
   );
 }
 
-// ===== ELGA brend wordmark (matn asosida) — EL sariq, GA oq, TAXI sariq =====
+// ===== Ketdik brend wordmark (matn asosida) — Ket sariq, dik oq, TAXI sariq =====
 function ElgaLogo({ size = 56, tagline = false }) {
   const tx = Math.round(size * 0.32);
   return (
     <View style={{ alignItems: 'center' }}>
       <Text style={{ fontSize: size, fontWeight: '800', letterSpacing: -size * 0.02, lineHeight: size * 1.05 }}>
-        <Text style={{ color: YELLOW }}>EL</Text>
-        <Text style={{ color: WHITE }}>GA</Text>
+        <Text style={{ color: YELLOW }}>Ket</Text>
+        <Text style={{ color: WHITE }}>dik</Text>
       </Text>
       <Text style={{ color: YELLOW, fontSize: tx, fontWeight: '800', letterSpacing: tx * 0.5, marginTop: -size * 0.08 }}>
         TAXI
@@ -2241,7 +2241,7 @@ function TripComplete({ trip, insets, onRate, onDone }) {
           <Text style={{ color: WHITE, fontSize: 14, fontWeight: '500' }}>{fmt(gross)} so'm</Text>
         </View>
         <View style={s.completeRow}>
-          <Text style={s.completeLbl}>ELGA komissiya</Text>
+          <Text style={s.completeLbl}>Ketdik komissiya</Text>
           <Text style={{ color: RED, fontSize: 14, fontWeight: '500' }}>−{fmt(commission)} so'm</Text>
         </View>
         <View style={[s.completeRow, { borderTopWidth: 1, borderTopColor: BORDER, paddingTop: 14, marginTop: 4, marginBottom: 0 }]}>
@@ -2662,9 +2662,9 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
             <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, marginLeft: 4 }}>ILOVA HAQIDA</Text>
             <View style={{ backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: BORDER, marginBottom: 16 }}>
               {[
-                { label: 'Versiya', value: 'ELGA Haydovchi v1.0.0' },
+                { label: 'Versiya', value: 'Ketdik Haydovchi v1.0.0' },
                 { label: 'Qurilgan', value: 'Expo SDK 54' },
-                { label: 'Litsenziya', value: '© 2025 ELGA TAXI' },
+                { label: 'Litsenziya', value: '© 2025 Ketdik' },
               ].map((item, i, arr) => (
                 <View key={i} style={[{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 }, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: BORDER }]}>
                   <Text style={{ color: GRAY1, fontSize: 14 }}>{item.label}</Text>

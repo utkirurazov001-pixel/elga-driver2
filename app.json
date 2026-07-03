@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ELGA Haydovchi",
+    "name": "Ketdik Haydovchi",
     "slug": "elga-taxi",
     "version": "1.0.2",
     "orientation": "portrait",
@@ -23,20 +23,20 @@
     "runtimeVersion": "1.0.2",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "uz.elga.haydovchi",
+      "bundleIdentifier": "uz.ketdik.haydovchi",
       "infoPlist": {
         "UIBackgroundModes": [
           "location",
           "fetch",
           "remote-notification"
         ],
-        "NSLocationWhenInUseUsageDescription": "ELGA haydovchi ilovasi buyurtmalarni topish uchun joylashuvdan foydalanadi.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "ELGA haydovchi ilovasi fonda ishlaganda ham buyurtmalarni qabul qilish uchun joylashuvdan foydalanadi.",
-        "NSLocationAlwaysUsageDescription": "ELGA haydovchi ilovasi fonda ham joylashuvdan foydalanadi."
+        "NSLocationWhenInUseUsageDescription": "Ketdik haydovchi ilovasi buyurtmalarni topish uchun joylashuvdan foydalanadi.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Ketdik haydovchi ilovasi fonda ishlaganda ham buyurtmalarni qabul qilish uchun joylashuvdan foydalanadi.",
+        "NSLocationAlwaysUsageDescription": "Ketdik haydovchi ilovasi fonda ham joylashuvdan foydalanadi."
       }
     },
     "android": {
-      "package": "uz.elga.driver",
+      "package": "uz.ketdik.driver",
       "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -54,7 +54,7 @@
         "RECEIVE_BOOT_COMPLETED"
       ],
       "foregroundService": {
-        "notificationTitle": "ELGA Haydovchi",
+        "notificationTitle": "Ketdik Haydovchi",
         "notificationBody": "Buyurtma kutilmoqda..."
       }
     },
@@ -62,8 +62,8 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ELGA haydovchi ilovasi buyurtmalarni topish uchun joylashuvdan foydalanadi.",
-          "locationAlwaysAndWhenInUsePermission": "ELGA fonda ham ishlashi uchun joylashuv kerak.",
+          "locationWhenInUsePermission": "Ketdik haydovchi ilovasi buyurtmalarni topish uchun joylashuvdan foydalanadi.",
+          "locationAlwaysAndWhenInUsePermission": "Ketdik fonda ham ishlashi uchun joylashuv kerak.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
