@@ -37,6 +37,15 @@ const BASE = 'https://api.elga.uz';
 // Faol (tugamagan) buyurtma holatlari — bularda buyurtma "tirik" hisoblanadi.
 // completed/cancelled/paid — yakuniy holatlar (faol emas).
 const ACTIVE_STATUSES = ['searching', 'assigned', 'accepted', 'arrived', 'in_progress'];
+// OFFER = haydovchiga kelgan, LEKIN hali qabul qilinmagan taklif (broadcast).
+//   Bu server tomonда haydovchining "faol buyurtmasi" EMAS — /api/me/active-order
+//   uni qaytarmaydi. Shuning uchun offer'ni active-order polling BILAN tozalamaymiz
+//   (aks holda ~5s'da "keldi va yo'qoldi" bo'ladi). Offer o'zining TTL taymeri,
+//   reject, yoki order_cancelled bilan yopiladi.
+const OFFER_STATUSES = ['searching', 'assigned'];
+// ACCEPTED = haydovchi qabul qilgan, serverdagi HAQIQIY faol buyurtma. Faqat
+//   shularni active-order (server = yagona haqiqat) bilan solishtirib tozalaymiz.
+const ACCEPTED_STATUSES = ['accepted', 'arrived', 'in_progress'];
 
 // Faol buyurtma lokal saqlanadigan kalit (crash/kill/OS-restart'da yo'qolmaydi).
 const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
@@ -675,6 +684,7 @@ function AppInner() {
   const watchActiveRef = useRef(false); // joriy GPS watch faol-buyurtma rejimidami
   const pollRef = useRef(null);      // backup polling intervali
   const healthRef = useRef(null);    // reachability heartbeat timeri
+  const offerTimerRef = useRef(null); // offer TTL: qabul qilinmasa o'zi yopiladi
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
   const [mapReady, setMapReady] = useState(false);
 
@@ -905,6 +915,16 @@ function AppInner() {
       try {
         setOrder(o || null);
         setChatMessages([]);
+        // Offer TTL: qabul qilinmasa o'zi yo'qoladi (fantom bo'lib qolmasin).
+        // Server bergan ttl bo'lsa (ms) shuni, aks holda 30s. Faqat OFFER uchun.
+        clearOfferTimer();
+        if (o && OFFER_STATUSES.includes(o.status)) {
+          const ttl = Number(o.offer_ttl_ms) > 0 ? Number(o.offer_ttl_ms) : 30000;
+          offerTimerRef.current = setTimeout(() => {
+            setOrder((prev) => (prev && prev.id === o.id && OFFER_STATUSES.includes(prev.status)) ? null : prev);
+            updatePersistentNotif('Buyurtma kutilmoqda...');
+          }, ttl);
+        }
         // Baland ovozli vibrasiya (3x)
         Vibration.vibrate([0, 400, 200, 400, 200, 400]);
         // Ovozli e'lon (o'zbek tilida)
@@ -922,9 +942,16 @@ function AppInner() {
       }
     });
     s.on('order_cancelled', () => {
+      clearOfferTimer();
       notify('Buyurtma bekor qilindi', '');
       setOrder(null);
       setChatMessages([]);
+      updatePersistentNotif('Buyurtma kutilmoqda...');
+    });
+    // Boshqa haydovchi oldindan oldi (yoki offer muddati tugadi) — offer'ni yopamiz
+    s.on('order_taken', () => {
+      clearOfferTimer();
+      setOrder((prev) => (prev && OFFER_STATUSES.includes(prev.status)) ? null : prev);
       updatePersistentNotif('Buyurtma kutilmoqda...');
     });
     s.on('order_update', (o) => setOrder((p) => p ? { ...p, ...o } : o));
@@ -949,6 +976,11 @@ function AppInner() {
     try { await Notifications.scheduleNotificationAsync({ content: { title, body }, trigger: null }); } catch (e) {}
   }
 
+  // Offer TTL taymerini bekor qilish (offer qabul/rad/bekor bo'lganda)
+  function clearOfferTimer() {
+    if (offerTimerRef.current) { clearTimeout(offerTimerRef.current); offerTimerRef.current = null; }
+  }
+
   // Faol buyurtmani serverdan tiklash — server YAGONA haqiqat manbai.
   // Ilova ochilganda, socket connect/reconnect bo'lganda, internet/foreground
   // qaytganda chaqiriladi. Tarmoq xatosida lokal holat saqlanadi (tozalanmaydi).
@@ -960,8 +992,11 @@ function AppInner() {
         // Bor buyurtma — eski holat bilan birlashtirib yangilaymiz (flicker bo'lmaydi)
         setOrder((prev) => (prev && prev.id === r.order.id) ? { ...prev, ...r.order } : r.order);
       } else if (r) {
-        // Server: faol buyurtma yo'q → lokaldagi eskirgan (fantom) buyurtmani tozalaymiz
-        setOrder((prev) => (prev && ACTIVE_STATUSES.includes(prev.status)) ? null : prev);
+        // Server: faol buyurtma yo'q → faqat QABUL QILINGAN (accepted+) buyurtmани
+        // tozalaymiz (u serverda bekor/yakunlangan). Hali qabul qilinmagan OFFER'ni
+        // TEGMAYMIZ — u active-order'da bo'lmasligi normal, o'z TTL/reject bilan yopiladi.
+        // (Ilgari OFFER ham tozalanardi -> "buyurtma keldi va ~5s'da yo'qoldi" bug'i.)
+        setOrder((prev) => (prev && ACCEPTED_STATUSES.includes(prev.status)) ? null : prev);
       }
     } catch (e) {
       // Tarmoq xatosi — lokal (saqlangan) holatni saqlab qolamiz
@@ -1305,6 +1340,7 @@ function AppInner() {
   // ---- BUYURTMA AMALLARI ----
   async function orderAction(action) {
     if (!order) return;
+    clearOfferTimer(); // haydovchi offerga javob berdi — TTL taymeri kerak emas
     const orderId = order.id;
     setLoading(true);
     try {
