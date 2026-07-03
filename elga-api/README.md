@@ -1,4 +1,4 @@
-# Ketdik 1226 — Backend API (`api.elga.uz`)
+# KetdikGo 1226 — Backend API (`api.elga.uz`)
 
 Node.js 20 · TypeScript (strict) · Express · Zod · JWT + bcrypt · RBAC · pino.
 TZ (`Ketdik1226_Backend_TZ.md`) §2–§9 asosida.

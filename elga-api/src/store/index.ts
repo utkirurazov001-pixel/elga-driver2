@@ -282,7 +282,7 @@ class MemoryStore {
       { id: 'RW1', title: "5 000 so'm chegirma", description: 'Keyingi safarga chegirma', cost_points: 200, type: 'discount', stock: 9999, is_active: true },
       { id: 'RW2', title: 'Bepul safar (Ekonom)', description: 'Shahar ichi 1 ta bepul safar', cost_points: 850, type: 'free_ride', stock: 120, is_active: true },
       { id: 'RW3', title: '10% chegirma kuponi', description: '30 kun amal qiladi', cost_points: 400, type: 'discount', stock: 500, is_active: true },
-      { id: 'RW4', title: 'Ketdik termo-stakan', description: 'Brendlangan sovg\'a', cost_points: 1500, type: 'gift', stock: 40, is_active: true },
+      { id: 'RW4', title: 'KetdikGo termo-stakan', description: 'Brendlangan sovg\'a', cost_points: 1500, type: 'gift', stock: 40, is_active: true },
     ];
     this.promos = [
       { id: 'PR1', code: 'YANGI2026', type: 'percent', value: 20, min_order: 20000, usage_limit: 1000, used_count: 412, valid_to: '2026-12-31', is_active: true },

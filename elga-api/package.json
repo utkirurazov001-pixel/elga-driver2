@@ -1,7 +1,7 @@
 {
   "name": "elga-api",
   "version": "1.0.0",
-  "description": "Ketdik 1226 — Backend API (api.elga.uz)",
+  "description": "KetdikGo 1226 — Backend API (api.elga.uz)",
   "type": "commonjs",
   "main": "dist/server.js",
   "engines": { "node": ">=20" },
