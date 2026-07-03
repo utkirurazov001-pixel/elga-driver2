@@ -1,5 +1,5 @@
 /**
- * Ketdik 1226 — o'zgarmas konstantalar (brand.config.json bilan mos).
+ * KetdikGo 1226 — o'zgarmas konstantalar (brand.config.json bilan mos).
  * RULE-03/04/05/07 — bu qiymatlar hech qachon o'zgartirilmaydi.
  */
 
@@ -17,9 +17,9 @@ export const TARIFFS = ['ekonom', 'komfort', 'biznes'] as const;
 
 // RULE-05/07 — brend
 export const BRAND = {
-  name: 'Ketdik',
+  name: 'KetdikGo',
   dispatcher: DISPATCHER,
-  tagline: 'HAR DOIM YONINGIZDA!',
+  tagline: 'Belgila. Ko\'r. Ketdik.',
   pillars: ['TEZ', 'XAVFSIZ', 'ISHONCHLI'] as const,
   colors: { gold: '#FFCC00', goldDark: '#C9A24B', dark: '#15171C', white: '#FFFFFF' },
   font: 'Manrope',

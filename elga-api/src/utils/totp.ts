@@ -56,6 +56,6 @@ export function verifyTotp(secret: string, token: string, t = Date.now()): boole
   return false;
 }
 
-export function otpauthUrl(secret: string, label: string, issuer = 'Ketdik 1226'): string {
+export function otpauthUrl(secret: string, label: string, issuer = 'KetdikGo 1226'): string {
   return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(label)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&period=30&digits=6`;
 }
