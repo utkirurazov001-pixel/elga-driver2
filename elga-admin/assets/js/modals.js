@@ -1,5 +1,5 @@
 /* ====================================================================
-   Ketdik Admin — Modal oynalar va amallar
+   KetdikGo Admin — Modal oynalar va amallar
    ==================================================================== */
 (function(){
   var U = window.UI;

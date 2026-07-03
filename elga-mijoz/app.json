@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Ketdik",
+    "name": "KetdikGo",
     "slug": "elga-mijoz",
     "version": "1.0.1",
     "orientation": "portrait",
@@ -26,7 +26,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "uz.ketdik.mijoz",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Ketdik taksini chaqirish uchun joylashuvingizdan foydalanadi.",
+        "NSLocationWhenInUseUsageDescription": "KetdikGo taksini chaqirish uchun joylashuvingizdan foydalanadi.",
         "NSMicrophoneUsageDescription": "Ovozli buyurtma berish uchun mikrofondan foydalanadi."
       }
     },
@@ -47,7 +47,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Ketdik taksini chaqirish uchun joylashuvingizdan foydalanadi."
+          "locationWhenInUsePermission": "KetdikGo taksini chaqirish uchun joylashuvingizdan foydalanadi."
         }
       ],
       "expo-notifications",

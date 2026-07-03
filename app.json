@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Ketdik Haydovchi",
+    "name": "KetdikGo Haydovchi",
     "slug": "elga-taxi",
     "version": "1.0.2",
     "orientation": "portrait",
@@ -30,9 +30,9 @@
           "fetch",
           "remote-notification"
         ],
-        "NSLocationWhenInUseUsageDescription": "Ketdik haydovchi ilovasi buyurtmalarni topish uchun joylashuvdan foydalanadi.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Ketdik haydovchi ilovasi fonda ishlaganda ham buyurtmalarni qabul qilish uchun joylashuvdan foydalanadi.",
-        "NSLocationAlwaysUsageDescription": "Ketdik haydovchi ilovasi fonda ham joylashuvdan foydalanadi."
+        "NSLocationWhenInUseUsageDescription": "KetdikGo haydovchi ilovasi buyurtmalarni topish uchun joylashuvdan foydalanadi.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "KetdikGo haydovchi ilovasi fonda ishlaganda ham buyurtmalarni qabul qilish uchun joylashuvdan foydalanadi.",
+        "NSLocationAlwaysUsageDescription": "KetdikGo haydovchi ilovasi fonda ham joylashuvdan foydalanadi."
       }
     },
     "android": {
@@ -54,7 +54,7 @@
         "RECEIVE_BOOT_COMPLETED"
       ],
       "foregroundService": {
-        "notificationTitle": "Ketdik Haydovchi",
+        "notificationTitle": "KetdikGo Haydovchi",
         "notificationBody": "Buyurtma kutilmoqda..."
       }
     },
@@ -62,8 +62,8 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Ketdik haydovchi ilovasi buyurtmalarni topish uchun joylashuvdan foydalanadi.",
-          "locationAlwaysAndWhenInUsePermission": "Ketdik fonda ham ishlashi uchun joylashuv kerak.",
+          "locationWhenInUsePermission": "KetdikGo haydovchi ilovasi buyurtmalarni topish uchun joylashuvdan foydalanadi.",
+          "locationAlwaysAndWhenInUsePermission": "KetdikGo fonda ham ishlashi uchun joylashuv kerak.",
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }

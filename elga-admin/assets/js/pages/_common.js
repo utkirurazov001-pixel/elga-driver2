@@ -1,5 +1,5 @@
 /* ====================================================================
-   Ketdik Admin — sahifalar uchun umumiy yordamchilar
+   KetdikGo Admin — sahifalar uchun umumiy yordamchilar
    ==================================================================== */
 window.PAGES = window.PAGES || {};
 (function(){

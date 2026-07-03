@@ -1,5 +1,5 @@
 /* ====================================================================
-   Ketdik Admin — Operatsion sahifalar (Uber/Yandex uslubidagi funksiyalar)
+   KetdikGo Admin — Operatsion sahifalar (Uber/Yandex uslubidagi funksiyalar)
    ==================================================================== */
 (function(){
   var U = window.UI;

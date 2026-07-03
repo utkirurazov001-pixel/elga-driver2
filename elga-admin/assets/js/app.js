@@ -1,5 +1,5 @@
 /* ====================================================================
-   Ketdik 1226 — Admin panel · ilova qobig'i (shell + router)
+   KetdikGo 1226 — Admin panel · ilova qobig'i (shell + router)
    ==================================================================== */
 (function(){
   // Navigatsiya tuzilishi: [route, label, ikona, badge, [sub:[subkey,label]]]
@@ -81,8 +81,8 @@
         '<div class="login-anchor"><b>1226</b><span>DISPETCHER</span></div>'+
         '<div class="login-brand">'+
           '<div class="checker"></div>'+
-          '<div class="lockup"><span class="el">EL</span><span class="ga">GA</span><span class="taxi">TAXI</span></div>'+
-          '<div class="login-slogan">HAR DOIM YONINGIZDA!</div>'+
+          '<div class="lockup"><span class="el">Ket</span><span class="ga">dik</span><span class="taxi">Go</span></div>'+
+          '<div class="login-slogan">Belgila. Ko\'r. Ketdik.</div>'+
           '<div class="login-pillars"><span>TEZ</span><span>XAVFSIZ</span><span>ISHONCHLI</span></div>'+
         '</div>'+
         '<form id="loginForm">'+
@@ -315,7 +315,7 @@
 
     return '<aside class="sidebar">'+
       '<div class="brand"><div class="lockup-row"><div class="checker"></div>'+
-        '<div class="lockup"><span class="el">EL</span><span class="ga">GA</span><span class="taxi">TAXI</span></div>'+
+        '<div class="lockup"><span class="el">Ket</span><span class="ga">dik</span><span class="taxi">Go</span></div>'+
         '<div class="dispatch"><b>1226</b><span>DISPETCHER</span></div></div>'+
         '<div class="slogan">Har doim yoningizda!</div></div>'+
       '<div class="sb-search"><div>'+window.icon('search',16)+'<input placeholder="Bo\'limni qidirish..."><kbd>⌘K</kbd></div></div>'+

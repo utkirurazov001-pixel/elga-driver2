@@ -1,4 +1,4 @@
-/* Ketdik Admin — SVG ikonlar (Lucide uslubi, stroke) */
+/* KetdikGo Admin — SVG ikonlar (Lucide uslubi, stroke) */
 window.ICONS = {
   grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
   radio:'<path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a9 9 0 0 1 0 14M5 19A9 9 0 0 1 5 5"/><circle cx="12" cy="12" r="2"/>',
