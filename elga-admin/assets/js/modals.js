@@ -1,5 +1,5 @@
 /* ====================================================================
-   ELGA Admin — Modal oynalar va amallar
+   Ketdik Admin — Modal oynalar va amallar
    ==================================================================== */
 (function(){
   var U = window.UI;

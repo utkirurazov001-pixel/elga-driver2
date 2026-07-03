@@ -32,7 +32,7 @@ async function main(): Promise<void> {
   }, 30000);
 
   server.listen(env.port, () => {
-    logger.info(`ELGA API ishga tushdi → http://localhost:${env.port}/health  · WS + 1226`);
+    logger.info(`Ketdik API ishga tushdi → http://localhost:${env.port}/health  · WS + 1226`);
   });
 }
 

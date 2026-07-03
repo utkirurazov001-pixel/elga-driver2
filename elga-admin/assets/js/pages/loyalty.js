@@ -1,5 +1,5 @@
 /* ====================================================================
-   ELGA Admin — Sadoqat (loyalty) bo'limi · RULE-08
+   Ketdik Admin — Sadoqat (loyalty) bo'limi · RULE-08
    ==================================================================== */
 (function(){
   var U = window.UI;

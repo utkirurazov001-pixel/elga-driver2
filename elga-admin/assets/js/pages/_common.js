@@ -1,5 +1,5 @@
 /* ====================================================================
-   ELGA Admin — sahifalar uchun umumiy yordamchilar
+   Ketdik Admin — sahifalar uchun umumiy yordamchilar
    ==================================================================== */
 window.PAGES = window.PAGES || {};
 (function(){

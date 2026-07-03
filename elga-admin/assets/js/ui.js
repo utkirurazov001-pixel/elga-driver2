@@ -1,5 +1,5 @@
 /* ====================================================================
-   ELGA Admin — UI yordamchilar va qayta ishlatiladigan komponentlar
+   Ketdik Admin — UI yordamchilar va qayta ishlatiladigan komponentlar
    ==================================================================== */
 (function(){
   var UI = {};

@@ -1,4 +1,4 @@
-# ELGA — Play Store tayyorgarlik to'plami
+# Ketdik — Play Store tayyorgarlik to'plami
 
 Hisob tasdiqlangach (Google email yuboradi), quyidagilarni copy-paste qilasiz.
 
@@ -15,16 +15,16 @@ PR merge bo'lib, GitHub Pages yoqilgach, manzillar:
 
 ---
 
-## 1. Store listing — ELGA Haydovchi
+## 1. Store listing — Ketdik Haydovchi
 
-**App name (50):** `ELGA Haydovchi`
+**App name (50):** `Ketdik Haydovchi`
 
 **Short description (80):**
-`Haydovchilar uchun ELGA taksi ilovasi — buyurtma qabul qiling, ko'proq toping.`
+`Haydovchilar uchun Ketdik taksi ilovasi — buyurtma qabul qiling, ko'proq toping.`
 
 **Full description (4000):**
 ```
-ELGA Haydovchi — Surxondaryo viloyati (Angor va Muzrabot) uchun taksi ilovasi.
+Ketdik Haydovchi — Surxondaryo viloyati (Angor va Muzrabot) uchun taksi ilovasi.
 
 Haydovchilar uchun:
 • Yaqin atrofdagi buyurtmalarni real vaqtда qabul qiling
@@ -40,18 +40,18 @@ Internet zaif bo'lsa ham ishonchli ishlaydi:
 • Buyurtma holati yo'qolmaydi (internet qaytganda sinxronlanadi)
 • Tog'/qishloq hududlarида ham barqaror
 
-ELGA bilan ishlang — qulay, tez va ishonchli.
+Ketdik bilan ishlang — qulay, tez va ishonchli.
 
 Operator: «BUSINESS-CENTER-ANGOR» MChJ.
 Qo'llab-quvvatlash: innokasbmarkazi@gmail.com
 ```
 
 **Short description (RU, 80):**
-`Приложение ELGA для водителей такси — принимайте заказы и зарабатывайте больше.`
+`Приложение Ketdik для водителей такси — принимайте заказы и зарабатывайте больше.`
 
 **Full description (RU):**
 ```
-ELGA Водитель — приложение такси для Сурхандарьинской области (Ангор, Музрабат).
+Ketdik Водитель — приложение такси для Сурхандарьинской области (Ангор, Музрабат).
 
 Для водителей:
 • Принимайте заказы поблизости в реальном времени
@@ -73,16 +73,16 @@ ELGA Водитель — приложение такси для Сурханд�
 
 ---
 
-## 2. Store listing — ELGA Mijoz
+## 2. Store listing — Ketdik Mijoz
 
-**App name (50):** `ELGA Mijoz`
+**App name (50):** `Ketdik Mijoz`
 
 **Short description (80):**
-`Bir bosishда taksi chaqiring — tez, qulay va arzon. ELGA taksi.`
+`Bir bosishда taksi chaqiring — tez, qulay va arzon. Ketdik taksi.`
 
 **Full description (4000):**
 ```
-ELGA Mijoz — Surxondaryo viloyati (Angor va Muzrabot) uchun taksi chaqirish ilovasi.
+Ketdik Mijoz — Surxondaryo viloyati (Angor va Muzrabot) uchun taksi chaqirish ilovasi.
 
 Imkoniyatlar:
 • Bir bosishда taksi chaqiring
@@ -100,11 +100,11 @@ Qo'llab-quvvatlash: innokasbmarkazi@gmail.com
 ```
 
 **Short description (RU, 80):**
-`Вызов такси в одно касание — быстро, удобно и недорого. ELGA такси.`
+`Вызов такси в одно касание — быстро, удобно и недорого. Ketdik такси.`
 
 **Full description (RU):**
 ```
-ELGA Клиент — приложение для вызова такси в Сурхандарьинской области (Ангор, Музрабат).
+Ketdik Клиент — приложение для вызова такси в Сурхандарьинской области (Ангор, Музрабат).
 
 Возможности:
 • Вызов такси в одно касание
@@ -135,7 +135,7 @@ ELGA Клиент — приложение для вызова такси в С�
 
 ## 4. Data safety formasi javoblari
 
-### ELGA Haydovchi
+### Ketdik Haydovchi
 | Savol | Javob |
 |------|-------|
 | Ma'lumot yig'iladimi? | Ha |
@@ -149,7 +149,7 @@ ELGA Клиент — приложение для вызова такси в С�
 | Shifrlanadi (in transit)? | **Ha** (HTTPS) |
 | Foydalanuvchi o'chira oladimi? | **Ha** (email orqali so'rov) |
 
-### ELGA Mijoz
+### Ketdik Mijoz
 | Savol | Javob |
 |------|-------|
 | **Location → Precise location** | Ha · App functionality · **fon YO'Q** (faqat ochiqда) |
@@ -195,7 +195,7 @@ buyurtma o'tkazib yuboriladi va mijoz mashinani kuzatolmaydi.
 | Asset | O'lcham | Eslatma |
 |------|---------|--------|
 | App icon | 512×512 PNG | bizда `assets/icon.png` (1254×1254) bor — Play o'zi qabul qiladi yoki 512 ga keltiring |
-| Feature graphic | 1024×500 PNG/JPG | **majburiy** — bitta banner rasm (logo + "ELGA Taksi") |
+| Feature graphic | 1024×500 PNG/JPG | **majburiy** — bitta banner rasm (logo + "Ketdik Taksi") |
 | Phone screenshots | kamida 2 ta, 16:9 yoki 9:16 | ilova ekranlaridан (login, xarita, buyurtma) |
 
 > Skrinshotlarni internal test'дан keyin telefonда olasiz.
@@ -203,7 +203,7 @@ buyurtma o'tkazib yuboriladi va mijoz mashinani kuzatolmaydi.
 ---
 
 ## 9. Hisob ochilgach — qadamlar tartibi
-1. **Create app** → ELGA Haydovchi (UZ, App, Free)
+1. **Create app** → Ketdik Haydovchi (UZ, App, Free)
 2. **Internal testing** → AAB yuklash → o'zingiz sinash
 3. **Store listing** (yuqoridagi matnlar) + ikonka + feature graphic + skrinshot
 4. **Privacy policy URL** qo'yish

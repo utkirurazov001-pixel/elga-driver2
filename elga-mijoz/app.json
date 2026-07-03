@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ELGA Mijoz",
+    "name": "Ketdik",
     "slug": "elga-mijoz",
     "version": "1.0.1",
     "orientation": "portrait",
@@ -24,14 +24,14 @@
     "runtimeVersion": "1.0.1",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "uz.elga.mijoz",
+      "bundleIdentifier": "uz.ketdik.mijoz",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "ELGA taksini chaqirish uchun joylashuvingizdan foydalanadi.",
+        "NSLocationWhenInUseUsageDescription": "Ketdik taksini chaqirish uchun joylashuvingizdan foydalanadi.",
         "NSMicrophoneUsageDescription": "Ovozli buyurtma berish uchun mikrofondan foydalanadi."
       }
     },
     "android": {
-      "package": "uz.elga.mijoz",
+      "package": "uz.ketdik.mijoz",
       "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -47,7 +47,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "ELGA taksini chaqirish uchun joylashuvingizdan foydalanadi."
+          "locationWhenInUsePermission": "Ketdik taksini chaqirish uchun joylashuvingizdan foydalanadi."
         }
       ],
       "expo-notifications",

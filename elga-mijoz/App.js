@@ -1,5 +1,5 @@
 // ============================================================
-//  ELGA Mijoz — taksi chaqirish ilovasi (React Native / Expo)
+//  Ketdik — taksi chaqirish ilovasi (React Native / Expo)
 //  Xarita: OpenStreetMap (Leaflet WebView)
 //  Server: https://api.elga.uz
 // ============================================================
@@ -215,7 +215,7 @@ async function reverseGeocode(lat, lng) {
   try {
     const r = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=uz`,
-      { headers: { 'User-Agent': 'ELGA-Taxi/1.0' } }
+      { headers: { 'User-Agent': 'Ketdik-Taxi/1.0' } }
     );
     const d = await r.json();
     if (d.display_name) {
@@ -315,7 +315,7 @@ export default function App() {
   );
 }
 
-// ===== ELGA brend wordmark (matn asosida — qo'shimcha paketsiz) =====
+// ===== Ketdik brend wordmark (matn asosida — qo'shimcha paketsiz) =====
 // EL → sariq, GA → oq, TAXI → sariq (brend spetsifikatsiyasi)
 const CAR_CLASS_ICONS = {
   ekonom: 'car-outline',
@@ -353,8 +353,8 @@ function ElgaLogo({ size = 56, tagline = false }) {
   return (
     <View style={{ alignItems: 'center' }}>
       <Text style={{ fontSize: size, fontWeight: '800', letterSpacing: -size * 0.02, lineHeight: size * 1.05 }}>
-        <Text style={{ color: YELLOW }}>EL</Text>
-        <Text style={{ color: WHITE }}>GA</Text>
+        <Text style={{ color: YELLOW }}>Ket</Text>
+        <Text style={{ color: WHITE }}>dik</Text>
       </Text>
       <Text style={{ color: YELLOW, fontSize: tx, fontWeight: '800', letterSpacing: tx * 0.5, marginTop: -size * 0.08 }}>
         TAXI
@@ -933,7 +933,7 @@ function AppInner() {
   async function shareTrip() {
     if (!order?.share_token) { Alert.alert('Ulashib bo\'lmadi', 'Token mavjud emas'); return; }
     const url = `${BASE}/api/orders/share/${order.share_token}`;
-    const msg = `Men ELGA taxi bilan sayohatdaman!\nKuzatish: ${url}`;
+    const msg = `Men Ketdik taxi bilan sayohatdaman!\nKuzatish: ${url}`;
     try {
       await Linking.openURL(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(msg)}`);
     } catch (_) {
@@ -2295,7 +2295,7 @@ function AppInner() {
 
             <TouchableOpacity style={s.aiEntryCard} activeOpacity={0.8} onPress={() => {}}>
               <Ionicons name="sparkles" size={18} color={YELLOW} style={{ marginRight: 10 }} />
-              <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>ELGA AI yordamchi</Text>
+              <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>Ketdik AI yordamchi</Text>
               <View style={{ backgroundColor: GRAY2, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
                 <Text style={{ color: WHITE, fontSize: 11, fontWeight: '600' }}>Beta</Text>
               </View>

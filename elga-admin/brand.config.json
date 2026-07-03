@@ -1,6 +1,6 @@
 {
   "$schema": "https://elga.uz/schemas/brand-config-v1.json",
-  "brand": "ELGA TAXI",
+  "brand": "Ketdik",
   "version": "1.0",
   "dispatcher": "1226",
   "tagline": "HAR DOIM YONINGIZDA!",
@@ -8,9 +8,9 @@
   "region": { "districts": ["Angor", "Muzrabot", "Jarqo'rg'on", "Sherobod", "Termiz", "Denov"], "region": "Surxondaryo", "country": "O'zbekiston" },
 
   "logo": {
-    "lockup": "EL + GA + TAXI",
-    "EL": { "color": "#FFCC00", "weight": 800 },
-    "GA": { "color": "#FFFFFF", "weight": 800 },
+    "lockup": "Ket + dik + TAXI",
+    "Ket": { "color": "#FFCC00", "weight": 800 },
+    "dik": { "color": "#FFFFFF", "weight": 800 },
     "TAXI": { "color": "#FFCC00", "tracking": "wide" },
     "motif": "checkered taxi pattern (shaxmat naqsh)",
     "background": "#15171C",
@@ -44,8 +44,8 @@
   "livery": {
     "body": "#FFFFFF",
     "stripe": "black + gold diagonal",
-    "roofSign": "ELGA TAXI 1226 + park_number",
-    "doorBranding": "ELGA TAXI logo + ☎ 1226 + park_number (masalan 326)",
+    "roofSign": "Ketdik 1226 + park_number",
+    "doorBranding": "Ketdik logo + ☎ 1226 + park_number (masalan 326)",
     "exampleVehicle": "Chevrolet Cobalt / Nexia"
   },
 

@@ -1,5 +1,5 @@
 /* ====================================================================
-   ELGA Admin — Operatsion sahifalar (Uber/Yandex uslubidagi funksiyalar)
+   Ketdik Admin — Operatsion sahifalar (Uber/Yandex uslubidagi funksiyalar)
    ==================================================================== */
 (function(){
   var U = window.UI;
