@@ -1,5 +1,5 @@
 // ============================================================
-//  Ketdik — taksi chaqirish ilovasi (React Native / Expo)
+//  KetdikGo — taksi chaqirish ilovasi (React Native / Expo)
 //  Xarita: OpenStreetMap (Leaflet WebView)
 //  Server: https://api.elga.uz
 // ============================================================
@@ -260,7 +260,7 @@ async function reverseGeocode(lat, lng) {
   try {
     const r = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=uz`,
-      { headers: { 'User-Agent': 'Ketdik-Taxi/1.0' } }
+      { headers: { 'User-Agent': 'KetdikGo-Taxi/1.0' } }
     );
     const d = await r.json();
     if (d.display_name) {
@@ -360,8 +360,8 @@ export default function App() {
   );
 }
 
-// ===== Ketdik brend wordmark (matn asosida — qo'shimcha paketsiz) =====
-// EL → sariq, GA → oq, TAXI → sariq (brend spetsifikatsiyasi)
+// ===== KetdikGo brend wordmark (matn asosida — qo'shimcha paketsiz) =====
+// Ket → sariq, dik → oq, Go → sariq (brend spetsifikatsiyasi)
 const CAR_CLASS_ICONS = {
   ekonom: 'car-outline',
   komfort: 'car-sport-outline',
@@ -400,13 +400,14 @@ function ElgaLogo({ size = 56, tagline = false }) {
       <Text style={{ fontSize: size, fontWeight: '800', letterSpacing: -size * 0.02, lineHeight: size * 1.05 }}>
         <Text style={{ color: YELLOW }}>Ket</Text>
         <Text style={{ color: WHITE }}>dik</Text>
+        <Text style={{ color: YELLOW }}>Go</Text>
       </Text>
       <Text style={{ color: YELLOW, fontSize: tx, fontWeight: '800', letterSpacing: tx * 0.5, marginTop: -size * 0.08 }}>
         TAXI
       </Text>
       {tagline && (
-        <Text style={{ color: GRAY1, fontSize: Math.max(10, size * 0.18), fontWeight: '600', letterSpacing: 2, marginTop: 8 }}>
-          XIZMAT OLIY HIMMAT
+        <Text style={{ color: GRAY1, fontSize: Math.max(10, size * 0.18), fontWeight: '600', letterSpacing: 1, marginTop: 8 }}>
+          Belgila. Ko'r. Ketdik.
         </Text>
       )}
     </View>
@@ -1018,7 +1019,7 @@ function AppInner() {
   async function shareTrip() {
     if (!order?.share_token) { Alert.alert('Ulashib bo\'lmadi', 'Token mavjud emas'); return; }
     const url = `${BASE}/api/orders/share/${order.share_token}`;
-    const msg = `Men Ketdik taxi bilan sayohatdaman!\nKuzatish: ${url}`;
+    const msg = `Men KetdikGo taxi bilan sayohatdaman!\nKuzatish: ${url}`;
     try {
       await Linking.openURL(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(msg)}`);
     } catch (_) {
@@ -2380,7 +2381,7 @@ function AppInner() {
 
             <TouchableOpacity style={s.aiEntryCard} activeOpacity={0.8} onPress={() => {}}>
               <Ionicons name="sparkles" size={18} color={YELLOW} style={{ marginRight: 10 }} />
-              <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>Ketdik AI yordamchi</Text>
+              <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>KetdikGo AI yordamchi</Text>
               <View style={{ backgroundColor: GRAY2, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
                 <Text style={{ color: WHITE, fontSize: 11, fontWeight: '600' }}>Beta</Text>
               </View>

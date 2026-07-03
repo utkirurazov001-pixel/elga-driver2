@@ -1,5 +1,5 @@
 /* ====================================================================
-   Ketdik Admin — Sadoqat (loyalty) bo'limi · RULE-08
+   KetdikGo Admin — Sadoqat (loyalty) bo'limi · RULE-08
    ==================================================================== */
 (function(){
   var U = window.UI;

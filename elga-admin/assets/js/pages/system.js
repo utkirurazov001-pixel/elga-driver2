@@ -1,5 +1,5 @@
 /* ====================================================================
-   Ketdik Admin — Tizim bo'limi
+   KetdikGo Admin — Tizim bo'limi
    ==================================================================== */
 (function(){
   var U = window.UI;
@@ -152,7 +152,7 @@
     return '<div class="grid g-half" style="align-items:start">'+
       '<div class="card"><div class="card-head"><div><h3>Umumiy</h3><p>Platforma sozlamalari</p></div></div>'+
       '<div class="card-body"><div class="form-grid">'+
-      field('Platforma nomi','Ketdik 1226')+field('Dispetcher raqami','1226',true)+
+      field('Platforma nomi','KetdikGo 1226')+field('Dispetcher raqami','1226',true)+
       field('Asosiy domen','app.elga.uz')+field('API manzili','api.elga.uz')+
       fieldFull('Standart viloyat','Surxondaryo')+
       '<div class="field full"><label>Ball koeffitsienti (RULE-08)</label><input class="input" value="1000 so\'m = 1 ball"></div>'+
@@ -199,8 +199,8 @@
   function brandCard(){
     return '<div class="card"><div class="card-head"><div><h3>Brend identikasi</h3><p>Manba: brand.config.json (yagona haqiqat)</p></div></div>'+
       '<div class="card-body"><div class="form-grid">'+
-      field('Nom','Ketdik')+field('Dispetcher','1226',true)+
-      fieldFull('Slogan','HAR DOIM YONINGIZDA!')+
+      field('Nom','KetdikGo')+field('Dispetcher','1226',true)+
+      fieldFull('Slogan','Belgila. Ko\'r. Ketdik.')+
       '<div class="field"><label>Asosiy rang</label><div style="display:flex;gap:8px;align-items:center"><span style="width:34px;height:34px;border-radius:9px;background:#FFCC00"></span><input class="input mono" value="#FFCC00" style="flex:1"></div></div>'+
       '<div class="field"><label>Gold-dark</label><div style="display:flex;gap:8px;align-items:center"><span style="width:34px;height:34px;border-radius:9px;background:#C9A24B"></span><input class="input mono" value="#C9A24B" style="flex:1"></div></div>'+
       '<div class="field"><label>Fon (qora)</label><div style="display:flex;gap:8px;align-items:center"><span style="width:34px;height:34px;border-radius:9px;background:#15171C;border:1px solid var(--border)"></span><input class="input mono" value="#15171C" style="flex:1"></div></div>'+

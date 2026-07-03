@@ -132,5 +132,5 @@ socket 'order_update' (completed)◄─  yakun  ◄─────────�
 ## 8. Qolgan risklar
 
 - **Backend hamkorligисиз** push va atomik assignment to'liq kafolatlanmaydi (klient qismi tayyor).
-- **Brend:** hozирги kod "Ketdik" (nom) ishlatadi. Spetsifikatsия "KetdikGo" + slogan "Belgila. Ko'r. Ketdik." + domen `ketdikgo.uz` talab qiladi — bu foydalanuvchи tasdig'idан keyin qo'llaniladi (pastдаги eslatma).
+- **Brend:** ✅ "KetdikGo" nomi, slogan "Belgila. Ko'r. Ketdik.", domen `ketdikgo.uz` qo'llandi (ilova nomlari, wordmark'lar `Ket`+`dik`+`Go`, admin login/sidebar lockup, `brand.config.json`, privacy sahifalar). **Ichки identifikatorlар saqlanди** (`uz.ketdik.*` package ID, EAS slug/projectId, `api.elga.uz`) — o'zgartирилса Play Store'да yangi ilova ochилиб, OTA yangilanишлар uzилар edi.
 - **Tekshirish:** o'zgarishlар `@babel/parser` bilan sintaksis + aniqlanmagан-havolа tekshiruvидан o'tди; jonli qurilmада (EAS build) yakuniy sinov tavsiya etiladi.

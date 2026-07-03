@@ -1,5 +1,5 @@
 /* ====================================================================
-   Ketdik Admin — Asosiy sahifalar
+   KetdikGo Admin — Asosiy sahifalar
    ==================================================================== */
 (function(){
   var U = window.UI;

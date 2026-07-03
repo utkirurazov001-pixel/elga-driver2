@@ -1,5 +1,5 @@
 /* ====================================================================
-   Ketdik Admin — API klient (api.elga.uz ga ulanish)
+   KetdikGo Admin — API klient (api.elga.uz ga ulanish)
    Backend topilsa → jonli ma'lumot. Topilmasa → demo (mock) rejimi.
    Bootstrap window.DB ni real ma'lumot bilan to'ldiradi (sahifalar
    o'zgartirilmaydi — ular window.DB dan o'qiydi).

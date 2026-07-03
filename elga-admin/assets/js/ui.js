@@ -1,5 +1,5 @@
 /* ====================================================================
-   Ketdik Admin — UI yordamchilar va qayta ishlatiladigan komponentlar
+   KetdikGo Admin — UI yordamchilar va qayta ishlatiladigan komponentlar
    ==================================================================== */
 (function(){
   var UI = {};

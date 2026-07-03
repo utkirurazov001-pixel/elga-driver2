@@ -1,6 +1,6 @@
-# Ketdik 1226 — Super Admin paneli
+# KetdikGo 1226 — Super Admin paneli
 
-`app.elga.uz` uchun boshqaruv paneli. Dizayn namunasi (Ketdik_Admin_1.html) asosida
+`app.elga.uz` uchun boshqaruv paneli. Dizayn namunasi (KetdikGo_Admin_1.html) asosida
 qurilgan, **toza HTML/CSS/JS** (build talab qilmaydi). Backend (`api.elga.uz`) tayyor
 bo'lganda `assets/js/data.js` mock qatlami `fetch()` bilan almashtiriladi.
 
@@ -80,7 +80,7 @@ elga-admin/
 ## Brend qoidalari (buzilmaydi)
 
 - **1226** dispetcher raqami — ishonch langari (RULE-03)
-- Slogan: **«HAR DOIM YONINGIZDA!»** · ustunlar: TEZ · XAVFSIZ · ISHONCHLI
+- Slogan: **«Belgila. Ko'r. Ketdik.»** · ustunlar: TEZ · XAVFSIZ · ISHONCHLI
 - Ranglar: `#FFCC00` / `#C9A24B` / `#15171C` · font Manrope
 - Shaharlar faqat: Angor, Muzrabot, Jarqo'rg'on, Sherobod, Termiz, Denov (RULE-04)
 - Telefon raqamlari maskirovkalangan: `+998 90 *** ** 45` (RULE-06)
