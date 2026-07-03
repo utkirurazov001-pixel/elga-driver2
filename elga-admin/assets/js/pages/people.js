@@ -1,5 +1,5 @@
 /* ====================================================================
-   ELGA Admin — Foydalanuvchilar bo'limi
+   Ketdik Admin — Foydalanuvchilar bo'limi
    ==================================================================== */
 (function(){
   var U = window.UI;
@@ -78,7 +78,7 @@
 
   function driversFleet(ctx){
     return window.listPage({
-      title:'Avtopark', sub:'Park raqamlari · tom belgisi «ELGA TAXI 1226 + park raqami»',
+      title:'Avtopark', sub:'Park raqamlari · tom belgisi «Ketdik 1226 + park raqami»',
       placeholder:'Park raqami yoki davlat raqami...',
       perPage:12,
       getData:function(st){
@@ -89,7 +89,7 @@
       },
       columns:[
         {th:'Park №', render:function(d){return U.park(d.park_number);}},
-        {th:'Tom belgisi', render:function(d){return '<span class="mono muted">ELGA TAXI 1226 · '+d.park_number+'</span>';}},
+        {th:'Tom belgisi', render:function(d){return '<span class="mono muted">Ketdik 1226 · '+d.park_number+'</span>';}},
         {th:'Haydovchi', render:function(d){return U.cust(d.full_name,d.ini);}},
         {th:'Avtomobil', render:function(d){return d.car_make+' '+d.car_model;}},
         {th:'Rang', render:function(d){return d.car_color;}},

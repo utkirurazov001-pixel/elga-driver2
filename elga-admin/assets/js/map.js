@@ -1,5 +1,5 @@
 /* ====================================================================
-   ELGA Admin — Geo / interaktiv xarita (Leaflet)
+   Ketdik Admin — Geo / interaktiv xarita (Leaflet)
    Surxondaryo real koordinatalari. Leaflet yuklanmasa (tarmoq yo'q)
    nafis fallback ko'rsatiladi — panel baribir ishlaydi.
    ==================================================================== */

@@ -1,6 +1,6 @@
-# ELGA TAXI 1226 — Super Admin paneli
+# Ketdik 1226 — Super Admin paneli
 
-`app.elga.uz` uchun boshqaruv paneli. Dizayn namunasi (ELGA_Admin_1.html) asosida
+`app.elga.uz` uchun boshqaruv paneli. Dizayn namunasi (Ketdik_Admin_1.html) asosida
 qurilgan, **toza HTML/CSS/JS** (build talab qilmaydi). Backend (`api.elga.uz`) tayyor
 bo'lganda `assets/js/data.js` mock qatlami `fetch()` bilan almashtiriladi.
 

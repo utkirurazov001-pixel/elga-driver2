@@ -1,5 +1,5 @@
 /* ====================================================================
-   ELGA Admin — Event bus + Real-time simulyatsiya dvigateli
+   Ketdik Admin — Event bus + Real-time simulyatsiya dvigateli
    api.elga.uz Socket.IO ulanganda shu joy real socket bilan
    almashtiriladi (order:new, driver:location, kpi:update ...).
    ==================================================================== */

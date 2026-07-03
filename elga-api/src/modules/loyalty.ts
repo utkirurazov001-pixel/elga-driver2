@@ -41,7 +41,7 @@ router.post(
     if (c.points < r.cost_points) throw ApiError.badRequest('Ball yetarli emas');
     c.points -= r.cost_points;
     r.stock -= 1;
-    const code = `ELGA-${1000 + Math.floor(Math.random() * 9000)}`;
+    const code = `KETDIK-${1000 + Math.floor(Math.random() * 9000)}`;
     store.addAudit({ user_id: req.user!.sub, user: req.user!.login, role: req.user!.role, action: 'loyalty.redeem', entity: 'redemptions', entity_id: c.id, detail: `${r.title} (−${r.cost_points} ball)`, ip: req.ip ?? '' });
     return ok(res, { client_id: c.id, reward: r.title, points_left: c.points, code });
   }),

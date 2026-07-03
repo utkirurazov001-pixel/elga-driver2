@@ -1,5 +1,5 @@
 /* ====================================================================
-   ELGA Admin — Mock ma'lumotlar bazasi
+   Ketdik Admin — Mock ma'lumotlar bazasi
    TZ §3 DATA modeliga mos. Backend (api.elga.uz) tayyor bo'lganda
    shu joy fetch() bilan almashtiriladi (api.js qatlami).
    ==================================================================== */
@@ -142,7 +142,7 @@
     {id:'RW1', title:'5 000 so\'m chegirma', desc:'Keyingi safaringizga 5 000 so\'m chegirma.', cost:200, type:'discount', stock:9999, active:true, icon:'ticket'},
     {id:'RW2', title:'Bepul safar (Ekonom)', desc:'Ekonom tarifda 1 ta bepul safar (shahar ichi).', cost:850, type:'free_ride', stock:120, active:true, icon:'car'},
     {id:'RW3', title:'10% chegirma kuponi', desc:'Istalgan safarga 10% chegirma, 30 kun amal qiladi.', cost:400, type:'discount', stock:500, active:true, icon:'tag'},
-    {id:'RW4', title:'ELGA termo-stakan', desc:'Brendlangan termo-stakan sovg\'asi.', cost:1500, type:'gift', stock:40, active:true, icon:'gift'},
+    {id:'RW4', title:'Ketdik termo-stakan', desc:'Brendlangan termo-stakan sovg\'asi.', cost:1500, type:'gift', stock:40, active:true, icon:'gift'},
     {id:'RW5', title:'Bepul safar (Komfort)', desc:'Komfort tarifda 1 ta bepul safar.', cost:1200, type:'free_ride', stock:60, active:true, icon:'star'},
     {id:'RW6', title:'15 000 so\'m chegirma', desc:'Yirik safar uchun 15 000 so\'m chegirma.', cost:600, type:'discount', stock:0, active:false, icon:'ticket'}
   ];
@@ -153,7 +153,7 @@
     var rw = pick(rewards,r); var cl3 = pick(clients,r+11);
     redemptions.push({
       id:'RD'+(7001+r), client:cl3.full_name, client_ini:cl3.ini, reward:rw.title, points:rw.cost,
-      code:'ELGA-'+(1000+r*37), status: r<6?'pending':(r%3?'fulfilled':'cancelled'), created_at: dateAgo(r*2+1)
+      code:'KETDIK-'+(1000+r*37), status: r<6?'pending':(r%3?'fulfilled':'cancelled'), created_at: dateAgo(r*2+1)
     });
   }
 

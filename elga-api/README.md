@@ -1,7 +1,7 @@
-# ELGA TAXI 1226 — Backend API (`api.elga.uz`)
+# Ketdik 1226 — Backend API (`api.elga.uz`)
 
 Node.js 20 · TypeScript (strict) · Express · Zod · JWT + bcrypt · RBAC · pino.
-TZ (`ELGA1226_Backend_TZ.md`) §2–§9 asosida.
+TZ (`Ketdik1226_Backend_TZ.md`) §2–§9 asosida.
 
 ## Ishga tushirish
 

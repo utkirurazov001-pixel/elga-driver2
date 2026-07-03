@@ -1,5 +1,5 @@
 /* ====================================================================
-   ELGA TAXI 1226 — Admin panel · ilova qobig'i (shell + router)
+   Ketdik 1226 — Admin panel · ilova qobig'i (shell + router)
    ==================================================================== */
 (function(){
   // Navigatsiya tuzilishi: [route, label, ikona, badge, [sub:[subkey,label]]]

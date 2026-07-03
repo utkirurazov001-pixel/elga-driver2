@@ -1,5 +1,5 @@
 // ============================================================
-//  ELGA TAXI — AI Ovozli Buyurtma backend moduli
+//  Ketdik — AI Ovozli Buyurtma backend moduli
 //  POST /api/voice/parse
 //  Oqim:  audio (base64 data-URL)  ->  Whisper STT (matn)
 //         ->  Claude (claude-haiku-4-5) tahlil  ->  JSON
@@ -22,7 +22,7 @@ const AI_MODEL = process.env.VOICE_AI_MODEL || 'claude-haiku-4-5';
 const STT_MODEL = process.env.VOICE_STT_MODEL || 'whisper-1';
 
 // Surxondaryo hududlari va umumiy joy turlari — AI shularni tanishi kerak.
-const SYSTEM_PROMPT = `Sen ELGA TAXI ilovasining ovozli buyurtma tahlilchisisan.
+const SYSTEM_PROMPT = `Sen Ketdik ilovasining ovozli buyurtma tahlilchisisan.
 Foydalanuvchining o'zbekcha (sheva/og'zaki nutq ham) gapidan taksi buyurtmasini ajratasan.
 
 FAQAT JSON qaytar. Hech qanday izoh, markdown yoki qo'shimcha matn YO'Q.

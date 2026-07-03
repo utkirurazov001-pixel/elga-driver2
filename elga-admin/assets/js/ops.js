@@ -1,5 +1,5 @@
 /* ====================================================================
-   ELGA Admin — Operatsion funksiyalar (Uber/Yandex uslubidagi)
+   Ketdik Admin — Operatsion funksiyalar (Uber/Yandex uslubidagi)
    Client-side hisob window.DB ustida (live rejimda DB backenddan keladi,
    shuning uchun ayni logika ham demo, ham jonli ma'lumotda ishlaydi).
    ==================================================================== */
