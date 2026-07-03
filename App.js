@@ -827,7 +827,8 @@ function AppInner() {
     if (!online) { setGpsStale(false); return; }
     const iv = setInterval(() => {
       const elapsed = Date.now() - (lastGpsRef.current || 0);
-      setGpsStale(elapsed > 30000);
+      // Idle holatda fix ~20s'da keladi — chegara 45s (soxta 'signal yo'q' bo'lmasin)
+      setGpsStale(elapsed > 45000);
     }, 10000);
     return () => clearInterval(iv);
   }, [online]);
@@ -1013,9 +1014,14 @@ function AppInner() {
       const accuracy = Location.Accuracy?.High ?? 4;
       const active = isOrderActive();
       watchActiveRef.current = active;
-      // Apparat so'rov chastotasi: faol 4s/15m, idle 20s/40m (spec bo'yicha)
+      lastGpsRef.current = Date.now(); // fix kelguncha "yangi" — boshlanishda soxta 'signal yo'q' bo'lmasin
+      // Apparat so'rovi VAQT asosida (distanceInterval: 0) — haydovchi bir joyda
+      // turganda (buyurtma kutib) ham har interval GPS fix keladi. Ilgari
+      // distanceInterval=40m edi: qimirlamаган haydovchiga fix umuman kelmasdi ->
+      // 'GPS signal yo'q' xato chiqib, joylashuv muzlab qolardi (#GPS-stale).
+      // Emit/UI chastotasini ilova o'zi (minGap/uiGap) cheklaydi.
       const hwTime = active ? 4000 : 20000;
-      const hwDist = active ? 15 : 40;
+      const hwDist = 0;
       watchRef.current = await Location.watchPositionAsync(
         { accuracy, distanceInterval: hwDist, timeInterval: hwTime },
         (pos) => {
