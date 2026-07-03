@@ -31,6 +31,26 @@ const BASE = 'https://api.elga.uz';
 // completed/cancelled/paid — yakuniy holatlar (faol emas).
 const ACTIVE_STATUSES = ['searching', 'assigned', 'accepted', 'arrived', 'in_progress'];
 
+// Buyurtma holatining tartibi. Kechikkan/eskirgan order_update holatni ORQAGA
+// qaytarib yubormasligi uchun (#status-regress).
+const STATUS_RANK = {
+  searching: 0, assigned: 1, accepted: 2, arrived: 3, in_progress: 4,
+  completed: 5, cancelled: 5, paid: 6,
+};
+const TERMINAL_STATUSES = ['completed', 'cancelled', 'paid'];
+function rankOf(st) { return Object.prototype.hasOwnProperty.call(STATUS_RANK, st) ? STATUS_RANK[st] : -1; }
+// Kelgan yangilanish (next) joriy holatdan (cur) ORQAGA ketmasligini tekshiradi.
+function isForwardUpdate(cur, next) {
+  if (!cur) return true;
+  if (!next || !next.status) return true;
+  if (cur.id && next.id && cur.id !== next.id) return true;
+  if (TERMINAL_STATUSES.includes(next.status)) return true;
+  return rankOf(next.status) >= rankOf(cur.status);
+}
+
+// EAS projectId — push token uchun (app.json extra.eas.projectId bilan bir xil).
+const EAS_PROJECT_ID = 'e5561b58-380f-45f6-9cc4-c6af58eaec84';
+
 // Faol buyurtma lokal saqlanadigan kalit (crash/kill/OS-restart'da yo'qolmaydi).
 const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
 
@@ -72,6 +92,31 @@ async function getDeviceId() {
     _deviceId = id;
   } catch (e) { _deviceId = uuid(); }
   return _deviceId;
+}
+
+// Expo push tokenini olib backendga yuboramiz. Ilova YOPIQ/fon holatida ham
+// "Haydovchi topildi", "Haydovchi yetib keldi" kabi xabarlar kelishi uchun
+// (socket faqat ochiq ilovada ishonchli). Backend (elga-backend) bu tokenga
+// Expo push yuborishi kerak — POST /api/me/push-token { token, platform, deviceId }. (#push-missing)
+async function registerPushToken(authToken) {
+  try {
+    if (!authToken) return null;
+    const settings = await Notifications.getPermissionsAsync();
+    let granted = settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus?.PROVISIONAL;
+    if (!granted) {
+      const req = await Notifications.requestPermissionsAsync();
+      granted = req.granted;
+    }
+    if (!granted) return null;
+    const tokenResp = await Notifications.getExpoPushTokenAsync({ projectId: EAS_PROJECT_ID });
+    const pushToken = tokenResp?.data;
+    if (!pushToken) return null;
+    const deviceId = await getDeviceId();
+    await api('/api/me/push-token', 'POST',
+      { token: pushToken, platform: Platform.OS, deviceId }, authToken, 10000, { retries: 1 })
+      .catch(() => {});
+    return pushToken;
+  } catch (e) { return null; }
 }
 
 // Global tarmoq holati — UI shu yerga obuna bo'lib bannerni ko'rsatadi
@@ -541,6 +586,9 @@ function AppInner() {
   const [liveWait, setLiveWait] = useState({ sec: 0, fee: 0, freeLeft: 0 });
 
   const socketRef = useRef(null);
+  const chatOutboxRef = useRef([]);      // socket uzilganda yuborilmagan chat xabarlar (#chat-loss)
+  const pushRegisteredRef = useRef(false); // push token bir marta ro'yxatga olinadi
+  const finishedOrderIdRef = useRef(null); // yakunlangan/bekor buyurtma id — kechikkan event uni tiriltirmasligi uchun (#order-resurrect)
   const webviewRef = useRef(null);
   const creatingOrderRef = useRef(false);                 // ikki marta buyurtma yaratilmasin (double-tap)
   const healthTimerRef = useRef(null);                    // reachability heartbeat timeri
@@ -613,8 +661,15 @@ function AppInner() {
       loadFavorites();
       loadPopularPlaces();
       startPinHalo();
+      // Push token — ilova yopiq/fon holatida ham "Haydovchi topildi/yetib keldi" kelishi uchun (#push-missing).
+      if (!pushRegisteredRef.current) { pushRegisteredRef.current = true; registerPushToken(token); }
     })();
+    // Push bosilib ilova ochilganda holatni serverdan tiklaymiz.
+    const respSub = Notifications.addNotificationResponseReceivedListener(() => {
+      try { ensureSocketConnected(); resumeActiveOrder(); } catch (e) {}
+    });
     return () => {
+      try { respSub.remove(); } catch (e) {}
       socketRef.current?.removeAllListeners();
       socketRef.current?.disconnect();
       if (nearbyTimer.current) clearInterval(nearbyTimer.current);
@@ -865,10 +920,19 @@ function AppInner() {
     });
     socketRef.current = s;
     // Qayta ulanganda faol buyurtma holatini serverdan qayta tiklaymiz (#40 — internet uzilsa holat yo'qolmaydi)
-    s.on('reconnect', () => { NetMonitor.set(true); resumeActiveOrder(); });
-    s.on('connect', () => { NetMonitor.set(true); resumeActiveOrder(); });
+    s.on('reconnect', () => { NetMonitor.set(true); resumeActiveOrder(); flushChatOutbox(); });
+    s.on('connect', () => { NetMonitor.set(true); resumeActiveOrder(); flushChatOutbox(); });
     s.on('order_update', (o) => {
-      setOrder((prev) => prev ? { ...prev, ...o } : o);
+      // Yakunlangan/bekor bo'lgan buyurtma id'siga kechikib kelgan event uni
+      // qayta tiriltirmasin (#order-resurrect): reset'dan keyin order=null bo'ladi,
+      // shu id uchun kechikkan 'completed' kelsa rate modal takror ochilardi.
+      if (o && o.id && finishedOrderIdRef.current === o.id) return;
+      // Holat orqaga qaytmasin (#status-regress): kechikkan 'assigned' 'accepted'ni bosmasin.
+      setOrder((prev) => {
+        if (!prev) return o;
+        if (!isForwardUpdate(prev, o)) { const { status, ...rest } = o || {}; return { ...prev, ...rest }; }
+        return { ...prev, ...o };
+      });
       if (o.status === 'accepted') {
         arrivedNotified.current = false;
         const nm = o.driver_name || 'Haydovchi';
@@ -880,12 +944,16 @@ function AppInner() {
         notify('Haydovchi yetib keldi ✅', 'Mashina sizni kutmoqda');
       }
       if (o.status === 'completed') {
+        finishedOrderIdRef.current = o.id; // kechikkan event uni tiriltirmasin (#order-resurrect)
         notify('Safar yakunlandi 🏁', 'Rahmat! Haydovchini baholang');
         setCompletedOrder(o);          // hisob-kitob ko'rsatish uchun saqlayмиз
         setRateOrderId(o.id); setStars(5); setTipAmount(0); setRateModal(true);
         resetOrder();
       }
-      if (o.status === 'cancelled') { notify('Buyurtma bekor qilindi', ''); resetOrder(); }
+      if (o.status === 'cancelled') {
+        finishedOrderIdRef.current = o.id; // kechikkan event uni tiriltirmasin (#order-resurrect)
+        notify('Buyurtma bekor qilindi', ''); resetOrder();
+      }
     });
     s.on('driver_location', (loc) => {
       // Bir xil koordinata kelsa re-render qilmaymiz (xarita ham o'zgarmaydi)
@@ -920,13 +988,30 @@ function AppInner() {
     });
   }
 
-  // Haydovchiga socket orqali chat xabari yuborish
+  // Haydovchiga socket orqali chat xabari yuborish. Socket uzilgan bo'lsa xabar
+  // yo'qolmasin — outbox'ga saqlaymiz va qayta ulanganda yuboramiz (#chat-loss).
   function sendTripChat() {
     const text = tripChatInput.trim();
     if (!text || !order) return;
-    socketRef.current?.emit('chat', { orderId: order.id, text });
+    const payload = { orderId: order.id, text };
+    if (socketRef.current?.connected) {
+      try { socketRef.current.emit('chat', payload); } catch (e) { chatOutboxRef.current.push(payload); }
+    } else {
+      chatOutboxRef.current.push(payload);
+    }
     setTripChat((prev) => [...prev, { role: 'customer', text }]);
     setTripChatInput('');
+  }
+
+  // Qayta ulanganda yuborilmagan chat xabarlarni jo'natamiz.
+  function flushChatOutbox() {
+    const s = socketRef.current;
+    if (!s?.connected || chatOutboxRef.current.length === 0) return;
+    const pending = chatOutboxRef.current;
+    chatOutboxRef.current = [];
+    for (const p of pending) {
+      try { s.emit('chat', p); } catch (e) { chatOutboxRef.current.push(p); }
+    }
   }
 
   // Sayohatni ulashish

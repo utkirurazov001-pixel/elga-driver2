@@ -47,6 +47,24 @@ const OFFER_STATUSES = ['searching', 'assigned'];
 //   shularni active-order (server = yagona haqiqat) bilan solishtirib tozalaymiz.
 const ACCEPTED_STATUSES = ['accepted', 'arrived', 'in_progress'];
 
+// Buyurtma holatining tartibi (oldinga qarab o'sadi). Kechikkan/eskirgan
+// order_update kelib holatni ORQAGA qaytarib yubormasligi uchun (#status-regress).
+const STATUS_RANK = {
+  searching: 0, assigned: 1, accepted: 2, arrived: 3, in_progress: 4,
+  completed: 5, cancelled: 5, paid: 6,
+};
+// Yakuniy holatlar har doim qo'llaniladi (bekor/tugadi orqaga qaytish emas).
+const TERMINAL_STATUSES = ['completed', 'cancelled', 'paid'];
+function rankOf(st) { return Object.prototype.hasOwnProperty.call(STATUS_RANK, st) ? STATUS_RANK[st] : -1; }
+// Kelgan yangilanish (next) joriy holatdan (cur) ORQAGA ketmasligini tekshiradi.
+function isForwardUpdate(cur, next) {
+  if (!cur) return true;
+  if (!next || !next.status) return true;              // status yo'q — boshqa maydonlar yangilanadi
+  if (cur.id && next.id && cur.id !== next.id) return true; // boshqa buyurtma — tegishli emas
+  if (TERMINAL_STATUSES.includes(next.status)) return true; // yakuniy holat doim qo'llaniladi
+  return rankOf(next.status) >= rankOf(cur.status);
+}
+
 // Faol buyurtma lokal saqlanadigan kalit (crash/kill/OS-restart'da yo'qolmaydi).
 const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
 
@@ -143,6 +161,35 @@ async function getDeviceId() {
     _deviceId = id;
   } catch (e) { _deviceId = uuid(); }
   return _deviceId;
+}
+
+// EAS projectId — push token olish uchun (app.json extra.eas.projectId bilan bir xil).
+const EAS_PROJECT_ID = '71afad6c-99e7-4ca2-9f6d-915f1cd27166';
+
+// Expo push tokenini olib backendga yuboramiz. Bu ilova YOPIQ/fon holatida ham
+// yangi buyurtma push xabari kelishini ta'minlaydi (socket faqat ochiq ilovada
+// ishonchli). Backend (elga-backend) bu tokenga Expo push yuborishi kerak —
+// endpoint: POST /api/me/push-token { token, platform, deviceId }. (#push-missing)
+async function registerPushToken(authToken) {
+  try {
+    if (!authToken) return null;
+    const settings = await Notifications.getPermissionsAsync();
+    let granted = settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus?.PROVISIONAL;
+    if (!granted) {
+      const req = await Notifications.requestPermissionsAsync();
+      granted = req.granted;
+    }
+    if (!granted) return null;
+    const tokenResp = await Notifications.getExpoPushTokenAsync({ projectId: EAS_PROJECT_ID });
+    const pushToken = tokenResp?.data;
+    if (!pushToken) return null;
+    const deviceId = await getDeviceId();
+    // Backend tokenni saqlaydi; xato bo'lsa jim (push ixtiyoriy qatlam).
+    await api('/api/me/push-token', 'POST',
+      { token: pushToken, platform: Platform.OS, deviceId }, authToken, 10000, { retries: 1 })
+      .catch(() => {});
+    return pushToken;
+  } catch (e) { return null; }
 }
 
 // Global tarmoq holati — UI shu yerga obuna bo'lib bannerni ko'rsatadi
@@ -685,6 +732,8 @@ function AppInner() {
   const pollRef = useRef(null);      // backup polling intervali
   const healthRef = useRef(null);    // reachability heartbeat timeri
   const offerTimerRef = useRef(null); // offer TTL: qabul qilinmasa o'zi yopiladi
+  const chatOutboxRef = useRef([]);  // socket uzilganda yuborilmagan chat xabarlar (#chat-loss)
+  const pushRegisteredRef = useRef(false); // push token bir marta ro'yxatga olinadi
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
   const [mapReady, setMapReady] = useState(false);
 
@@ -723,10 +772,18 @@ function AppInner() {
       connectSocket();
       loadEarnings();
       resumeActiveOrder();
+      // Push token — ilova yopiq/fon holatida ham yangi buyurtma push kelishi uchun (#push-missing).
+      if (!pushRegisteredRef.current) { pushRegisteredRef.current = true; registerPushToken(token); }
     })();
+    // Push xabar bosilganda (fon/yopiq holatdan ochilganda) holatni serverdan tiklaymiz —
+    // socket hali ulanmagan bo'lsa ham buyurtma darrov ko'rinadi.
+    const respSub = Notifications.addNotificationResponseReceivedListener(() => {
+      try { ensureSocket(); resumeActiveOrder(); } catch (e) {}
+    });
     return () => {
       // Listenerlarni ham olib tashlaymiz — aks holda disconnect'dan keyin
       // qayta ulanishda eski handlerlar takror ishlab ketishi mumkin.
+      try { respSub.remove(); } catch (e) {}
       socketRef.current?.removeAllListeners();
       socketRef.current?.disconnect();
       watchRef.current?.remove?.();
@@ -901,6 +958,7 @@ function AppInner() {
       setSocketConnected(true);
       resumeActiveOrder();            // faol buyurtma holatini darrov tiklaymiz (#40)
       OfflineQueue.flush(token);      // navbatdagi amallarni yuboramiz
+      flushChatOutbox();              // uzilishda yozilgan chat xabarlarni yuboramiz (#chat-loss)
       // Oxirgi joylashuvni darrov yuboramiz — server "online" deb bilsin
       if (lastLocRef.current) { try { s.emit('location', lastLocRef.current); } catch (e) {} }
     };
@@ -954,7 +1012,14 @@ function AppInner() {
       setOrder((prev) => (prev && OFFER_STATUSES.includes(prev.status)) ? null : prev);
       updatePersistentNotif('Buyurtma kutilmoqda...');
     });
-    s.on('order_update', (o) => setOrder((p) => p ? { ...p, ...o } : o));
+    // Kechikkan/eskirgan yangilanish holatni orqaga qaytarmasligi kerak (#status-regress):
+    // masalan 'accepted' dan keyin kechikib kelgan 'assigned' e'tiborsiz qoldiriladi,
+    // ammo boshqa maydonlar (price, manzil) baribir yangilanadi.
+    s.on('order_update', (o) => setOrder((p) => {
+      if (!p) return o;
+      if (!isForwardUpdate(p, o)) { const { status, ...rest } = o || {}; return { ...p, ...rest }; }
+      return { ...p, ...o };
+    }));
     s.on('chat_message', (msg) => {
       setChatMessages((prev) => [...prev, msg]);
       if (!chatModal) notify('💬 Mijoz', msg.text || '');
@@ -1406,12 +1471,31 @@ function AppInner() {
   }
 
   // ---- Mijozga chat xabar yuborish ----
+  // Socket uzilgan bo'lsa xabar yo'qolib ketmasligi uchun outbox'ga saqlaymiz va
+  // qayta ulanganda avtomatik yuboramiz (#chat-loss). Ilgari ulanmagan holatda
+  // emit jim tushib qolar, mijoz esa xabarni umuman olmasdi.
   function sendChat() {
     const text = chatInput.trim();
     if (!text || !order) return;
-    socketRef.current?.emit('chat', { orderId: order.id, text });
+    const payload = { orderId: order.id, text };
+    if (socketRef.current?.connected) {
+      try { socketRef.current.emit('chat', payload); } catch (e) { chatOutboxRef.current.push(payload); }
+    } else {
+      chatOutboxRef.current.push(payload); // qayta ulanganda flushChatOutbox() yuboradi
+    }
     setChatMessages((prev) => [...prev, { sender_role: 'driver', text }]);
     setChatInput('');
+  }
+
+  // Qayta ulanganda yuborilmagan chat xabarlarni jo'natamiz.
+  function flushChatOutbox() {
+    const s = socketRef.current;
+    if (!s?.connected || chatOutboxRef.current.length === 0) return;
+    const pending = chatOutboxRef.current;
+    chatOutboxRef.current = [];
+    for (const p of pending) {
+      try { s.emit('chat', p); } catch (e) { chatOutboxRef.current.push(p); }
+    }
   }
 
   // Buyurtma qabul qilingach mavjud xabarlarni yuklash
