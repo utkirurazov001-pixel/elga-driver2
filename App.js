@@ -29,10 +29,15 @@ import { Ionicons } from '@expo/vector-icons';
 // ─── Ajratilgan modullar (modularizatsiya — App.js'ni yengillashtirish) ───
 import { uuid, sleep, fmt, safeStr, haversineKm, fmtPhone } from './src/utils';
 import { mapHTML } from './src/mapHtml';
-import { speak, announce } from './src/voice';
+import { speak, announce, playOrderAlert, stopOrderAlert } from './src/voice';
 import { captureException } from './src/crash';
 
 const BASE = 'https://api.elga.uz';
+
+// T-07: ilova ichidagi ZAXIRA buyurtma ovozi — admin ovoz yuklamagan yoki oflayn
+// bo'lsa ham DOIM ishlaydi. Admin ovoz bergan bo'lsa (/api/config/sounds) o'sha
+// ustun turadi; bu — kafolatlangan zaxira (baland, e'tibor tortuvchi ohang).
+const ORDER_ALERT_ASSET = require('./assets/new_order.wav');
 
 // Faol (tugamagan) buyurtma holatlari — bularda buyurtma "tirik" hisoblanadi.
 // completed/cancelled/paid — yakuniy holatlar (faol emas).
@@ -103,6 +108,20 @@ if (Platform.OS === 'android') {
     sound: null,
     vibrationPattern: null,
     enableVibrate: false,
+  }).catch(() => {});
+  // T-07: YANGI BUYURTMA — eng yuqori muhimlik + OVOZ + kuchli vibratsiya.
+  // Ilova FON/YOPIQ bo'lsa push shu kanalga tushadi (backend channelId:'orders')
+  // — haydovchi buyurtmani o'tkazib yubormaydi. sound:'default' — telefonning
+  // bildirishnoma ovozi (Android tizim cheklovi: maxsus fayl config-plugin talab
+  // qiladi; 'default' baland va ishonchli). Ilova OCHIQ bo'lsa esa admin/zaxira
+  // ovozi playOrderAlert() bilan takror chalinadi.
+  Notifications.setNotificationChannelAsync('orders', {
+    name: 'Yangi buyurtmalar',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: 'default',
+    vibrationPattern: [0, 400, 200, 400, 200, 400],
+    enableVibrate: true,
+    bypassDnd: true,
   }).catch(() => {});
 }
 
@@ -551,16 +570,14 @@ export default function App() {
 
 // ===== KetdikGo brend wordmark (matn asosida) — Ket sariq, dik oq, Go sariq =====
 function ElgaLogo({ size = 56, tagline = false }) {
-  const tx = Math.round(size * 0.32);
+  // T-05: KetdikGo brendi. Oldingi "ELGA TAXI" qoldig'i ("TAXI" so'zi) olib tashlandi —
+  // brend endi faqat "KetdikGo" + slogan "Belgila. Ko'r. Ketdik.".
   return (
     <View style={{ alignItems: 'center' }}>
       <Text style={{ fontSize: size, fontWeight: '800', letterSpacing: -size * 0.02, lineHeight: size * 1.05 }}>
         <Text style={{ color: YELLOW }}>Ket</Text>
         <Text style={{ color: WHITE }}>dik</Text>
         <Text style={{ color: YELLOW }}>Go</Text>
-      </Text>
-      <Text style={{ color: YELLOW, fontSize: tx, fontWeight: '800', letterSpacing: tx * 0.5, marginTop: -size * 0.08 }}>
-        TAXI
       </Text>
       {tagline && (
         <Text style={{ color: GRAY1, fontSize: Math.max(10, size * 0.18), fontWeight: '600', letterSpacing: 1, marginTop: 8 }}>
@@ -733,6 +750,7 @@ function AppInner() {
   const pollRef = useRef(null);      // backup polling intervali
   const healthRef = useRef(null);    // reachability heartbeat timeri
   const offerTimerRef = useRef(null); // offer TTL: qabul qilinmasa o'zi yopiladi
+  const orderSoundUriRef = useRef(null); // T-07: admin yuklagan buyurtma ovozi (lokalga keshlangan URI)
   const chatOutboxRef = useRef([]);  // socket uzilganda yuborilmagan chat xabarlar (#chat-loss)
   const pushRegisteredRef = useRef(false); // push token bir marta ro'yxatga olinadi
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
@@ -776,6 +794,7 @@ function AppInner() {
       connectSocket();
       loadEarnings();
       resumeActiveOrder();
+      loadOrderSound(); // T-07: admin yuklagan buyurtma ovozini oldindan yuklab/keshlab qo'yamiz
       // Push token — ilova yopiq/fon holatida ham yangi buyurtma push kelishi uchun (#push-missing).
       if (!pushRegisteredRef.current) { pushRegisteredRef.current = true; registerPushToken(token); }
     })();
@@ -985,15 +1004,21 @@ function AppInner() {
           offerTimerRef.current = setTimeout(() => {
             setOrder((prev) => (prev && prev.id === o.id && OFFER_STATUSES.includes(prev.status)) ? null : prev);
             updatePersistentNotif('Buyurtma kutilmoqda...');
+            stopOrderAlert(); // T-07: taklif TTL tugadi — ovoz to'xtaydi
           }, ttl);
         }
         // Baland ovozli vibrasiya (3x)
         Vibration.vibrate([0, 400, 200, 400, 200, 400]);
-        // Ovozli e'lon (o'zbek tilida)
         const addr = typeof o?.from_address === 'string' ? o.from_address : '';
-        // Server e'lon audiosi bersa (super-admin sozlaydi) shuni o'ynaymiz,
-        // bo'lmasa TTS. Backend kelishuvi: o.announce_audio yoki o.voice_url.
-        announce(`Yangi buyurtma! ${fmt(o?.price)} so'm. ${addr}`, o?.announce_audio || o?.voice_url);
+        // T-07: BALAND + TAKRORLANADIGAN buyurtma ovozi (haydovchi ekranga
+        // qaramaydi). Ustuvorlik: (1) admin yuklagan ovoz (lokalga keshlangan),
+        // (2) ilova ichidagi zaxira asset — doim ishlaydi. Loop bilan chalinadi;
+        // haydovchi javob berganda (clearOfferTimer) yoki TTL tugaganda to'xtaydi.
+        const alertSrc = orderSoundUriRef.current ? { uri: orderSoundUriRef.current } : ORDER_ALERT_ASSET;
+        if (!playOrderAlert(alertSrc)) {
+          // audio umuman ishlamasa — TTS zaxira (robot ovoz)
+          announce(`Yangi buyurtma! ${fmt(o?.price)} so'm. ${addr}`, o?.voice_url);
+        }
         notify('🚖 Yangi buyurtma!', `${addr || 'Manzil'} → ${fmt(o?.price)} so'm`);
         // Fon bildirishnomasi — buyurtma tafsiloti
         updatePersistentNotif(`Yangi buyurtma · ${fmt(o?.price)} so'm`);
@@ -1048,6 +1073,32 @@ function AppInner() {
   // Offer TTL taymerini bekor qilish (offer qabul/rad/bekor bo'lganda)
   function clearOfferTimer() {
     if (offerTimerRef.current) { clearTimeout(offerTimerRef.current); offerTimerRef.current = null; }
+    stopOrderAlert(); // T-07: taklif tugadi (qabul/rad/bekor/o'tib ketdi) — ovozni to'xtatamiz
+  }
+
+  // T-07: Admin panelда yuklangan "yangi buyurtma" ovozini backenddan olib LOKALga
+  // keshlaymiz — new_order kelganда darrov (oflayn ham) chalinadi. Manifest:
+  //   GET /api/config/sounds → { sounds: { new_order: "/api/config/sound/new_order?v=N" } }
+  // Admin ovoz bermagan bo'lsa — orderSoundUriRef null qoladi va ilova ichidagi
+  // zaxira asset (ORDER_ALERT_ASSET) ishlatiladi (doim ishlaydi).
+  async function loadOrderSound() {
+    try {
+      const r = await api('/api/config/sounds', 'GET', null, token, 15000);
+      const path = r?.sounds?.new_order;
+      if (!path) { orderSoundUriRef.current = null; return; }
+      const url = /^https?:\/\//i.test(path) ? path : (BASE + path);
+      const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+      if (!dir) return;
+      // ?v= (versiya) o'zgarsa qayta yuklaymiz — fayl nomiga versiyani kiritamiz.
+      const ver = (String(path).match(/[?&]v=([^&]+)/) || [])[1] || '1';
+      const fileUri = `${dir}elga-order-sound-${ver}.mp3`;
+      const info = await FileSystem.getInfoAsync(fileUri).catch(() => ({ exists: false }));
+      if (!info.exists) {
+        const dl = await FileSystem.downloadAsync(url, fileUri).catch(() => null);
+        if (!dl || dl.status !== 200) { orderSoundUriRef.current = null; return; }
+      }
+      orderSoundUriRef.current = fileUri;
+    } catch (e) { /* zaxira asset ishlatiladi */ }
   }
 
   // Faol buyurtmani serverdan tiklash — server YAGONA haqiqat manbai.

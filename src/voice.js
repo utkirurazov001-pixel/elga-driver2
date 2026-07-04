@@ -64,3 +64,29 @@ function playAnnouncementAudio(url) {
 export function announce(text, audioUrl) {
   if (!playAnnouncementAudio(audioUrl)) speak(text);
 }
+
+// ---- T-07: YANGI BUYURTMA OVOZI (haydovchi mashina haydayotgan bo'lsa ham eshitsin) ----
+// Haydovchi ekranga qaramaydi — buyurtmani OVOZDAN biladi. Shuning uchun:
+//   • BALAND (volume=1.0),
+//   • TAKRORLANADIGAN (loop) — haydovchi javob berguncha yoki TTL tugagunca,
+//   • telefon "jim" rejimida ham (setAudioModeAsync playsInSilentMode yuqorida).
+// source: { uri } (admin yuklagan ovoz, lokalga keshlangan) YOKI require() bilan
+// kelgan ilova ichidagi zaxira asset (admin ovoz bermasa — doim ishlaydi).
+let _orderPlayer = null;
+export function stopOrderAlert() {
+  if (_orderPlayer) { try { _orderPlayer.remove(); } catch (_) {} _orderPlayer = null; }
+}
+export function playOrderAlert(source) {
+  stopOrderAlert();
+  try {
+    const p = createAudioPlayer(source);
+    try { p.volume = 1.0; } catch (_) {}
+    try { p.loop = true; } catch (_) {}   // haydovchi javob bergunca takrorlanadi
+    p.play();
+    _orderPlayer = p;
+    return true;
+  } catch (e) {
+    _orderPlayer = null;
+    return false;
+  }
+}

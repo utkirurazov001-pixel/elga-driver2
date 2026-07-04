@@ -394,16 +394,14 @@ function CarClassIcon({ c, size = 56, active, image }) {
 }
 
 function ElgaLogo({ size = 56, tagline = false }) {
-  const tx = Math.round(size * 0.32);
+  // T-05: KetdikGo brendi. Oldingi "ELGA TAXI" qoldig'i ("TAXI" so'zi) olib tashlandi —
+  // brend endi faqat "KetdikGo" + slogan "Belgila. Ko'r. Ketdik.".
   return (
     <View style={{ alignItems: 'center' }}>
       <Text style={{ fontSize: size, fontWeight: '800', letterSpacing: -size * 0.02, lineHeight: size * 1.05 }}>
         <Text style={{ color: YELLOW }}>Ket</Text>
         <Text style={{ color: WHITE }}>dik</Text>
         <Text style={{ color: YELLOW }}>Go</Text>
-      </Text>
-      <Text style={{ color: YELLOW, fontSize: tx, fontWeight: '800', letterSpacing: tx * 0.5, marginTop: -size * 0.08 }}>
-        TAXI
       </Text>
       {tagline && (
         <Text style={{ color: GRAY1, fontSize: Math.max(10, size * 0.18), fontWeight: '600', letterSpacing: 1, marginTop: 8 }}>
@@ -1683,6 +1681,8 @@ function AppInner() {
     destLat: dest?.lat ?? null, destLng: dest?.lng ?? null,
     driverLat: driverLoc?.lat ?? null, driverLng: driverLoc?.lng ?? null,
     nearby: [], pickupMode: false,
+    // T-04: qidiruv paytida xaritada kengayuvchi radius doirasi (radar effekti)
+    searching: ['searching', 'assigned'].includes(order.status),
   } : orderStep === 'confirm' ? {
     lat: mapBase?.lat ?? null, lng: mapBase?.lng ?? null,
     destLat: null, destLng: null, driverLat: null, driverLng: null,
@@ -1769,11 +1769,7 @@ function AppInner() {
               )}
 
               {['searching', 'assigned'].includes(order.status) && (
-                <View style={{ alignItems: 'center', padding: 20, gap: 12 }}>
-                  <ActivityIndicator color={YELLOW} size="large" />
-                  <Text style={{ color: WHITE, fontSize: 16, fontWeight: '600' }}>Haydovchi qidirilmoqda</Text>
-                  <Text style={{ color: GRAY1, fontSize: 13 }}>Bir oz kuting...</Text>
-                </View>
+                <SearchingPulse />
               )}
 
               {order.status === 'arrived' && <CustomerWaitTimer arrivedAt={order.arrived_at} />}
@@ -2871,6 +2867,50 @@ function CustomerWaitTimer({ arrivedAt }) {
           Pullik kutish · {fmt(fee)} so'm qo'shiladi
         </Text>
       )}
+    </View>
+  );
+}
+
+// T-04: Professional qidiruv indikatori — radar pulse (Yandex Go / Bolt uslubi).
+// Uch halqa markazdan kengayib, xira bo'lib yo'qoladi (radar). Markazда KetdikGo
+// sariq doirasidagi mashina belgisi. Holat matni bosqichma-bosqich yangilanadi.
+function SearchingPulse() {
+  const r1 = useRef(new Animated.Value(0)).current;
+  const r2 = useRef(new Animated.Value(0)).current;
+  const r3 = useRef(new Animated.Value(0)).current;
+  const [msgIdx, setMsgIdx] = useState(0);
+  const MSGS = ['Yaqin haydovchilar qidirilmoqda…', 'Eng mos haydovchi tanlanmoqda…', 'Deyarli tayyor…'];
+  useEffect(() => {
+    const rings = [r1, r2, r3];
+    const anims = rings.map((v, i) => Animated.loop(
+      Animated.timing(v, { toValue: 1, duration: 2200, delay: i * 730, easing: Easing.out(Easing.ease), useNativeDriver: true })
+    ));
+    anims.forEach((a) => a.start());
+    const t = setInterval(() => setMsgIdx((m) => Math.min(m + 1, MSGS.length - 1)), 3500);
+    return () => { anims.forEach((a) => a.stop()); clearInterval(t); };
+  }, []);
+  const ring = (v, key) => (
+    <Animated.View key={key} style={{
+      position: 'absolute', width: 150, height: 150, borderRadius: 75,
+      borderWidth: 2, borderColor: YELLOW,
+      opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] }),
+      transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }) }],
+    }} />
+  );
+  return (
+    <View style={{ alignItems: 'center', paddingVertical: 22, gap: 14 }}>
+      <View style={{ width: 150, height: 150, alignItems: 'center', justifyContent: 'center' }}>
+        {ring(r1, 'a')}{ring(r2, 'b')}{ring(r3, 'c')}
+        <View style={{
+          width: 76, height: 76, borderRadius: 38, backgroundColor: YELLOW,
+          alignItems: 'center', justifyContent: 'center',
+          shadowColor: YELLOW, shadowOpacity: 0.5, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 8,
+        }}>
+          <Ionicons name="car-sport" size={38} color="#15171C" />
+        </View>
+      </View>
+      <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>Haydovchi qidirilmoqda</Text>
+      <Text style={{ color: GRAY1, fontSize: 13.5, textAlign: 'center', paddingHorizontal: 24 }}>{MSGS[msgIdx]}</Text>
     </View>
   );
 }
