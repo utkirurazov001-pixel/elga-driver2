@@ -751,6 +751,7 @@ function AppInner() {
   const healthRef = useRef(null);    // reachability heartbeat timeri
   const offerTimerRef = useRef(null); // offer TTL: qabul qilinmasa o'zi yopiladi
   const orderSoundUriRef = useRef(null); // T-07: admin yuklagan buyurtma ovozi (lokalga keshlangan URI)
+  const inTripRef = useRef(false);       // T-08: haydovchi faol safarda (keep-awake uchun, stale closure'siz)
   const chatOutboxRef = useRef([]);  // socket uzilganda yuborilmagan chat xabarlar (#chat-loss)
   const pushRegisteredRef = useRef(false); // push token bir marta ro'yxatga olinadi
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
@@ -857,6 +858,9 @@ function AppInner() {
         resumeActiveOrder();
         OfflineQueue.flush(token);
         if (online && !watchRef.current) startTracking();
+        // T-08: fon'dan qaytganda faol safarda bo'lsa ekranни qayta uyg'oq qilamiz
+        // (keep-awake tag ba'zi qurilmalarда fon'ga o'tganда bo'shashi mumkin).
+        if (inTripRef.current) keepAwakeOn();
       }
     };
     const appSub = AppState.addEventListener('change', onAppState);
@@ -1151,6 +1155,19 @@ function AppInner() {
     } catch (e) {}
   };
 
+  // ---- T-08: FAOL SAFARDA ekran DOIM yoqiq tursin ----
+  // Haydovchi buyurtma qabul qilgandan safar tugaguncha (assigned/accepted/
+  // arrived/in_progress) ekran o'chmaydi — taksometr va marshrut doim ko'rinadi.
+  // Idle/offline holatда O'CHIRILADI (batareya tejaladi). order.status har
+  // o'zgarganда qayta baholanadi; foreground'ga qaytganда ham qayta yoqiladi
+  // (AppState handler'да inTripRef orqali).
+  const TRIP_AWAKE_STATUSES = ['assigned', 'accepted', 'arrived', 'in_progress'];
+  useEffect(() => {
+    const inTrip = !!order?.status && TRIP_AWAKE_STATUSES.includes(order.status);
+    inTripRef.current = inTrip;
+    if (inTrip) keepAwakeOn(); else keepAwakeOff();
+  }, [order?.status]);
+
   // Faol buyurtma bormi (GPS callback ichida ref orqali, stale closure'siz)
   function isOrderActive() {
     const o = orderRef.current;
@@ -1388,7 +1405,8 @@ function AppInner() {
         // Fon GPS: ilova fonda/ekran o'chiq bo'lsa ham joylashuv yuborilsin
         AsyncStorage.setItem('drv_online', '1').catch(() => {});
         startBackgroundLocation();
-        keepAwakeOn();
+        // T-08: online-idle'da keep-awake YOQILMAYDI (batareya). Faqat FAOL SAFARDA
+        // (yuqoridagi effekt: assigned/accepted/arrived/in_progress) ekran yoqiq turadi.
         showPersistentNotif('Buyurtma kutilmoqda...');
       } else {
         await api('/api/drivers/status', 'POST', { online: false }, token);
