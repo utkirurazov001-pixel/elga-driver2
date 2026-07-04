@@ -747,8 +747,11 @@ function AppInner() {
         const u = await AsyncStorage.getItem('user');
         const p = await AsyncStorage.getItem('pin');
         if (t && u) {
+          // T-06: parol/PIN so'ralmaydi — saqlangan token bilan AVTOMATIK kiramiz.
+          // Token "rolling": har ochilganda jimgina yangilanadi (muddati uzayadi),
+          // shuning uchun faol haydovchi hech qachon qayta SMS/parol kiritmaydi.
           setToken(t); setUser(JSON.parse(u));
-          if (p) { setStoredPin(p); setPinStep('enter'); }
+          refreshToken(t);
           // Crash recovery: oxirgi faol buyurtmani lokaldan DARHOL ko'rsatamiz
           // (internet kelguncha bo'sh ekran chiqmaydi). Keyin server bilan sinxron.
           try {
@@ -1250,8 +1253,25 @@ function AppInner() {
     await AsyncStorage.setItem('token', r.token);
     await AsyncStorage.setItem('user', JSON.stringify(r.user));
     setToken(r.token); setUser(r.user);
-    const p = await AsyncStorage.getItem('pin');
-    if (!p) setPinStep('setup');
+    // T-06: PIN/parol so'ralmaydi — bir marta SMS bilan kirish yetarli.
+    // Token saqlandi; keyingi ochilishlarda avtomatik kiriladi.
+  }
+
+  // T-06: token "rolling" yangilash. Ilova ochilganda saqlangan token bilan chaqiriladi;
+  // yangi (muddati uzaytirilgan) token qaytadi va saqlanadi — faol haydovchi hech qachon
+  // qayta SMS kiritmaydi. Faqat token HAQIQATAN yaroqsiz/muddati o'tган bo'lsa (401)
+  // chiqamiz (qayta SMS). Tarmoq xatosida — saqlangan tokenni saqlab qolamiz (oflayn).
+  async function refreshToken(existing) {
+    try {
+      const r = await api('/api/auth/refresh', 'POST', null, existing);
+      if (r?.token) {
+        await AsyncStorage.setItem('token', r.token);
+        if (r.user) await AsyncStorage.setItem('user', JSON.stringify(r.user));
+        setToken(r.token); if (r.user) setUser(r.user);
+      }
+    } catch (e) {
+      if (e?.status === 401) { try { await logout(); } catch (_) {} }
+    }
   }
 
   async function logout() {

@@ -623,8 +623,11 @@ function AppInner() {
         const hp = await AsyncStorage.getItem('home_place');
         const wp = await AsyncStorage.getItem('work_place');
         if (t && u) {
+          // T-06: parol/PIN so'ralmaydi — saqlangan token bilan AVTOMATIK kiramiz.
+          // Token "rolling": har ochilganда jimgina yangilanadi (muddati uzayadi),
+          // shuning uchun faol foydalanuvchi hech qachon qayta SMS/parol kiritmaydi.
           setToken(t); setUser(JSON.parse(u));
-          if (p) { setStoredPin(p); setPinStep('enter'); }
+          refreshToken(t);
           // Crash recovery: oxirgi faol buyurtmani lokaldan DARHOL ko'rsatamiz
           // (internet kelguncha bo'sh ekran chiqmaydi). Keyin server bilan sinxron.
           try {
@@ -1449,6 +1452,23 @@ function AppInner() {
     ]);
   }
 
+  // T-06: token "rolling" yangilash. Ilova ochilganда saqlangan token bilan chaqiriladi;
+  // yangi (muddati uzaytirilgan) token qaytadi va saqlanadi — faol foydalanuvchi hech
+  // qachon qayta SMS kiritmaydi. Faqat token HAQIQATAN yaroqsiz/muddati o'tган bo'lsa
+  // (401) chiqamiz (qayta SMS). Tarmoq xatosida — saqlangan tokenni saqlab qolamiz (oflayn).
+  async function refreshToken(existing) {
+    try {
+      const r = await api('/api/auth/refresh', 'POST', null, existing);
+      if (r?.token) {
+        await AsyncStorage.setItem('token', r.token);
+        if (r.user) await AsyncStorage.setItem('user', JSON.stringify(r.user));
+        setToken(r.token); if (r.user) setUser(r.user);
+      }
+    } catch (e) {
+      if (e?.status === 401) { try { await doLogout(); } catch (_) {} }
+    }
+  }
+
   async function loadTrips() {
     try { const r = await api('/api/me/trips?limit=30', 'GET', null, token); setTrips(r.trips || []); } catch (e) {}
   }
@@ -1603,8 +1623,8 @@ function AppInner() {
                 await AsyncStorage.setItem('token', r.token);
                 await AsyncStorage.setItem('user', JSON.stringify(r.user));
                 setToken(r.token); setUser(r.user);
-                const p = await AsyncStorage.getItem('pin');
-                if (!p) setPinStep('setup');
+                // T-06: PIN/parol so'ralmaydi — bir marta SMS bilan kirish yetarli.
+                // Token saqlandi; keyingi ochilishlarda avtomatik kiriladi.
               } catch (e) {
                 if (e.data?.new_user && e.data?.reg_token) { setRegToken(e.data.reg_token); setStep('name'); }
                 else { Alert.alert('Xato', e.message); }
@@ -1636,8 +1656,8 @@ function AppInner() {
                 await AsyncStorage.setItem('token', r.token);
                 await AsyncStorage.setItem('user', JSON.stringify(r.user));
                 setToken(r.token); setUser(r.user);
-                const p = await AsyncStorage.getItem('pin');
-                if (!p) setPinStep('setup');
+                // T-06: PIN/parol so'ralmaydi — bir marta SMS bilan kirish yetarli.
+                // Token saqlandi; keyingi ochilishlarda avtomatik kiriladi.
               } catch (e) { Alert.alert('Xato', e.message); }
               setLoading(false);
             }} disabled={loading}>
