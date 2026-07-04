@@ -299,6 +299,8 @@ async function api(path, method = 'GET', body = null, token = null, timeoutMs = 
 //  Har bir amal o'ziga xos id (idempotencyKey) bilan yuboriladi — dubl bo'lmaydi.
 // ============================================================
 const OFFLINE_QUEUE_KEY = 'offline_queue_v1';
+// A-5: faol safar masofasi (lokal odometr) — internetsiz ham yig'iladi, keyin sync.
+const TRIP_KM_KEY = 'trip_km_v1';
 const OfflineQueue = {
   items: [],
   loaded: false,
@@ -337,7 +339,9 @@ const OfflineQueue = {
         const it = this.items[0];
         try {
           if (it.kind === 'order_action') {
-            await api(`/api/orders/${it.orderId}/${it.action}`, 'POST', {}, token, 15000,
+            // A-5: 'complete' oflayn navbatga tushsa, lokal o'lchangan client_km
+            // (safar masofasi) ham yuboriladi — server oflayn bo'shliqni tiklaydi.
+            await api(`/api/orders/${it.orderId}/${it.action}`, 'POST', it.body || {}, token, 15000,
               { idempotencyKey: it.id, retries: 1 });
           }
           this.items.shift(); // muvaffaqiyat — navbatdan olib tashlaymiz
@@ -752,6 +756,7 @@ function AppInner() {
   const offerTimerRef = useRef(null); // offer TTL: qabul qilinmasa o'zi yopiladi
   const orderSoundUriRef = useRef(null); // T-07: admin yuklagan buyurtma ovozi (lokalga keshlangan URI)
   const inTripRef = useRef(false);       // T-08: haydovchi faol safarda (keep-awake uchun, stale closure'siz)
+  const tripKmRef = useRef({ orderId: null, km: 0, prevLoc: null, savedAt: 0 }); // A-5: faol safar lokal odometri (internetsiz ham)
   const chatOutboxRef = useRef([]);  // socket uzilganda yuborilmagan chat xabarlar (#chat-loss)
   const pushRegisteredRef = useRef(false); // push token bir marta ro'yxatga olinadi
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
@@ -776,6 +781,12 @@ function AppInner() {
           try {
             const ao = await AsyncStorage.getItem(ACTIVE_ORDER_KEY);
             if (ao) { const o = JSON.parse(ao); if (o && ACTIVE_STATUSES.includes(o.status)) setOrder(o); }
+          } catch (e) {}
+          // A-5: safar odometrini tiklaymiz (ilova safar o'rtasida o'chib qayta ochilsa
+          // ham lokal masofa yo'qolmaydi — internet qaytganda to'g'ri narx yuboriladi).
+          try {
+            const tkRaw = await AsyncStorage.getItem(TRIP_KM_KEY);
+            if (tkRaw) { const tk = JSON.parse(tkRaw); if (tk && tk.orderId) tripKmRef.current = { orderId: tk.orderId, km: Number(tk.km) || 0, prevLoc: null, savedAt: 0 }; }
           } catch (e) {}
         }
       } catch (e) {}
@@ -1236,6 +1247,25 @@ function AppInner() {
             }
             return { ...prev, km: (prev.km || 0) + addKm, prevLoc: loc };
           });
+
+          // A-5 (INTERNETSIZ SAFAR): faol safar (in_progress) masofasini LOKAL o'lchaymiz
+          // — GPS internetdan mustaqil ishlaydi. Internet uzilsa ham km yig'iladi va
+          // AsyncStorage'ga saqlanadi (ilova o'chsa ham yo'qolmaydi). Yakuniy narx
+          // 'complete'да client_km sifatida yuboriladi; server oflayn bo'shliqni tiklaydi.
+          const ao = orderRef.current;
+          if (ao && ao.status === 'in_progress') {
+            const tk = tripKmRef.current;
+            if (tk.orderId !== ao.id) { tk.orderId = ao.id; tk.km = 0; tk.prevLoc = null; }
+            if (tk.prevLoc) {
+              const d = haversineKm(tk.prevLoc.lat, tk.prevLoc.lng, loc.lat, loc.lng);
+              if (d > 0.008 && d < 2) tk.km += d;
+            }
+            tk.prevLoc = loc;
+            if (now - (tk.savedAt || 0) > 5000) { // ~5s throttle — restart mid-trip'da tiklanadi
+              tk.savedAt = now;
+              AsyncStorage.setItem(TRIP_KM_KEY, JSON.stringify({ orderId: tk.orderId, km: tk.km })).catch(() => {});
+            }
+          }
         }
       );
     } catch (e) {}
@@ -1498,9 +1528,16 @@ function AppInner() {
     clearOfferTimer(); // haydovchi offerga javob berdi — TTL taymeri kerak emas
     const orderId = order.id;
     setLoading(true);
+    // A-5: 'complete'да lokal o'lchangan safar masofasini (client_km) yuboramiz —
+    // server oflayn bo'shliqда yo'qolgan km'ni tiklaydi (haydovchi kam pul olmasin).
+    const tk = tripKmRef.current;
+    const body = (action === 'complete' && tk.orderId === orderId && tk.km > 0)
+      ? { client_km: Number(tk.km.toFixed(2)) } : {};
     try {
-      const r = await api(`/api/orders/${orderId}/${action}`, 'POST', {}, token);
+      const r = await api(`/api/orders/${orderId}/${action}`, 'POST', body, token);
       if (action === 'complete') {
+        tripKmRef.current = { orderId: null, km: 0, prevLoc: null, savedAt: 0 };
+        AsyncStorage.removeItem(TRIP_KM_KEY).catch(() => {});
         const finishedOrder = r.order || order;
         const net = Number(finishedOrder.price || 0) - Number(finishedOrder.commission || 0);
         speak(`Safar yakunlandi. ${fmt(net)} so'm ishlandingiz.`);
@@ -1531,9 +1568,13 @@ function AppInner() {
     } catch (e) {
       if (e && e.network) {
         // Internet yo'q — amalni navbatga qo'yamiz, qaytganda avtomatik yuboriladi.
-        await OfflineQueue.enqueue({ kind: 'order_action', orderId, action });
+        // A-5: 'complete' body'sida client_km ham saqlanadi — internet qaytganда
+        // server oflayn masofani to'g'ri tiklaydi.
+        await OfflineQueue.enqueue({ kind: 'order_action', orderId, action, body });
         // Optimistik holat: haydovchi ish jarayonini to'xtatmasdan davom ettiradi
         if (action === 'complete') {
+          tripKmRef.current = { orderId: null, km: 0, prevLoc: null, savedAt: 0 };
+          AsyncStorage.removeItem(TRIP_KM_KEY).catch(() => {});
           setCompletedTrip(order);
           setOrder(null); setMeter(null); setChatMessages([]);
           updatePersistentNotif('Buyurtma kutilmoqda... (oflayn — sinxronlanadi)');
