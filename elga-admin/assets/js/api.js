@@ -1,153 +1,231 @@
 /* ====================================================================
-   KetdikGo Admin — API klient (api.elga.uz ga ulanish)
-   Backend topilsa → jonli ma'lumot. Topilmasa → demo (mock) rejimi.
-   Bootstrap window.DB ni real ma'lumot bilan to'ldiradi (sahifalar
-   o'zgartirilmaydi — ular window.DB dan o'qiydi).
+   KetdikGo Admin — API klient (JONLI backend: api.elga.uz /api/admin/*)
+   YO'L 2: panel mavjud backend'ga to'g'ri ulanadi (backend TEGILMAYDI).
+   - Auth: POST /api/admin/staff/login  (staff JWT) yoki X-Admin-Key.
+   - Ma'lumot: GET /api/admin/{stats,drivers,orders,balances,promos,
+       complaints,audit,customers,payouts} — REAL shakl.
+   - Real-time: backend'da admin-socket YO'Q (driver_location faqat
+       customer xonasiga boradi) -> POLLING bilan jonli xarita/KPI.
+   - Fetch: timeout + retry (zaif internet).
+   Bootstrap window.DB ni real ma'lumot bilan to'ldiradi; sahifalar
+   o'zgartirilmaydi — ular window.DB dan o'qiydi.
    ==================================================================== */
 (function(){
   function defaultBase(){
-    // Lokal/dev hostda ishlatilsa — localhost; aks holda prod (HTTPS).
     try{
       var h = location.hostname;
-      if(h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0') return 'http://localhost:3000/v1';
+      if(h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0') return 'http://localhost:3000';
     }catch(e){}
-    return 'https://api.elga.uz/v1';
+    return 'https://api.elga.uz';
   }
   function baseUrl(){
-    try{ return localStorage.getItem('elga_api_base') || defaultBase(); }
+    try{
+      var b = localStorage.getItem('elga_api_base') || defaultBase();
+      // Eski sozlama '/v1' bilan saqlangan bo'lsa — tozalaymiz (backend'da /v1 yo'q).
+      return b.replace(/\/v1\/?$/,'').replace(/\/$/,'');
+    }
     catch(e){ return defaultBase(); }
+  }
+
+  // timeout + 1 retry (backoff). Zaif internetда osilib qolmaydi.
+  function fetchJSON(method, url, headers, body, timeoutMs, retries){
+    timeoutMs = timeoutMs || 12000;
+    retries = (retries == null) ? 1 : retries;
+    function attempt(left, delay){
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function(){ try{ctrl.abort();}catch(e){} }, timeoutMs) : null;
+      var opts = { method: method, headers: headers };
+      if(body) opts.body = JSON.stringify(body);
+      if(ctrl) opts.signal = ctrl.signal;
+      return fetch(url, opts).then(function(r){
+        if(timer) clearTimeout(timer);
+        return r.json().catch(function(){ return null; }).then(function(j){ return { status: r.status, body: j }; });
+      }).catch(function(){
+        if(timer) clearTimeout(timer);
+        if(left > 0){ return new Promise(function(res){ setTimeout(res, delay); }).then(function(){ return attempt(left-1, delay*2); }); }
+        var e = new Error('network'); e.network = true; throw e;
+      });
+    }
+    return attempt(retries, 800);
   }
 
   var ELGA = {
     live: false,
-    token: null,
+    token: null,       // staff JWT
+    adminKey: null,    // yoki X-Admin-Key (zaxira)
     me: null,
+    _poll: null,
 
-    setBase: function(url){ try{ localStorage.setItem('elga_api_base', url); }catch(e){} },
+    setBase: function(url){ try{ localStorage.setItem('elga_api_base', String(url||'').replace(/\/v1\/?$/,'')); }catch(e){} },
     base: baseUrl,
 
+    _headers: function(){
+      var h = { 'Content-Type':'application/json' };
+      if(this.token) h['Authorization'] = 'Bearer ' + this.token;
+      if(this.adminKey) h['X-Admin-Key'] = this.adminKey;
+      return h;
+    },
+
+    // path — '/api/admin/...' bilan boshlanadi.
     request: function(method, path, body){
-      var opts = { method:method, headers:{'Content-Type':'application/json'} };
-      if(this.token) opts.headers['Authorization'] = 'Bearer '+this.token;
-      if(body) opts.body = JSON.stringify(body);
-      return fetch(baseUrl()+path, opts).then(function(r){
-        return r.json().catch(function(){ return {success:false, error:{code:'PARSE', message:'Javob o\'qilmadi'}}; })
-          .then(function(j){ return {status:r.status, body:j}; });
-      });
+      return fetchJSON(method, baseUrl() + path, this._headers(), body);
     },
     get: function(path){ return this.request('GET', path); },
     post: function(path, body){ return this.request('POST', path, body); },
 
-    // Login: muvaffaqiyat → {ok:true}; xato turlari: 'auth' | 'network'
-    login: function(login, password, code){
-      var self=this;
-      return this.post('/auth/login', {login:login, password:password, code:code||undefined})
-        .then(function(res){
-          if(res.status>=200 && res.status<300 && res.body.success){
-            self.token = res.body.data.access_token;
-            self.me = res.body.data.user;
-            return {ok:true};
-          }
-          return {ok:false, type:'auth', message:(res.body.error&&res.body.error.message)||'Login xato'};
-        })
-        .catch(function(){ return {ok:false, type:'network'}; });
+    // Login: username+password -> /api/admin/staff/login (JWT). Parol bo'sh bo'lsa
+    // login maydonidagi qiymat X-Admin-Key sifatida sinaladi (super-admin kaliti).
+    // Muvaffaqiyat -> {ok:true}; xato: 'auth' | 'network'.
+    login: function(login, password){
+      var self = this;
+      if(password){
+        return this.post('/api/admin/staff/login', { username: login, password: password })
+          .then(function(res){
+            if(res.status>=200 && res.status<300 && res.body && res.body.token){
+              self.token = res.body.token; self.adminKey = null;
+              self.me = res.body.staff || null;
+              return { ok:true };
+            }
+            return { ok:false, type:'auth', message:(res.body && res.body.error) || 'Login yoki parol noto\'g\'ri' };
+          })
+          .catch(function(){ return { ok:false, type:'network' }; });
+      }
+      // Parolsiz — login = X-Admin-Key deb sinaymiz (stats bilan tekshiramiz)
+      self.adminKey = login; self.token = null;
+      return this.get('/api/admin/stats').then(function(res){
+        if(res.status>=200 && res.status<300 && res.body && res.body.role){
+          self.me = { username:'admin', role: res.body.role, name:'Admin' };
+          return { ok:true };
+        }
+        self.adminKey = null;
+        return { ok:false, type:'auth', message:'Admin kalit noto\'g\'ri' };
+      }).catch(function(){ self.adminKey=null; return { ok:false, type:'network' }; });
     },
 
-    // window.DB ni jonli ma'lumot bilan to'ldirish
+    // window.DB ni jonli ma'lumot bilan to'ldirish (mavjud endpointlardan)
     bootstrap: function(){
-      var self=this;
-      var get = function(p){ return self.get(p).then(function(r){ return r.body && r.body.success ? r.body : {data:[],meta:null}; }); };
+      var self = this;
+      var g = function(p){ return self.get(p).then(function(r){ return (r.status>=200&&r.status<300) ? (r.body||{}) : {}; }).catch(function(){ return {}; }); };
       return Promise.all([
-        get('/drivers?limit=100'), get('/clients?limit=100'), get('/orders?limit=100'),
-        get('/finance/withdrawals?limit=100'), get('/finance/transactions?limit=100'),
-        get('/complaints?limit=100'), get('/loyalty/rewards'), get('/loyalty/promo-codes'),
-        get('/cities'), get('/places?limit=100'), get('/audit?limit=100'), get('/tariffs'),
-        get('/stats/dashboard'), get('/zones'), get('/campaigns'), get('/corporate')
+        g('/api/admin/stats'),
+        g('/api/admin/drivers'),
+        g('/api/admin/orders?limit=100'),
+        g('/api/admin/balances'),
+        g('/api/admin/promos'),
+        g('/api/admin/complaints'),
+        g('/api/admin/audit?limit=100'),
+        g('/api/admin/customers?limit=100'),
+        g('/api/admin/payouts')
       ]).then(function(r){
         var D = window.DB;
-        D.drivers     = (r[0].data||[]).map(mapDriver);
-        D.clients     = (r[1].data||[]).map(mapClient);
-        D.orders      = (r[2].data||[]).map(mapOrder);
-        D.withdrawals = (r[3].data||[]).map(mapWithdrawal);
-        D.transactions= (r[4].data||[]).map(mapTxn);
-        D.complaints  = (r[5].data||[]).map(mapComplaint);
-        D.rewards     = (r[6].data||[]).map(mapReward);
-        D.promos      = (r[7].data||[]).map(mapPromo);
-        D.cities      = (r[8].data||[]).map(mapCity);
-        D.places      = (r[9].data||[]).map(mapPlace);
-        D.audit       = (r[10].data||[]).map(mapAudit);
-        D.tariffs     = (r[11].data||[]).map(mapTariff);
-        var dash = r[12].data;
-        if(dash) applyDash(dash);
-        if((r[13].data||[]).length) D.zones = r[13].data.map(mapZone);
-        if((r[14].data||[]).length) D.campaigns = r[14].data.map(mapCampaign);
-        if((r[15].data||[]).length) D.corporate = r[15].data.map(mapCorp);
+        var balMap = {};
+        arr(r[3],'drivers').forEach(function(b){ balMap[b.id] = b; });
+        D.drivers     = arr(r[1],'drivers').map(function(d){ return mapDriver(d, balMap[d.id]); });
+        D.orders      = arr(r[2],'orders').map(mapOrder);
+        D.promos      = arr(r[4],'promos').map(mapPromo);
+        D.complaints  = arr(r[5],'complaints').map(mapComplaint);
+        D.audit       = arr(r[6],'audit','logs','log').map(mapAudit);
+        D.clients     = arr(r[7],'customers','clients').map(mapClient);
+        D.withdrawals = arr(r[8],'payouts','withdrawals').map(mapWithdrawal);
+        applyStats(r[0] || {});
         self.live = true;
         return true;
       });
-    }
+    },
+
+    // ---- Real-time o'rniga POLLING (backend'da admin-socket yo'q) ----
+    // Har ~6s: KPI + haydovchi joylashuvi + yangi buyurtmalar. Bus event'lari
+    // orqali sahifalar (jonli xarita, dashboard) avtomatik yangilanadi.
+    startPolling: function(){
+      var self = this;
+      if(self._poll) return;
+      var known = {}; (window.DB.orders||[]).forEach(function(o){ known[o.id]=1; });
+      function tick(){
+        if(!self.live) return;
+        self.get('/api/admin/stats').then(function(r){ if(r.body) applyStats(r.body); window.Bus && window.Bus.emit('kpi:update', window.LiveKPI); }).catch(function(){});
+        self.get('/api/admin/drivers').then(function(r){
+          var list = arr(r.body,'drivers'); if(!list.length) return;
+          window.DB.drivers = list.map(function(d){ return mapDriver(d, null); });
+          window.Bus && window.Bus.emit('driver:location', window.DB.drivers);
+        }).catch(function(){});
+        self.get('/api/admin/orders?limit=50').then(function(r){
+          var list = arr(r.body,'orders').map(mapOrder);
+          var fresh = list.filter(function(o){ return !known[o.id]; });
+          fresh.forEach(function(o){ known[o.id]=1; });
+          if(fresh.length){
+            var olds = (window.DB.orders||[]).filter(function(o){ return list.every(function(n){return n.id!==o.id;}); });
+            window.DB.orders = list.concat(olds).slice(0,240);
+            fresh.forEach(function(o){ window.Bus && window.Bus.emit('order:new', o); });
+          }
+        }).catch(function(){});
+      }
+      self._poll = setInterval(tick, 6000);
+    },
+    stopPolling: function(){ if(this._poll){ clearInterval(this._poll); this._poll=null; } },
+
+    // Eski nomlar (app.js chaqiradi) — polling'ga bog'laymiz (socket o'rniga).
+    connectSocket: function(){ this.startPolling(); },
+    disconnectSocket: function(){ this.stopPolling(); }
   };
 
-  function ini(name){ var p=String(name||'').split(' '); return ((p[0]||'')[0]||'')+((p[1]||'')[0]||''); }
+  // ---- Yordamchilar ----
+  // Javobdagi birinchi mos massivni topadi (kalit nomi backendда har xil bo'lishi mumkin).
+  function arr(body){
+    if(!body) return [];
+    for(var i=1;i<arguments.length;i++){ if(Array.isArray(body[arguments[i]])) return body[arguments[i]]; }
+    if(Array.isArray(body.data)) return body.data;
+    if(Array.isArray(body)) return body;
+    return [];
+  }
+  function ini(name){ var p=String(name||'').trim().split(/\s+/); return ((p[0]||'')[0]||'')+((p[1]||'')[0]||''); }
   function cap(p){ return ({payme:'Payme',click:'Click',cash:'Naqd',balance:'Balans'})[p]||p; }
-  function tlabel(t){ return t? t.charAt(0).toUpperCase()+t.slice(1) : t; }
 
-  function mapDriver(d){ d.ini=ini(d.full_name); d.tariff=tlabel(d.tariff); return d; }
-  function mapClient(c){ c.ini=ini(c.full_name); return c; }
+  // Dashboard KPI — real /stats -> panel LiveKPI
+  function applyStats(s){
+    var L = window.LiveKPI; if(!L||!s) return;
+    if(s.orders_today!=null) L.orders_today = s.orders_today;
+    if(s.drivers_online!=null) L.active_drivers = s.drivers_online;
+    if(s.revenue_today!=null) L.revenue_today = +(Number(s.revenue_today)/1e6).toFixed(2);
+    if(s.customers!=null) L.new_clients = s.customers;
+    if(s.orders_today!=null) L.cancel_rate = s.orders_today ? Math.round(100*(s.cancelled_today||0)/s.orders_today) : 0;
+    if(s.commission_total!=null) L.commission = +(Number(s.commission_total)/1e6).toFixed(2);
+  }
+
+  // real /drivers -> panel driver (balans /balances dan qo'shiladi)
+  function mapDriver(d, bal){
+    var name = d.name || d.full_name || '';
+    return {
+      id: d.id, full_name: name, name: name, ini: ini(name), phone: d.phone,
+      driver_id: d.driver_id, car: d.car || [d.car_model, d.car_number].filter(Boolean).join(' · '),
+      online: !!d.online, busy: !!d.busy,
+      status: d.online ? (d.busy ? 'busy' : 'online') : 'offline',
+      trips: (d.trips!=null?d.trips:d.trips_done), earned: d.earned,
+      rating: d.rating,
+      balance: bal ? bal.balance : (d.balance!=null?d.balance:0),
+      pending_bonus: bal ? bal.pending_bonus : undefined
+    };
+  }
+  function mapClient(c){ var name=c.name||c.full_name||''; return { id:c.id, full_name:name, name:name, ini:ini(name), phone:c.phone, orders:c.orders, spent:c.spent, tier:c.tier }; }
   function mapOrder(o){
-    o.client_ini=ini(o.client);
-    o.from = o.from_city+' · '+o.from_place; o.to = o.to_city+' · '+o.to_place;
-    o.tariff=tlabel(o.tariff); return o;
+    var name = o.customer_name || o.client || '';
+    return {
+      id:o.id, status:o.status, price:o.price, distance_km:o.distance_km,
+      from:o.from_address||o.from||'', to:o.to_address||o.to||'',
+      client:name, client_ini:ini(name), driver:o.driver_name||'',
+      created_at:o.created_at
+    };
   }
-  function mapWithdrawal(w){ w.driver_ini=ini(w.driver); w.provider=cap(w.provider); return w; }
-  function mapTxn(t){ t.provider=cap(t.provider); return t; }
-  function mapComplaint(c){ return c; }
-  function mapReward(r){ return {id:r.id, title:r.title, desc:r.description, cost:r.cost_points, type:r.type, stock:r.stock, active:r.is_active, icon:'gift'}; }
-  function mapPromo(p){ return {id:p.id, code:p.code, type:p.type, value:p.value, min_order:p.min_order, limit:p.usage_limit, used:p.used_count, valid_to:p.valid_to, active:p.is_active}; }
-  function mapCity(c){ return {id:c.name, name:c.name, region:c.region, active:c.is_active, drivers:c.drivers, orders:c.orders}; }
-  function mapPlace(p){ return {id:p.id, city:p.city, name:p.name, count:p.count, source:p.source, added_at:p.added_at||p.created_at||''}; }
-  function mapAudit(a){ return a; }
-  function mapTariff(t){ return {id:t.id, name:tlabel(t.name), base:t.base_fare, per_km:t.per_km, per_min:t.per_min, min_fare:t.min_fare, surge:t.surge_multiplier, commission:t.commission_percent, active:t.is_active}; }
-  function mapZone(z){ return {id:z.id, name:z.name, city:z.city, polygon:z.polygon, surge:z.surge, active:z.is_active}; }
-  function mapCampaign(c){ var seg=c.segment||{}; var s=(seg.city?seg.city+' · ':'')+(seg.tier?tlabel(seg.tier)+' mijozlar':'Barcha mijozlar'); return {id:c.id, title:c.title, channel:c.channel, segment:s, body:c.body, status:c.status, recipients:c.recipients, created_at:c.created_at}; }
-  function mapCorp(c){ return {id:c.id, name:c.name, contact:c.contact, phone:c.phone, balance:c.balance, employees:c.employees, rides:c.rides, active:c.is_active}; }
+  function mapWithdrawal(w){ var name=w.driver||w.name||''; return { id:w.id, driver:name, driver_ini:ini(name), amount:w.amount, provider:cap(w.provider||w.method), status:w.status, created_at:w.created_at }; }
+  function mapComplaint(c){ return { id:c.id, user:c.name||'', phone:c.phone, role:c.role, order_id:c.order_id, text:c.text, status:c.status, created_at:c.created_at }; }
+  function mapPromo(p){ return { id:p.id, code:p.code, type:p.type||'percent', value:(p.percent!=null?p.percent:p.value), min_order:p.min_order, limit:(p.max_uses!=null?p.max_uses:p.usage_limit), used:(p.used_count||p.used||0), valid_to:p.valid_to, active:!!(p.active!=null?p.active:p.is_active) }; }
+  function mapAudit(a){ return { id:a.id, user:(a.actor||a.user||a.staff||''), role:a.role, action:a.action, entity:(a.entity||a.target||''), entity_id:(a.entity_id||a.target||''), detail:a.detail, ip:a.ip, created_at:(a.created_at||a.at) }; }
 
-  function applyDash(d){
-    var L = window.LiveKPI; if(!L) return;
-    L.orders_today = d.orders_today;
-    L.active_drivers = d.active_drivers;
-    L.revenue_today = +(d.revenue_today/1e6).toFixed(2);
-    L.new_clients = d.new_clients;
-    L.cancel_rate = d.cancel_rate;
-    L.commission = +(d.commission_today/1e6).toFixed(2);
-  }
-
-  /* Socket.IO jonli ulanish (live rejimda real-time) */
-  ELGA.connectSocket = function(){
-    if(typeof io==='undefined' || !this.token) return;
-    try{
-      var origin = baseUrl().replace(/\/v1$/,'');
-      var s = io(origin, {auth:{token:this.token}, transports:['websocket','polling']});
-      this.socket = s;
-      s.on('order:new', function(o){ try{ o.from=o.from_city+' · '+o.from_place; o.to=o.to_city+' · '+o.to_place; o.client_ini=(o.client||'').split(' ').map(function(x){return x[0];}).join('').slice(0,2); window.DB.orders.unshift(o); if(window.DB.orders.length>240)window.DB.orders.pop(); window.Bus&&window.Bus.emit('order:new',o);}catch(e){} });
-      s.on('order:updated', function(o){ window.Bus&&window.Bus.emit('order:updated',o); });
-      s.on('driver:status', function(d){ window.Bus&&window.Bus.emit('driver:status',d); });
-      s.on('driver:location', function(list){
-        var full=[]; (list||[]).forEach(function(p){ var d=window.DB.drivers.find(function(x){return x.id===p.id;}); if(d){ d.lat=p.lat; d.lng=p.lng; if(p.status)d.status=p.status; full.push(d); } });
-        window.Bus&&window.Bus.emit('driver:location', full.length?full:list);
-      });
-      s.on('kpi:update', function(k){ if(k&&k.orders_today!=null){ var L=window.LiveKPI; L.orders_today=k.orders_today; L.active_drivers=k.active_drivers; L.revenue_today=+(k.revenue_today/1e6).toFixed(2); } window.Bus&&window.Bus.emit('kpi:update', window.LiveKPI); });
-    }catch(e){}
-  };
-  ELGA.disconnectSocket = function(){ if(this.socket){ try{this.socket.disconnect();}catch(e){} this.socket=null; } };
-
-  /* Yozish amali — live rejimda backendga yuboradi, demo'da no-op.
-     Promise qaytaradi: {ok:true,data} yoki {ok:false,message}. */
+  /* Yozish amali — live rejimda backendga (/api/admin/...) yuboradi, demo'da no-op. */
   window.apiAction = function(method, path, body){
     if(!(window.ELGA && window.ELGA.live)) return Promise.resolve({ok:true, demo:true});
     return window.ELGA.request(method, path, body).then(function(r){
-      if(r.status>=200 && r.status<300 && r.body && r.body.success) return {ok:true, data:r.body.data};
-      return {ok:false, message:(r.body && r.body.error && r.body.error.message) || 'Server xatosi'};
+      if(r.status>=200 && r.status<300 && r.body && (r.body.ok || r.body.success!==false)) return {ok:true, data:r.body};
+      return {ok:false, message:(r.body && r.body.error) || 'Server xatosi'};
     }).catch(function(){ return {ok:false, message:'Tarmoq xatosi'}; });
   };
 

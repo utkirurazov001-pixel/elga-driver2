@@ -114,11 +114,16 @@
       }
       function enterLive(){
         window.ELGA.bootstrap().then(function(){
-          if(window.ELGA.me){ ME.full_name=window.ELGA.me.full_name; ME.role=window.ELGA.me.role; ME.ini=(ME.full_name.split(' ').map(function(x){return x[0];}).join('').slice(0,2)); }
-          window.ELGA.connectSocket && window.ELGA.connectSocket(); // real-time WS
+          if(window.ELGA.me){
+            var nm = window.ELGA.me.name || window.ELGA.me.full_name || window.ELGA.me.username || 'Admin';
+            ME.full_name = nm; ME.login = window.ELGA.me.username || ME.login;
+            ME.role = window.ELGA.me.role || ME.role;
+            ME.ini = nm.split(' ').map(function(x){return x[0];}).join('').slice(0,2);
+          }
+          window.ELGA.connectSocket && window.ELGA.connectSocket(); // jonli POLLING (backend'da admin-socket yo'q)
           sessionStorage.setItem('elga_admin_in','1');
           renderShell(); navigate(homeRoute());
-          window.UI.toast('Backendga ulandi', 'api.elga.uz · jonli ma\'lumot + WS · 1226');
+          window.UI.toast('Backendga ulandi', 'api.elga.uz · jonli ma\'lumot · 1226');
         }).catch(function(){ enterDemo('Ma\'lumot yuklanmadi — namuna rejimi'); });
       }
 
