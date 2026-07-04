@@ -17,6 +17,14 @@ L.control.zoom({position:'topright'}).addTo(map);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
 map.setView([41.31,69.24],13);
 var pickupMarker=null,destMarker=null,driverMarker=null,carMarkers=[],fitted=false,centeredOnce=false;
+// T-04: qidiruv radar doirasi — 'searching' bo'lganda pickup atrofida kengayadi.
+var searchCircle=null,searchTimer=null,searchR=120;
+function stopSearchPulse(){ if(searchTimer){clearInterval(searchTimer);searchTimer=null;} if(searchCircle){try{map.removeLayer(searchCircle);}catch(e){}searchCircle=null;} }
+function startSearchPulse(lat,lng){
+  stopSearchPulse(); searchR=120;
+  searchCircle=L.circle([lat,lng],{radius:searchR,color:'#FFCC00',weight:2,opacity:0.9,fillColor:'#FFCC00',fillOpacity:0.10}).addTo(map);
+  searchTimer=setInterval(function(){ searchR+=70; if(searchR>1000)searchR=120; try{searchCircle.setLatLng([lat,lng]);searchCircle.setRadius(searchR);searchCircle.setStyle({fillOpacity:Math.max(0.02,0.16-(searchR/1000)*0.14),opacity:Math.max(0.15,0.9-(searchR/1000)*0.75)});}catch(e){} },110);
+}
 function postPickupDrag(e){var ll=e.target.getLatLng();window.ReactNativeWebView.postMessage(JSON.stringify({type:'pickupDrag',lat:ll.lat,lng:ll.lng}));}
 window.updateMap=function(d){
   try{
@@ -29,6 +37,8 @@ window.updateMap=function(d){
     for(var i=0;i<carMarkers.length;i++){map.removeLayer(carMarkers[i]);}
     carMarkers=[];
     (d.nearby||[]).forEach(function(c){if(c.lat&&c.lng){carMarkers.push(L.marker([c.lat,c.lng],{icon:carIcon}).addTo(map));}});
+    // T-04: qidiruv radar doirasi (kengayuvchi radius)
+    if(d.searching&&d.lat!=null){ if(!searchCircle)startSearchPulse(d.lat,d.lng); } else { stopSearchPulse(); }
     if(d.destLat!=null&&d.lat!=null&&!fitted){map.fitBounds([[d.lat,d.lng],[d.destLat,d.destLng]],{padding:[40,40]});fitted=true;centeredOnce=true;}
     else if(d.lat!=null&&!centeredOnce){map.setView([d.lat,d.lng],15);centeredOnce=true;}
   }catch(e){}
