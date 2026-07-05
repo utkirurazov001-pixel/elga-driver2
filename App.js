@@ -735,6 +735,8 @@ function AppInner() {
   const [meter, setMeter] = useState(null); // { km, minutes, fare } — SERVER hisoblagich (~4s)
   // T-11: LOKAL real-time taksometr — har GPS'da (tarmoq kutmasdan) yangilanadi.
   const [liveMeter, setLiveMeter] = useState(null); // { km, fare }
+  // T-18: safar davomida kutish holati (haydovchi tablosi uchun) — /midwait javobidan.
+  const [tripWait, setTripWait] = useState(null); // { sec, fee, waiting }
   // Server 'meter' eventidan olingan interpolatsiya bazasi: fare = offset + km*perKm.
   const meterBaseRef = useRef(null); // { offset, perKm, metered }
   const liveMeterAtRef = useRef(0);  // re-render throttle (ms)
@@ -768,6 +770,10 @@ function AppInner() {
   const orderSoundUriRef = useRef(null); // T-07: admin yuklagan buyurtma ovozi (lokalga keshlangan URI)
   const inTripRef = useRef(false);       // T-08: haydovchi faol safarda (keep-awake uchun, stale closure'siz)
   const tripKmRef = useRef({ orderId: null, km: 0, prevLoc: null, savedAt: 0 }); // A-5: faol safar lokal odometri (internetsiz ham)
+  // T-18: safar davomida kutish-aniqlash (uzoq to'xtash → /midwait; svetofor emas)
+  const stopSinceRef = useRef(0);      // to'xtash boshlangan vaqt (ms), 0 = harakatda
+  const waitActiveRef = useRef(false); // hozir kutish rejimida
+  const lastWaitReportRef = useRef(0); // oxirgi /midwait vaqti (ms)
   const chatOutboxRef = useRef([]);  // socket uzilganda yuborilmagan chat xabarlar (#chat-loss)
   const pushRegisteredRef = useRef(false); // push token bir marta ro'yxatga olinadi
   const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
@@ -1207,6 +1213,22 @@ function AppInner() {
   }
 
   // ---- GPS kuzatuv (onlayn bo'lganda socket orqali yuboriladi) ----
+  // T-18: safar davomidagi KUTISHni backendга yozadi (mavjud /midwait endpoint).
+  // add_sec — qo'shiladigan kutish soniyalari (backend ≤120 ga cheklaydi). waiting=false
+  // → kutish tugadi (mashina harakatlandi). Bepul oyna (FREE_WAIT_SEC) + daqiqa narxini
+  // (WAIT_PER_MIN) BACKEND o'zi qo'llaydi — bu yerда faqat REAL kutish yuboriladi
+  // (qisqa svetofor to'xtashlari umuman yuborilmaydi). Javobdan tabloni yangilaymiz.
+  async function reportMidwait(addSec, waiting) {
+    const ao = orderRef.current;
+    if (!ao || ao.status !== 'in_progress') return;
+    try {
+      const r = await api(`/api/orders/${ao.id}/midwait`, 'POST',
+        { add_sec: Math.max(0, Math.min(120, Math.round(addSec || 0))), waiting: !!waiting },
+        token, 8000, { retries: 0 });
+      if (r && typeof r.waitFee === 'number') setTripWait({ sec: r.waitSec || 0, fee: r.waitFee || 0, waiting: !!waiting });
+    } catch (e) { /* oflayn — kutish keyingi hisobotда qo'shiladi (kam olish xavfsizroq) */ }
+  }
+
   // Adaptiv: GPS apparat so'rovi va re-render/emit chastotasi faol buyurtma va
   // tarmoq holatiga qarab o'zgaradi. Bu batareyani tejaydi va bekorga re-render
   // (FPS pasayishi) qilmaydi:
@@ -1276,11 +1298,9 @@ function AppInner() {
           const ao = orderRef.current;
           if (ao && ao.status === 'in_progress') {
             const tk = tripKmRef.current;
-            if (tk.orderId !== ao.id) { tk.orderId = ao.id; tk.km = 0; tk.prevLoc = null; }
-            if (tk.prevLoc) {
-              const d = haversineKm(tk.prevLoc.lat, tk.prevLoc.lng, loc.lat, loc.lng);
-              if (d > 0.008 && d < 2) tk.km += d;
-            }
+            if (tk.orderId !== ao.id) { tk.orderId = ao.id; tk.km = 0; tk.prevLoc = null; stopSinceRef.current = 0; waitActiveRef.current = false; }
+            const dMoved = tk.prevLoc ? haversineKm(tk.prevLoc.lat, tk.prevLoc.lng, loc.lat, loc.lng) : null;
+            if (dMoved != null && dMoved > 0.008 && dMoved < 2) tk.km += dMoved;
             tk.prevLoc = loc;
             if (now - (tk.savedAt || 0) > 5000) { // ~5s throttle — restart mid-trip'da tiklanadi
               tk.savedAt = now;
@@ -1299,6 +1319,37 @@ function AppInner() {
                 return { km, fare: prev ? prev.fare : (ao.price || 0) };
               });
             }
+
+            // T-18: TO'XTASH-ANIQLASH. Mashina HARAKATDA (siljish ≥ ~12m/GPS) → masofa
+            // rejimi, kutish STOP. UZOQ to'xtash (≥20s, mijoz do'konга) → REAL kutish
+            // /midwait ga yoziladi. QISQA to'xtash (svetofor <20s) → umuman yuborilmaydi
+            // (svetoforда pul olinmasin). Backend bepul oyna (FREE_WAIT_SEC) + daqiqa
+            // narxini o'zi qo'llaydi.
+            const STOP_MOVE_KM = 0.012;   // ~12m/GPS'dan kam siljish = to'xtagan
+            const STOP_START_SEC = 20;    // shu qadar to'xtab tursa — REAL kutish
+            const WAIT_REPORT_MS = 15000; // har ~15s da to'plangan kutish yuboriladi
+            if (dMoved != null) {
+              if (dMoved >= STOP_MOVE_KM) {
+                if (waitActiveRef.current) { waitActiveRef.current = false; reportMidwait(0, false); } // kutish tugadi
+                stopSinceRef.current = 0;
+              } else {
+                if (!stopSinceRef.current) stopSinceRef.current = now;
+                const stoppedMs = now - stopSinceRef.current;
+                if (stoppedMs >= STOP_START_SEC * 1000) {
+                  if (!waitActiveRef.current) {
+                    waitActiveRef.current = true;
+                    lastWaitReportRef.current = now;
+                    reportMidwait(Math.round(stoppedMs / 1000), true); // ~20s — birinchi hisobot
+                  } else if (now - lastWaitReportRef.current >= WAIT_REPORT_MS) {
+                    reportMidwait(Math.round((now - lastWaitReportRef.current) / 1000), true);
+                    lastWaitReportRef.current = now;
+                  }
+                }
+              }
+            }
+          } else if (stopSinceRef.current || waitActiveRef.current) {
+            // in_progress'dan chiqdi (yakun/bekor) — kutish holatini tozalaymiz
+            stopSinceRef.current = 0; waitActiveRef.current = false;
           }
         }
       );
@@ -1577,13 +1628,13 @@ function AppInner() {
         speak(`Safar yakunlandi. ${fmt(net)} so'm ishlandingiz.`);
         setCompletedTrip(finishedOrder);
         setOrder(null);
-        setMeter(null); setLiveMeter(null); meterBaseRef.current = null;
+        setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0;
         setChatMessages([]);
         loadEarnings();
         updatePersistentNotif('Buyurtma kutilmoqda...');
       } else if (action === 'reject') {
         setOrder(null);
-        setMeter(null); setLiveMeter(null); meterBaseRef.current = null;
+        setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0;
         setChatMessages([]);
         loadEarnings();
         updatePersistentNotif('Buyurtma kutilmoqda...');
@@ -1610,10 +1661,10 @@ function AppInner() {
           tripKmRef.current = { orderId: null, km: 0, prevLoc: null, savedAt: 0 };
           AsyncStorage.removeItem(TRIP_KM_KEY).catch(() => {});
           setCompletedTrip(order);
-          setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setChatMessages([]);
+          setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0; setChatMessages([]);
           updatePersistentNotif('Buyurtma kutilmoqda... (oflayn — sinxronlanadi)');
         } else if (action === 'reject') {
-          setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setChatMessages([]);
+          setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0; setChatMessages([]);
         } else {
           setOrder((p) => (p ? { ...p, status: statusAfter(action) } : p));
         }
@@ -1970,7 +2021,7 @@ function AppInner() {
               style={[s.bottom, { bottom: insets.bottom }]}
               contentContainerStyle={{ paddingBottom: 8 }}>
               <OrderPanel
-                order={order} loading={loading} meter={meter} liveMeter={liveMeter}
+                order={order} loading={loading} meter={meter} liveMeter={liveMeter} tripWait={tripWait}
                 onAction={orderAction} onNavigate={navigateTo}
                 onCall={callCustomer} onChat={() => { loadChatHistory(order.id); setChatModal(true); }}
                 onPlayVoice={playVoiceOrder} voiceBusy={voiceStatus === 'loading'}
@@ -2150,7 +2201,7 @@ function CountdownBar() {
 }
 
 // ---- Buyurtma paneli (holat tugmalari) ----
-function OrderPanel({ order, loading, meter, liveMeter, onAction, onNavigate, onCall, onChat, onPlayVoice, voiceBusy }) {
+function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNavigate, onCall, onChat, onPlayVoice, voiceBusy }) {
   const st = order.status;
   const isNew = st === 'searching' || st === 'assigned';
   const showCustomer = ['accepted', 'arrived', 'in_progress'].includes(st) && !!order.customer_phone;
@@ -2285,6 +2336,17 @@ function OrderPanel({ order, loading, meter, liveMeter, onAction, onNavigate, on
                 </View>
                 );
               })()}
+              {/* T-18: kutish holati — uzoq to'xtaganda ko'rinadi (haydovchi tablosi) */}
+              {tripWait && (tripWait.waiting || tripWait.fee > 0) && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2A2410', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 }}>
+                  <Text style={{ color: YELLOW, fontSize: 14, fontWeight: '700' }}>
+                    ⏱ Kutish {Math.floor((tripWait.sec || 0) / 60)}:{String((tripWait.sec || 0) % 60).padStart(2, '0')}
+                  </Text>
+                  <Text style={{ color: tripWait.fee > 0 ? YELLOW : GRAY1, fontSize: 14, fontWeight: '700' }}>
+                    {tripWait.fee > 0 ? `+${fmt(tripWait.fee)} so'm` : 'bepul'}
+                  </Text>
+                </View>
+              )}
               <TouchableOpacity style={s.btnNav} onPress={() => onNavigate(order.to_lat, order.to_lng)} activeOpacity={0.8}>
                 <Ionicons name="navigate" size={18} color="#fff" style={{ marginRight: 8 }} />
                 <Text style={s.btnTxtW}>MANZILGA YO'L</Text>
