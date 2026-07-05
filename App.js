@@ -30,7 +30,7 @@ import { Ionicons } from '@expo/vector-icons';
 // ─── Ajratilgan modullar (modularizatsiya — App.js'ni yengillashtirish) ───
 import { uuid, sleep, fmt, safeStr, haversineKm, fmtPhone } from './src/utils';
 import { mapHTML } from './src/mapHtml';
-import { speak, announce, playOrderAlert, stopOrderAlert } from './src/voice';
+import { speak, announce, playOrderAlert, stopOrderAlert, playStatusSound } from './src/voice';
 import { captureException } from './src/crash';
 
 const BASE = 'https://api.elga.uz';
@@ -119,7 +119,11 @@ if (Platform.OS === 'android') {
   Notifications.setNotificationChannelAsync('orders', {
     name: 'Yangi buyurtmalar',
     importance: Notifications.AndroidImportance.MAX,
-    sound: 'default',
+    // T-15: fon/yopiq holatда BALAND maxsus ovoz — app.json expo-notifications
+    // `sounds` orqali bundle qilingan new_order.wav (res/raw). Android 8+ da kanal
+    // ovozi push payload'dan ustun turadi, shuning uchun backend'ni O'ZGARTIRMASDAN
+    // fon push'i ham shu baland ovoz + kuchli vibratsiya bilan keladi.
+    sound: 'new_order.wav',
     vibrationPattern: [0, 400, 200, 400, 200, 400],
     enableVibrate: true,
     bypassDnd: true,
@@ -768,6 +772,7 @@ function AppInner() {
   const healthRef = useRef(null);    // reachability heartbeat timeri
   const offerTimerRef = useRef(null); // offer TTL: qabul qilinmasa o'zi yopiladi
   const orderSoundUriRef = useRef(null); // T-07: admin yuklagan buyurtma ovozi (lokalga keshlangan URI)
+  const orderSoundsRef = useRef({});     // T-17: admin ovozlari xaritasi { key: lokalURI } (har holat o'z ovozi)
   const inTripRef = useRef(false);       // T-08: haydovchi faol safarda (keep-awake uchun, stale closure'siz)
   const tripKmRef = useRef({ orderId: null, km: 0, prevLoc: null, savedAt: 0 }); // A-5: faol safar lokal odometri (internetsiz ham)
   // T-18: safar davomida kutish-aniqlash (uzoq to'xtash → /midwait; svetofor emas)
@@ -1061,7 +1066,9 @@ function AppInner() {
       }
     });
     s.on('order_cancelled', () => {
-      clearOfferTimer();
+      clearOfferTimer(); // T-14: yangi buyurtma ovozini DARROV to'xtatadi
+      // T-17: bekor qilindi — admin ovozi (order_cancelled). Admin bermasa — jim.
+      playStatusSound(adminSound('order_cancelled'), null);
       notify('Buyurtma bekor qilindi', '');
       setOrder(null);
       setChatMessages([]);
@@ -1118,29 +1125,41 @@ function AppInner() {
     stopOrderAlert(); // T-07: taklif tugadi (qabul/rad/bekor/o'tib ketdi) — ovozni to'xtatamiz
   }
 
-  // T-07: Admin panelда yuklangan "yangi buyurtma" ovozini backenddan olib LOKALga
-  // keshlaymiz — new_order kelganда darrov (oflayn ham) chalinadi. Manifest:
-  //   GET /api/config/sounds → { sounds: { new_order: "/api/config/sound/new_order?v=N" } }
-  // Admin ovoz bermagan bo'lsa — orderSoundUriRef null qoladi va ilova ichidagi
-  // zaxira asset (ORDER_ALERT_ASSET) ishlatiladi (doim ishlaydi).
+  // T-17: Admin panelда yuklangan BARCHA ovozlarni backenddan olib LOKALga keshlaymiz —
+  // har holat (new_order, trip_completed, order_cancelled, ...) O'Z ovozini chaladi.
+  // Manifest: GET /api/config/sounds → { sounds: { <key>: "/api/config/sound/<key>?v=N" } }.
+  // Har key uchun lokal fayl URI'si orderSoundsRef.current[key] da saqlanadi. Admin
+  // ovoz bermagan key'lar — null (ilova ichidagi zaxira asset yoki TTS ishlatiladi).
   async function loadOrderSound() {
     try {
       const r = await api('/api/config/sounds', 'GET', null, token, 15000);
-      const path = r?.sounds?.new_order;
-      if (!path) { orderSoundUriRef.current = null; return; }
-      const url = /^https?:\/\//i.test(path) ? path : (BASE + path);
+      const sounds = (r && r.sounds) || {};
       const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
       if (!dir) return;
-      // ?v= (versiya) o'zgarsa qayta yuklaymiz — fayl nomiga versiyani kiritamiz.
-      const ver = (String(path).match(/[?&]v=([^&]+)/) || [])[1] || '1';
-      const fileUri = `${dir}elga-order-sound-${ver}.mp3`;
-      const info = await FileSystem.getInfoAsync(fileUri).catch(() => ({ exists: false }));
-      if (!info.exists) {
-        const dl = await FileSystem.downloadAsync(url, fileUri).catch(() => null);
-        if (!dl || dl.status !== 200) { orderSoundUriRef.current = null; return; }
+      const map = {};
+      for (const key of Object.keys(sounds)) {
+        const path = sounds[key];
+        if (!path) continue;
+        try {
+          const url = /^https?:\/\//i.test(path) ? path : (BASE + path);
+          const ver = (String(path).match(/[?&]v=([^&]+)/) || [])[1] || '1';
+          const fileUri = `${dir}elga-snd-${key}-${ver}.mp3`;
+          const info = await FileSystem.getInfoAsync(fileUri).catch(() => ({ exists: false }));
+          if (!info.exists) {
+            const dl = await FileSystem.downloadAsync(url, fileUri).catch(() => null);
+            if (!dl || dl.status !== 200) continue;
+          }
+          map[key] = fileUri;
+        } catch (e) { /* bu key o'tkazib yuboriladi */ }
       }
-      orderSoundUriRef.current = fileUri;
-    } catch (e) { /* zaxira asset ishlatiladi */ }
+      orderSoundsRef.current = map;
+      orderSoundUriRef.current = map.new_order || null; // T-07 moslik (new_order tez-tez ishlatiladi)
+    } catch (e) { /* zaxira asset/TTS ishlatiladi */ }
+  }
+  // Berilgan admin ovoz kaliti uchun manba ({uri}) yoki null (ovoz yuklanmagan).
+  function adminSound(key) {
+    const uri = orderSoundsRef.current && orderSoundsRef.current[key];
+    return uri ? { uri } : null;
   }
 
   // Faol buyurtmani serverdan tiklash — server YAGONA haqiqat manbai.
@@ -1530,6 +1549,8 @@ function AppInner() {
         AsyncStorage.setItem('drv_online', '0').catch(() => {});
         stopBackgroundLocation();
         keepAwakeOff();
+        // T-14: OFFLINE bo'lganда yangi buyurtma ovozi (agar chalinayotgan bo'lsa) to'xtaydi.
+        clearOfferTimer(); stopOrderAlert();
         hidePersistentNotif();
       }
     } catch (e) {
@@ -1625,7 +1646,9 @@ function AppInner() {
         AsyncStorage.removeItem(TRIP_KM_KEY).catch(() => {});
         const finishedOrder = r.order || order;
         const net = Number(finishedOrder.price || 0) - Number(finishedOrder.commission || 0);
-        speak(`Safar yakunlandi. ${fmt(net)} so'm ishlandingiz.`);
+        // T-17: safar yakunlandi — admin ovozi (trip_completed → bo'lmasa earned);
+        // admin ovozi USTUN, yo'q bo'lsa TTS zaxira.
+        playStatusSound(adminSound('trip_completed') || adminSound('earned'), `Safar yakunlandi. ${fmt(net)} so'm ishlandingiz.`);
         setCompletedTrip(finishedOrder);
         setOrder(null);
         setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0;
