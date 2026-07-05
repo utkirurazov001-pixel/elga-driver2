@@ -588,6 +588,9 @@ function AppInner() {
   const chatOutboxRef = useRef([]);      // socket uzilganda yuborilmagan chat xabarlar (#chat-loss)
   const pushRegisteredRef = useRef(false); // push token bir marta ro'yxatga olinadi
   const finishedOrderIdRef = useRef(null); // yakunlangan/bekor buyurtma id — kechikkan event uni tiriltirmasligi uchun (#order-resurrect)
+  // T-16: markaziy holat mashinasi uchun himoya ref'lari.
+  const orderTouchedAtRef = useRef(0); // buyurtma oxirgi o'rnatilgan vaqt — eski "bo'sh" javob YANGI buyurtmani o'chirmasin (race guard)
+  const resumeBusyRef = useRef(false); // parallel resume so'rovlari dedup (mount/connect/reconnect/foreground bir vaqtda)
   const webviewRef = useRef(null);
   const creatingOrderRef = useRef(false);                 // ikki marta buyurtma yaratilmasin (double-tap)
   const healthTimerRef = useRef(null);                    // reachability heartbeat timeri
@@ -783,7 +786,8 @@ function AppInner() {
           const car = fresh.driver_car ? ` · ${fresh.driver_car}${fresh.driver_plate ? ' ' + fresh.driver_plate : ''}` : '';
           notify('Haydovchi topildi! 🚗', `${nm}${car} yo'lda`);
         }
-        setOrder((prev) => (prev && prev.id === fresh.id) ? { ...prev, ...fresh } : prev);
+        // T-16: markaziy mashina orqali — eskirgan poll javobi holatni ORQAGA qaytarmasin
+        applyServerOrder(fresh);
       } catch (_) {}
     };
     poll();
@@ -929,12 +933,8 @@ function AppInner() {
       // qayta tiriltirmasin (#order-resurrect): reset'dan keyin order=null bo'ladi,
       // shu id uchun kechikkan 'completed' kelsa rate modal takror ochilardi.
       if (o && o.id && finishedOrderIdRef.current === o.id) return;
-      // Holat orqaga qaytmasin (#status-regress): kechikkan 'assigned' 'accepted'ni bosmasin.
-      setOrder((prev) => {
-        if (!prev) return o;
-        if (!isForwardUpdate(prev, o)) { const { status, ...rest } = o || {}; return { ...prev, ...rest }; }
-        return { ...prev, ...o };
-      });
+      // T-16: holat MARKAZIY mashinadan o'tadi (regress/resurrect/race himoyasi bir joyda)
+      applyServerOrder(o);
       if (o.status === 'accepted') {
         arrivedNotified.current = false;
         const nm = o.driver_name || 'Haydovchi';
@@ -1042,38 +1042,69 @@ function AppInner() {
     if (!s.connected) { try { s.connect(); } catch (e) {} }
   }
 
+  // T-16: MARKAZIY HOLAT MASHINASI — serverdan kelgan buyurtmani XAVFSIZ qo'llash.
+  // Barcha manbalar (socket order_update, resume/poll REST, 409 fallback) SHU yerdan
+  // o'tadi, shunda qoidalar bitta joyda:
+  //   1) Yakunlangan buyurtma qayta tirilmaydi (#order-resurrect, finishedOrderIdRef).
+  //   2) Holat ORQAGA sakramaydi (#status-regress, isForwardUpdate: rank + terminal).
+  //      Eskirgan javob kelsa — faqat status'siz maydonlar (haydovchi ma'lumoti,
+  //      narx) yangilanadi, holat joyida qoladi.
+  //   3) Har qo'llash vaqti belgilanadi (orderTouchedAtRef) — eski "bo'sh" javob
+  //      yangi yaratilgan buyurtmani o'chirib yubormasin (race guard).
+  function applyServerOrder(o) {
+    if (!o || !o.id) return;
+    if (finishedOrderIdRef.current === o.id) return; // yakunlangan — qayta tirilmaydi
+    orderTouchedAtRef.current = Date.now();
+    setOrder((prev) => {
+      if (!prev || prev.id !== o.id) return o;
+      if (!isForwardUpdate(prev, o)) { const { status, ...rest } = o; return { ...prev, ...rest }; }
+      return { ...prev, ...o };
+    });
+  }
+
   // Faol buyurtmani serverdan tiklash — server YAGONA haqiqat manbai.
   // Ilova ochilganda, socket connect/reconnect, internet/foreground qaytganda chaqiriladi.
   // Tarmoq xatosida lokal holat saqlanadi (tozalanmaydi).
+  // T-16: parallel chaqiruvlar dedup (resumeBusyRef) + "bo'sh" javob faqat so'rov
+  // boshlanganidan beri buyurtma O'ZGARMAGAN bo'lsagina tozalaydi (race guard) +
+  // natija markaziy holat mashinasidan o'tadi (regress/resurrect himoyasi).
   async function resumeActiveOrder() {
+    if (resumeBusyRef.current) return; // mount/connect/foreground bir vaqtda — bitta so'rov yetadi
+    resumeBusyRef.current = true;
+    const startedAt = Date.now();
     try {
       const r = await api('/api/me/active-order', 'GET', null, tokenRef.current || token);
       if (r?.order) {
-        setOrder((prev) => (prev && prev.id === r.order.id) ? { ...prev, ...r.order } : r.order);
+        applyServerOrder(r.order);
         setOrderStep(null);
-      } else if (r) {
-        // Server: faol buyurtma yo'q → lokaldagi eskirgan buyurtmani tozalaymiz
+      } else if (r && orderTouchedAtRef.current <= startedAt) {
+        // Server: faol buyurtma yo'q → lokaldagi eskirgan buyurtmani tozalaymiz.
+        // LEKIN so'rov ketayotganda yangi buyurtma yaratilgan bo'lsa (touched > startedAt)
+        // — bu javob ESKI, yangi buyurtmaga TEGMAYMIZ (#order-disappear race).
         setOrder((prev) => (prev && ACTIVE_STATUSES.includes(prev.status)) ? null : prev);
         setOrderStep((s) => (s === null ? 'dest' : s));
       }
     } catch (e) {
       // Tarmoq xatosi — lokal (saqlangan) holatni saqlab qolamiz
+    } finally {
+      resumeBusyRef.current = false;
     }
   }
 
   // Faol buyurtma ekranini ochish. Avval 409 javobidagi active_order'dan,
   // bo'lmasa GET /api/orders/active dan olamiz. Ochilsa true qaytaradi.
   async function openActiveOrder(errOr409) {
+    // T-16: barcha yo'llar markaziy mashinadan (regress/resurrect himoyasi)
     const fromErr = errOr409?.data?.active_order;
-    if (fromErr) { setOrder(fromErr); setOrderStep(null); return true; }
+    if (fromErr) { applyServerOrder(fromErr); setOrderStep(null); return true; }
     try {
       const r = await api('/api/orders/active', 'GET', null, tokenRef.current || token);
-      if (r?.order) { setOrder(r.order); setOrderStep(null); return true; }
+      if (r?.order) { applyServerOrder(r.order); setOrderStep(null); return true; }
     } catch (_) {}
     // Eski endpoint — zaxira
     try {
       const r2 = await api('/api/me/active-order', 'GET', null, tokenRef.current || token);
-      if (r2?.order) { setOrder(r2.order); setOrderStep(null); return true; }
+      if (r2?.order) { applyServerOrder(r2.order); setOrderStep(null); return true; }
     } catch (_) {}
     return false;
   }
@@ -1228,6 +1259,10 @@ function AppInner() {
         from, to: dest, car_class: carClass, payment_method: payMethod,
       }, token, 15000, { idempotencyKey: uuid(), retries: 2 });
       const o = r.order || r;
+      // T-16: yaratish vaqtini belgilaymiz — parallel ketayotgan eski "faol buyurtma
+      // yo'q" javobi bu YANGI buyurtmani o'chirib yubormasin (#order-disappear race)
+      orderTouchedAtRef.current = Date.now();
+      finishedOrderIdRef.current = null; // yangi buyurtma — eski yakun belgisi tozalanadi
       setOrder(o);
       setOrderStep(null);
       notify('Buyurtma berildi 🚖', 'Haydovchi qidirilmoqda...');
@@ -1314,6 +1349,8 @@ function AppInner() {
         from, metered: true, voice, payment_method: payMethod,
       }, token, 45000, { idempotencyKey: uuid(), retries: 1 }); // ovoz katta — sekin internetga uzunroq timeout
       const o = r.order || r;
+      orderTouchedAtRef.current = Date.now(); // T-16: race guard (#order-disappear)
+      finishedOrderIdRef.current = null;
       setOrder(o); setOrderStep(null); setVoiceModal(false); setVoiceSec(0);
       notify('Ovozli buyurtma berildi 🎙', 'Haydovchi qidirilmoqda...');
     } catch (e) {
