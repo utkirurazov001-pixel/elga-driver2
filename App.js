@@ -2744,6 +2744,26 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
   // Settings
   const [soundNotif, setSoundNotif] = useState(true);
 
+  // T-13: KetdikGo AI yordamchi (haydovchi) — backend /api/ai/chat allaqachon
+  // 'driver' rolini biladi (murabbiy/maslahat), lekin ilovada UI YO'Q edi.
+  const [aiChat, setAiChat] = useState([]);
+  const [aiInput, setAiInput] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  async function sendAiChat() {
+    const text = aiInput.trim();
+    if (!text || aiLoading) return;
+    const next = [...aiChat, { role: 'user', text }];
+    setAiChat(next); setAiInput(''); setAiLoading(true);
+    try {
+      const r = await api('/api/ai/chat', 'POST', { messages: next.slice(-12), context_role: 'driver' }, token);
+      const reply = r.reply + (r.ticket ? `\n\n📋 Murojaat raqami: ${r.ticket}` : '');
+      setAiChat([...next, { role: 'assistant', text: reply }]);
+    } catch (e) {
+      setAiChat([...next, { role: 'assistant', text: 'Kechirasiz, javob berib bo\'lmadi. Keyinroq urinib ko\'ring.' }]);
+    }
+    setAiLoading(false);
+  }
+
   useEffect(() => {
     AsyncStorage.getItem('sound_notif').then(val => {
       if (val !== null) setSoundNotif(val === 'true');
@@ -2970,6 +2990,40 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
             <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700' }}>Yordam markazi</Text>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
+            {/* T-13: KetdikGo AI yordamchi — savol yozing, AI (Claude) javob beradi.
+                AI o'chiq bo'lsa backend murojaatni operatorga ochadi (ticket). */}
+            <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, marginLeft: 4 }}>KETDIKGO AI YORDAMCHI</Text>
+            <View style={{ backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: BORDER, marginBottom: 16, padding: 12 }}>
+              {aiChat.length === 0 && (
+                <Text style={{ color: GRAY1, fontSize: 13, padding: 6 }}>
+                  Savolingizni yozing — KetdikGo AI darrov javob beradi (daromad, reyting, to'lov...).
+                </Text>
+              )}
+              {aiChat.map((m, i) => (
+                <View key={i} style={{
+                  alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+                  backgroundColor: m.role === 'user' ? YELLOW : CARD2,
+                  borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8,
+                  marginBottom: 8, maxWidth: '85%',
+                }}>
+                  <Text style={{ color: m.role === 'user' ? '#000' : WHITE, fontSize: 14 }}>{m.text}</Text>
+                </View>
+              ))}
+              {aiLoading && <ActivityIndicator color={YELLOW} style={{ marginVertical: 6 }} />}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                <TextInput
+                  style={{ flex: 1, backgroundColor: CARD2, borderRadius: 12, borderWidth: 1, borderColor: BORDER, color: WHITE, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 }}
+                  placeholder="Savol yozing..." placeholderTextColor={GRAY2}
+                  value={aiInput} onChangeText={setAiInput}
+                  onSubmitEditing={sendAiChat} returnKeyType="send"
+                />
+                <TouchableOpacity onPress={sendAiChat} disabled={aiLoading} activeOpacity={0.8}
+                  style={{ backgroundColor: YELLOW, borderRadius: 12, padding: 10 }}>
+                  <Ionicons name="send" size={18} color="#000" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <View style={{ backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: BORDER, marginBottom: 16 }}>
               <TouchableOpacity onPress={() => Linking.openURL('tel:+998712000000')} activeOpacity={0.75}
                 style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: BORDER }}>

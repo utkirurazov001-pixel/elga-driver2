@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0A0A0A"
+      "backgroundColor": "#0B1020"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -40,7 +40,7 @@
       "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0A0A0A"
+        "backgroundColor": "#0B1020"
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -72,7 +72,9 @@
         "expo-notifications",
         {
           "color": "#FFCC00",
-          "sounds": ["./assets/new_order.wav"]
+          "sounds": [
+            "./assets/new_order.wav"
+          ]
         }
       ],
       "expo-task-manager",
