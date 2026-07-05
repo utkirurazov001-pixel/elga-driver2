@@ -3166,13 +3166,13 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
                 <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>Operator bilan bog'lanish</Text>
                 <Ionicons name="chevron-forward" size={18} color={GRAY2} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => Linking.openURL('https://t.me/elgataxiuz')} activeOpacity={0.75}
+              <TouchableOpacity onPress={() => Linking.openURL('https://t.me/ketdikgobot')} activeOpacity={0.75}
                 style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: BORDER }}>
                 <Text style={{ fontSize: 18, marginRight: 12 }}>✈️</Text>
                 <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>Telegram kanal</Text>
                 <Ionicons name="chevron-forward" size={18} color={GRAY2} />
               </TouchableOpacity>
-              <TouchableOpacity onPress={() => Linking.openURL('https://t.me/elgataxisupport')} activeOpacity={0.75}
+              <TouchableOpacity onPress={() => Linking.openURL('https://t.me/ketdikgobot')} activeOpacity={0.75}
                 style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
                 <Text style={{ fontSize: 18, marginRight: 12 }}>💬</Text>
                 <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>Texnik yordam</Text>
@@ -3183,7 +3183,7 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
             <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, marginLeft: 4 }}>KO'P SO'RALADIGAN SAVOLLAR</Text>
             <View style={{ backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: BORDER }}>
               {[
-                { q: 'Haydovchi hisobim blok bo\'ldi', a: 'Admin bilan bog\'laning: @elgataxiuz' },
+                { q: 'Haydovchi hisobim blok bo\'ldi', a: 'Admin bilan bog\'laning: @ketdikgobot' },
                 { q: 'To\'lov qachon chiqadi?', a: 'Har kuni 18:00 da avtomatik o\'tkaziladi' },
                 { q: 'Reyting qanday hisoblanadi?', a: 'Mijozlar bergan 1-5 ball o\'rtachasi' },
                 { q: 'Mashina ma\'lumotlarini o\'zgartirish', a: 'Profil → Avtomobil ma\'lumotlari bo\'limidan' },
