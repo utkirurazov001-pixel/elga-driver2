@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Modal, Linking, FlatList,
-  Animated, Easing, Image, Dimensions, AppState, Platform,
+  Animated, Easing, Image, Dimensions, AppState, Platform, PanResponder,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,7 +18,7 @@ import { WebView } from 'react-native-webview';
 import { io } from 'socket.io-client';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
+import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync, createAudioPlayer } from 'expo-audio';
 
 // ─── Ajratilgan modullar ───
 import { fmt, fmtPhone } from './src/utils';
@@ -53,6 +53,86 @@ const EAS_PROJECT_ID = 'e5561b58-380f-45f6-9cc4-c6af58eaec84';
 
 // Faol buyurtma lokal saqlanadigan kalit (crash/kill/OS-restart'da yo'qolmaydi).
 const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
+
+// T-19: Admin panelda yuklangan holat ovozlari MIJOZ ilovasida ham chalinsin
+// (driver_arrived, trip_started, trip_completed, order_cancelled). Ilgari mijoz
+// ilovasida bu ovozlar UMUMAN ijro etilmasdi. Bir martalik (loop emas), telefon
+// "jim" rejimida ham eshitiladi.
+setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+let _statusPlayer = null;
+function playAdminSoundUrl(url) {
+  if (!url) return; // admin ovoz yuklamagan — jim (mijozda TTS zaxira yo'q)
+  try {
+    if (_statusPlayer) { try { _statusPlayer.remove(); } catch (_) {} _statusPlayer = null; }
+    const p = createAudioPlayer({ uri: url });
+    try { p.volume = 1.0; } catch (_) {}
+    try {
+      p.addListener('playbackStatusUpdate', (st) => {
+        if (st && st.didJustFinish && _statusPlayer === p) { try { p.remove(); } catch (_) {} _statusPlayer = null; }
+      });
+    } catch (_) {}
+    p.play();
+    _statusPlayer = p;
+  } catch (_) { _statusPlayer = null; }
+}
+
+// SURILADIGAN (draggable) AI tugma — foydalanuvchi barmoq bilan istagan joyga
+// ko'chiradi, qo'yib yuborganda yaqin chetga "yopishadi" (snap). Joylashuv
+// AsyncStorage'da saqlanadi. Tegish (surmasdan) — onPress. Buyurtma
+// tugmalariga xalaqit bermaydi: kichik (44px), pastki panel zonasi chegaralangan.
+function DraggableAiButton({ insets, onPress, storageKey, accent, iconColor }) {
+  const BTN = 44, M = 12;
+  const { width: SW, height: SH } = Dimensions.get('window');
+  const yMin = insets.top + 60;
+  const yMax = SH - insets.bottom - BTN - 190; // pastki buyurtma paneliga tegmasin
+  const defPos = { x: SW - BTN - M, y: Math.max(yMin, Math.min(yMax, SH * 0.38)) };
+  const pos = useRef(new Animated.ValueXY(defPos)).current;
+  const startRef = useRef(defPos);
+  const movedRef = useRef(false);
+  useEffect(() => {
+    AsyncStorage.getItem(storageKey).then((v) => {
+      if (!v) return;
+      try {
+        const p = JSON.parse(v);
+        if (Number.isFinite(p.x) && Number.isFinite(p.y)) {
+          pos.setValue({ x: Math.min(SW - BTN - M, Math.max(M, p.x)), y: Math.max(yMin, Math.min(yMax, p.y)) });
+        }
+      } catch (_) {}
+    }).catch(() => {});
+  }, []);
+  const pan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      movedRef.current = false;
+      startRef.current = { x: pos.x.__getValue(), y: pos.y.__getValue() };
+    },
+    onPanResponderMove: (_, g) => {
+      if (Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6) movedRef.current = true;
+      pos.setValue({ x: startRef.current.x + g.dx, y: startRef.current.y + g.dy });
+    },
+    onPanResponderRelease: (_, g) => {
+      if (!movedRef.current) { onPress && onPress(); return; } // surilmadi — bu TEGISH
+      const x = startRef.current.x + g.dx, y = startRef.current.y + g.dy;
+      const snapX = (x + BTN / 2) < SW / 2 ? M : SW - BTN - M;
+      const clampY = Math.max(yMin, Math.min(yMax, y));
+      Animated.spring(pos, { toValue: { x: snapX, y: clampY }, useNativeDriver: false, friction: 6 }).start();
+      AsyncStorage.setItem(storageKey, JSON.stringify({ x: snapX, y: clampY })).catch(() => {});
+    },
+    onPanResponderTerminate: () => {},
+  })).current;
+  return (
+    <Animated.View
+      {...pan.panHandlers}
+      style={[pos.getLayout(), {
+        position: 'absolute', width: BTN, height: BTN, zIndex: 60,
+        borderRadius: BTN / 2, backgroundColor: accent,
+        alignItems: 'center', justifyContent: 'center',
+        elevation: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+      }]}>
+      <Ionicons name="sparkles" size={20} color={iconColor} />
+    </Animated.View>
+  );
+}
 
 // Ixtiyoriy NetInfo — internet qaytishini tez aniqlash uchun. Standalone (EAS) buildda
 // to'liq ishlaydi; Expo Go yoki modul o'rnatilmagan bo'lsa xavfsiz o'tkazib yuboriladi
@@ -539,6 +619,23 @@ function AppInner() {
   // Arrived bildirishnomasi bir marta chiqsin
   const arrivedNotified = useRef(false);
 
+  // T-19: admin ovozlari manifesti { key: to'liq URL } + trip_started dedup
+  const soundMapRef = useRef({});
+  const tripStartedSoundRef = useRef(null); // shu buyurtma uchun chalindi (takror emas)
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await api('/api/config/sounds', 'GET', null, null, 15000);
+        const m = {};
+        for (const [k, v] of Object.entries((r && r.sounds) || {})) {
+          if (v) m[k] = /^https?:\/\//i.test(v) ? v : BASE + v;
+        }
+        soundMapRef.current = m;
+      } catch (_) { /* ovozsiz davom etadi — keyingi ochilishda qayta uriniladi */ }
+    })();
+  }, []);
+  const adminSoundUrl = (key) => soundMapRef.current[key] || null;
+
   // Qidiruv
   const [searchQ, setSearchQ] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -945,17 +1042,26 @@ function AppInner() {
       if (o.status === 'arrived' && !arrivedNotified.current) {
         arrivedNotified.current = true;
         notify('Haydovchi yetib keldi ✅', 'Mashina sizni kutmoqda');
+        playAdminSoundUrl(adminSoundUrl('driver_arrived')); // T-19: admin ovozi (mijoz)
+      }
+      // T-19: safar boshlandi — admin ovozi (bir buyurtma uchun bir marta)
+      if (o.status === 'in_progress' && tripStartedSoundRef.current !== o.id) {
+        tripStartedSoundRef.current = o.id;
+        playAdminSoundUrl(adminSoundUrl('trip_started'));
       }
       if (o.status === 'completed') {
         finishedOrderIdRef.current = o.id; // kechikkan event uni tiriltirmasin (#order-resurrect)
         notify('Safar yakunlandi 🏁', 'Rahmat! Haydovchini baholang');
+        playAdminSoundUrl(adminSoundUrl('trip_completed')); // T-19: admin ovozi (mijoz)
         setCompletedOrder(o);          // hisob-kitob ko'rsatish uchun saqlayмиз
         setRateOrderId(o.id); setStars(5); setTipAmount(0); setRateModal(true);
         resetOrder();
       }
       if (o.status === 'cancelled') {
         finishedOrderIdRef.current = o.id; // kechikkan event uni tiriltirmasin (#order-resurrect)
-        notify('Buyurtma bekor qilindi', ''); resetOrder();
+        notify('Buyurtma bekor qilindi', '');
+        playAdminSoundUrl(adminSoundUrl('order_cancelled')); // T-19: admin ovozi (mijoz)
+        resetOrder();
       }
     });
     s.on('driver_location', (loc) => {
@@ -1926,12 +2032,10 @@ function AppInner() {
             </View>
 
             {/* Avatar circle */}
-            {/* AI yordamchi — suzuvchi tugma (doim ko'rinadi, 1 tegishда ochiladi) */}
-            <TouchableOpacity
-              style={[s.avatarCircle, { top: insets.top + 64, right: 16, backgroundColor: YELLOW }]}
-              onPress={() => setAiModal(true)} activeOpacity={0.85}>
-              <Ionicons name="sparkles" size={20} color="#000" />
-            </TouchableOpacity>
+            {/* AI yordamchi — SURILADIGAN suzuvchi tugma (istagan joyga ko'chiriladi) */}
+            <DraggableAiButton
+              insets={insets} onPress={() => setAiModal(true)}
+              storageKey="AI_FAB_POS" accent={YELLOW} iconColor="#000" />
             <TouchableOpacity style={[s.avatarCircle, { top: insets.top + 8, right: 16 }]} onPress={() => setTab('profile')}>
               <Text style={s.avatarInitial}>{(user?.name?.[0] || 'U').toUpperCase()}</Text>
             </TouchableOpacity>

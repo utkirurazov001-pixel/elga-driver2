@@ -8,7 +8,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Linking, Platform,
   Modal, KeyboardAvoidingView, FlatList, Animated, Vibration, Easing,
-  AppState,
+  AppState, PanResponder, Dimensions,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -578,6 +578,67 @@ export default function App() {
 }
 
 // ===== KetdikGo brend wordmark (matn asosida) — Ket sariq, dik oq, Go sariq =====
+// SURILADIGAN (draggable) AI tugma — foydalanuvchi barmoq bilan istagan joyga
+// ko'chiradi, qo'yib yuborganda yaqin chetga "yopishadi" (snap). Joylashuv
+// AsyncStorage'da saqlanadi (keyingi ochilishda o'sha joyda). Tegish (surmasdan)
+// — onPress. Haydashga xalaqit bermaydi: kichik (44px), xarita ustida suzadi.
+function DraggableAiButton({ insets, onPress, storageKey }) {
+  const BTN = 44, M = 12; // tugma o'lchami va chetdan masofa
+  const { width: SW, height: SH } = Dimensions.get('window');
+  const yMin = insets.top + 60;                 // yuqori panel ostidan
+  const yMax = SH - insets.bottom - BTN - 170;  // pastki panel/tugmalarga tegmasin
+  // Standart joy: O'NG chet, ekranning ~40% balandligi (barmoq yetadigan)
+  const defPos = { x: SW - BTN - M, y: Math.max(yMin, Math.min(yMax, SH * 0.4)) };
+  const pos = useRef(new Animated.ValueXY(defPos)).current;
+  const startRef = useRef(defPos);
+  const movedRef = useRef(false);
+  useEffect(() => {
+    AsyncStorage.getItem(storageKey).then((v) => {
+      if (!v) return;
+      try {
+        const p = JSON.parse(v);
+        if (Number.isFinite(p.x) && Number.isFinite(p.y)) {
+          pos.setValue({ x: Math.min(SW - BTN - M, Math.max(M, p.x)), y: Math.max(yMin, Math.min(yMax, p.y)) });
+        }
+      } catch (_) {}
+    }).catch(() => {});
+  }, []);
+  const pan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      movedRef.current = false;
+      startRef.current = { x: pos.x.__getValue(), y: pos.y.__getValue() };
+    },
+    onPanResponderMove: (_, g) => {
+      if (Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6) movedRef.current = true;
+      pos.setValue({ x: startRef.current.x + g.dx, y: startRef.current.y + g.dy });
+    },
+    onPanResponderRelease: (_, g) => {
+      if (!movedRef.current) { onPress && onPress(); return; } // surilmadi — bu TEGISH
+      const x = startRef.current.x + g.dx, y = startRef.current.y + g.dy;
+      const snapX = (x + BTN / 2) < SW / 2 ? M : SW - BTN - M; // yaqin chetga yopishadi
+      const clampY = Math.max(yMin, Math.min(yMax, y));
+      Animated.spring(pos, { toValue: { x: snapX, y: clampY }, useNativeDriver: false, friction: 6 }).start();
+      AsyncStorage.setItem(storageKey, JSON.stringify({ x: snapX, y: clampY })).catch(() => {});
+    },
+    onPanResponderTerminate: () => {
+      // boshqa element panni tortib oldi — tugma joyida qoladi
+    },
+  })).current;
+  return (
+    <Animated.View
+      {...pan.panHandlers}
+      style={[pos.getLayout(), {
+        position: 'absolute', width: BTN, height: BTN, zIndex: 60,
+        borderRadius: BTN / 2, backgroundColor: YELLOW,
+        alignItems: 'center', justifyContent: 'center',
+        elevation: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+      }]}>
+      <Ionicons name="sparkles" size={20} color="#1A1500" />
+    </Animated.View>
+  );
+}
+
 // AI yordamchi modali (haydovchi) — bosh ekrandagi suzuvchi tugmadan 1 tegishда
 // ochiladi. Holat komponent ichida (ilova ochiq ekan suhbat saqlanadi).
 // Tejamkor: faqat oxirgi 4 xabar yuboriladi; timeout+retry — jim to'xtamaydi (T-20).
@@ -1730,7 +1791,8 @@ function AppInner() {
       } else {
         const nextStatus = r.order?.status || statusAfter(action);
         if (action === 'start') {
-          speak("Safar boshlandi. Yaxshi yo'l!");
+          // T-19: admin yuklagan trip_started ovozi USTUN; yo'q bo'lsa TTS zaxira
+          playStatusSound(adminSound('trip_started'), "Safar boshlandi. Yaxshi yo'l!");
           updatePersistentNotif('Safar davom etmoqda...');
         } else if (action === 'accept') {
           updatePersistentNotif('Buyurtma qabul qilindi · Yo\'lda');
@@ -2005,18 +2067,8 @@ function AppInner() {
             </TouchableOpacity>
           </View>
 
-          {/* ── AI yordamchi — kichik burchak tugmasi (haydashga xalaqit bermaydi) ── */}
-          <TouchableOpacity
-            style={{
-              position: 'absolute', top: insets.top + 62, right: 12,
-              width: 42, height: 42, borderRadius: 21,
-              backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center',
-              elevation: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-            }}
-            onPress={() => setAiModal(true)}
-            activeOpacity={0.8}>
-            <Ionicons name="sparkles" size={20} color="#1A1500" />
-          </TouchableOpacity>
+          {/* ── AI yordamchi — SURILADIGAN tugma (istagan joyga ko'chiriladi, chetga yopishadi) ── */}
+          <DraggableAiButton insets={insets} onPress={() => setAiModal(true)} storageKey="AI_FAB_POS" />
 
           {/* ── Pastki panel — buyurtma YO'Q: online sheet ── */}
           {!order && (
