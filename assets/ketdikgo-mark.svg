@@ -1,14 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-  <g fill="#FFCC00">
-    <!-- K: vertikal ustun -->
-    <rect x="252" y="212" width="150" height="600" rx="34"/>
-    <!-- yuqori qo'l (parallelogramma) -->
-    <path d="M 362 562 L 632 212 L 792 212 L 522 562 Z"/>
-    <!-- pastki qo'l -->
-    <path d="M 362 462 L 632 812 L 792 812 L 522 462 Z"/>
-    <!-- shaxmat-trail: yuqori-o'ngga davom etuvchi checker kvadratlar -->
-    <rect x="700" y="300" width="92" height="92"/>
-    <rect x="792" y="208" width="92" height="92" fill-opacity="0.55"/>
-    <rect x="792" y="392" width="92" height="92" fill-opacity="0.30"/>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><g transform="translate(38 0) skewX(-8)">
+    <rect x="196" y="140" width="48" height="232" fill="#4D7BFF"/>
+    <path d="M 244 276 L 328 148 L 366 148 L 282 276 Z" fill="#4D7BFF"/>
+    <path d="M 244 240 L 336 372 L 374 372 L 282 240 Z" fill="#2563FF"/>
+  </g></svg>
