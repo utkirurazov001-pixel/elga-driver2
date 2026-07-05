@@ -12,7 +12,9 @@ export function mapHTML() {
 </head><body><div id="map"></div><script>
 function ic(c){return L.icon({iconUrl:'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-'+c+'.png',shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',iconSize:[25,41],iconAnchor:[12,41],popupAnchor:[1,-34],shadowSize:[41,41]});}
 var greenIcon=ic('green'),redIcon=ic('red');
-var map=L.map('map').setView([41.31,69.24],14);
+// H-08: default markaz — Angor (Surxondaryo), Toshkent [41.31,69.24] EMAS.
+// GPS kelganda updateMap() joriy joylashuvga markazlashtiradi (centeredOnce).
+var map=L.map('map').setView([37.48,67.16],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
 var myMarker=null,pickMarker=null,dropMarker=null,centeredOnce=false;
 window.updateMap=function(d){
