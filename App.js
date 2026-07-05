@@ -2821,9 +2821,17 @@ const DriverHistory = React.memo(function DriverHistory({ trips, insets }) {
               <View key={t.id || i} style={s.histCard}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
                   <Text style={{ color: GRAY1, fontSize: 13 }}>{time}</Text>
-                  <Text style={{ color: YELLOW, fontSize: 15, fontWeight: '700' }}>
-                    +{fmt(t.driver_earned || t.price)} <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>so'm</Text>
-                  </Text>
+                  {t.status === 'cancelled' ? (
+                    // H-09: bekor qilingan safar daromad EMAS — "+narx" ko'rsatmaymiz.
+                    // (Backend daromadi allaqachon faqat completed/paid ni sanaydi.)
+                    <Text style={{ color: GRAY1, fontSize: 15, fontWeight: '700' }}>
+                      Bekor <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>· 0 so'm</Text>
+                    </Text>
+                  ) : (
+                    <Text style={{ color: YELLOW, fontSize: 15, fontWeight: '700' }}>
+                      +{fmt(t.driver_earned || t.price)} <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>so'm</Text>
+                    </Text>
+                  )}
                 </View>
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <View style={{ alignItems: 'center', paddingTop: 4 }}>
