@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Modal, Linking, FlatList,
-  Animated, Easing, Image, Dimensions, AppState, Platform,
+  Animated, Easing, Image, Dimensions, AppState, Platform, PanResponder,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,7 +18,7 @@ import { WebView } from 'react-native-webview';
 import { io } from 'socket.io-client';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync } from 'expo-audio';
+import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync, createAudioPlayer } from 'expo-audio';
 
 // ─── Ajratilgan modullar ───
 import { fmt, fmtPhone } from './src/utils';
@@ -53,6 +53,86 @@ const EAS_PROJECT_ID = 'e5561b58-380f-45f6-9cc4-c6af58eaec84';
 
 // Faol buyurtma lokal saqlanadigan kalit (crash/kill/OS-restart'da yo'qolmaydi).
 const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
+
+// T-19: Admin panelda yuklangan holat ovozlari MIJOZ ilovasida ham chalinsin
+// (driver_arrived, trip_started, trip_completed, order_cancelled). Ilgari mijoz
+// ilovasida bu ovozlar UMUMAN ijro etilmasdi. Bir martalik (loop emas), telefon
+// "jim" rejimida ham eshitiladi.
+setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
+let _statusPlayer = null;
+function playAdminSoundUrl(url) {
+  if (!url) return; // admin ovoz yuklamagan — jim (mijozda TTS zaxira yo'q)
+  try {
+    if (_statusPlayer) { try { _statusPlayer.remove(); } catch (_) {} _statusPlayer = null; }
+    const p = createAudioPlayer({ uri: url });
+    try { p.volume = 1.0; } catch (_) {}
+    try {
+      p.addListener('playbackStatusUpdate', (st) => {
+        if (st && st.didJustFinish && _statusPlayer === p) { try { p.remove(); } catch (_) {} _statusPlayer = null; }
+      });
+    } catch (_) {}
+    p.play();
+    _statusPlayer = p;
+  } catch (_) { _statusPlayer = null; }
+}
+
+// SURILADIGAN (draggable) AI tugma — foydalanuvchi barmoq bilan istagan joyga
+// ko'chiradi, qo'yib yuborganda yaqin chetga "yopishadi" (snap). Joylashuv
+// AsyncStorage'da saqlanadi. Tegish (surmasdan) — onPress. Buyurtma
+// tugmalariga xalaqit bermaydi: kichik (44px), pastki panel zonasi chegaralangan.
+function DraggableAiButton({ insets, onPress, storageKey, accent, iconColor }) {
+  const BTN = 44, M = 12;
+  const { width: SW, height: SH } = Dimensions.get('window');
+  const yMin = insets.top + 60;
+  const yMax = SH - insets.bottom - BTN - 190; // pastki buyurtma paneliga tegmasin
+  const defPos = { x: SW - BTN - M, y: Math.max(yMin, Math.min(yMax, SH * 0.38)) };
+  const pos = useRef(new Animated.ValueXY(defPos)).current;
+  const startRef = useRef(defPos);
+  const movedRef = useRef(false);
+  useEffect(() => {
+    AsyncStorage.getItem(storageKey).then((v) => {
+      if (!v) return;
+      try {
+        const p = JSON.parse(v);
+        if (Number.isFinite(p.x) && Number.isFinite(p.y)) {
+          pos.setValue({ x: Math.min(SW - BTN - M, Math.max(M, p.x)), y: Math.max(yMin, Math.min(yMax, p.y)) });
+        }
+      } catch (_) {}
+    }).catch(() => {});
+  }, []);
+  const pan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => {
+      movedRef.current = false;
+      startRef.current = { x: pos.x.__getValue(), y: pos.y.__getValue() };
+    },
+    onPanResponderMove: (_, g) => {
+      if (Math.abs(g.dx) > 6 || Math.abs(g.dy) > 6) movedRef.current = true;
+      pos.setValue({ x: startRef.current.x + g.dx, y: startRef.current.y + g.dy });
+    },
+    onPanResponderRelease: (_, g) => {
+      if (!movedRef.current) { onPress && onPress(); return; } // surilmadi — bu TEGISH
+      const x = startRef.current.x + g.dx, y = startRef.current.y + g.dy;
+      const snapX = (x + BTN / 2) < SW / 2 ? M : SW - BTN - M;
+      const clampY = Math.max(yMin, Math.min(yMax, y));
+      Animated.spring(pos, { toValue: { x: snapX, y: clampY }, useNativeDriver: false, friction: 6 }).start();
+      AsyncStorage.setItem(storageKey, JSON.stringify({ x: snapX, y: clampY })).catch(() => {});
+    },
+    onPanResponderTerminate: () => {},
+  })).current;
+  return (
+    <Animated.View
+      {...pan.panHandlers}
+      style={[pos.getLayout(), {
+        position: 'absolute', width: BTN, height: BTN, zIndex: 60,
+        borderRadius: BTN / 2, backgroundColor: accent,
+        alignItems: 'center', justifyContent: 'center',
+        elevation: 6, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+      }]}>
+      <Ionicons name="sparkles" size={20} color={iconColor} />
+    </Animated.View>
+  );
+}
 
 // Ixtiyoriy NetInfo — internet qaytishini tez aniqlash uchun. Standalone (EAS) buildda
 // to'liq ishlaydi; Expo Go yoki modul o'rnatilmagan bo'lsa xavfsiz o'tkazib yuboriladi
@@ -208,39 +288,35 @@ const SCREEN_H = Dimensions.get('window').height;
 // Mijoz balansi 0 yoki manfiy bo'lsa "Balans" blokini umuman yashirish
 const HIDE_BALANCE_IF_NONPOSITIVE = true;
 
-// Mashina klasslari (backend config bilan mos)
+// Mashina klasslari (backend config bilan mos).
+// VIZUAL: Ekspress OLIB TASHLANDI (4 tarif). Brend aksenti — YAGONA sariq #FFCC00
+// (ko'k/rangin ranglar olib tashlandi). Tarif narx/buyurtma mantig'i o'zgarmaydi —
+// bu faqat ro'yxat va rang. car_class id'lari backend bilan o'sha-o'sha.
 const CAR_CLASSES = [
   {
     id: 'ekonom', label: 'Tejamkor', seats: 4,
-    color: '#3B82F6', badge: 'Mashhur',
+    color: '#FFCC00', badge: 'Mashhur',
     models: 'Cobalt · Spark · Gentra',
     features: ['A/C', 'Arzon narx'],
     icon: '🚗',
   },
   {
     id: 'komfort', label: 'Comfort', seats: 4,
-    color: '#22C55E', badge: null,
+    color: '#FFCC00', badge: null,
     models: 'Nexia 3 · Lacetti · Tracker',
     features: ['A/C', 'USB', 'Keng salon'],
     icon: '🚙',
   },
   {
     id: 'oila', label: 'Oila', seats: 6,
-    color: '#A855F7', badge: null,
+    color: '#FFCC00', badge: null,
     models: 'Damas · Orlando · Zafira',
     features: ['6 o\'rinli', 'Katta yuk'],
     icon: '🚐',
   },
   {
-    id: 'ekspress', label: 'Ekspress', seats: 4,
-    color: '#FFC700', badge: 'Premium',
-    models: 'Malibu · Camry · Sonata',
-    features: ['Tez topish', 'VIP'],
-    icon: '⚡',
-  },
-  {
     id: 'yuk', label: 'Yuk tashish', seats: 2,
-    color: '#F97316', badge: null,
+    color: '#FFCC00', badge: null,
     models: 'GAZelle · Porter · Sprinter',
     features: ['Katta yuk', 'Ko\'chirish'],
     icon: '🚚',
@@ -366,7 +442,6 @@ const CAR_CLASS_ICONS = {
   ekonom: 'car-outline',
   komfort: 'car-sport-outline',
   oila: 'bus-outline',
-  ekspress: 'flash-outline',
   yuk: 'cube-outline',
 };
 function CarClassIcon({ c, size = 56, active, image }) {
@@ -395,7 +470,7 @@ function CarClassIcon({ c, size = 56, active, image }) {
 
 function ElgaLogo({ size = 56, tagline = false }) {
   // T-05: KetdikGo brendi. Oldingi "ELGA TAXI" qoldig'i ("TAXI" so'zi) olib tashlandi —
-  // brend endi faqat "KetdikGo" + slogan "Belgila. Ko'r. Ketdik.".
+  // brend endi faqat "KetdikGo" + slogan "Belgila. Tanla. Ketdik.".
   return (
     <View style={{ alignItems: 'center' }}>
       <Text style={{ fontSize: size, fontWeight: '800', letterSpacing: -size * 0.02, lineHeight: size * 1.05 }}>
@@ -405,7 +480,7 @@ function ElgaLogo({ size = 56, tagline = false }) {
       </Text>
       {tagline && (
         <Text style={{ color: GRAY1, fontSize: Math.max(10, size * 0.18), fontWeight: '600', letterSpacing: 1, marginTop: 8 }}>
-          Belgila. Ko'r. Ketdik.
+          Belgila. Tanla. Ketdik.
         </Text>
       )}
     </View>
@@ -538,6 +613,23 @@ function AppInner() {
 
   // Arrived bildirishnomasi bir marta chiqsin
   const arrivedNotified = useRef(false);
+
+  // T-19: admin ovozlari manifesti { key: to'liq URL } + trip_started dedup
+  const soundMapRef = useRef({});
+  const tripStartedSoundRef = useRef(null); // shu buyurtma uchun chalindi (takror emas)
+  useEffect(() => {
+    (async () => {
+      try {
+        const r = await api('/api/config/sounds', 'GET', null, null, 15000);
+        const m = {};
+        for (const [k, v] of Object.entries((r && r.sounds) || {})) {
+          if (v) m[k] = /^https?:\/\//i.test(v) ? v : BASE + v;
+        }
+        soundMapRef.current = m;
+      } catch (_) { /* ovozsiz davom etadi — keyingi ochilishda qayta uriniladi */ }
+    })();
+  }, []);
+  const adminSoundUrl = (key) => soundMapRef.current[key] || null;
 
   // Qidiruv
   const [searchQ, setSearchQ] = useState('');
@@ -945,17 +1037,26 @@ function AppInner() {
       if (o.status === 'arrived' && !arrivedNotified.current) {
         arrivedNotified.current = true;
         notify('Haydovchi yetib keldi ✅', 'Mashina sizni kutmoqda');
+        playAdminSoundUrl(adminSoundUrl('driver_arrived')); // T-19: admin ovozi (mijoz)
+      }
+      // T-19: safar boshlandi — admin ovozi (bir buyurtma uchun bir marta)
+      if (o.status === 'in_progress' && tripStartedSoundRef.current !== o.id) {
+        tripStartedSoundRef.current = o.id;
+        playAdminSoundUrl(adminSoundUrl('trip_started'));
       }
       if (o.status === 'completed') {
         finishedOrderIdRef.current = o.id; // kechikkan event uni tiriltirmasin (#order-resurrect)
         notify('Safar yakunlandi 🏁', 'Rahmat! Haydovchini baholang');
+        playAdminSoundUrl(adminSoundUrl('trip_completed')); // T-19: admin ovozi (mijoz)
         setCompletedOrder(o);          // hisob-kitob ko'rsatish uchun saqlayмиз
         setRateOrderId(o.id); setStars(5); setTipAmount(0); setRateModal(true);
         resetOrder();
       }
       if (o.status === 'cancelled') {
         finishedOrderIdRef.current = o.id; // kechikkan event uni tiriltirmasin (#order-resurrect)
-        notify('Buyurtma bekor qilindi', ''); resetOrder();
+        notify('Buyurtma bekor qilindi', '');
+        playAdminSoundUrl(adminSoundUrl('order_cancelled')); // T-19: admin ovozi (mijoz)
+        resetOrder();
       }
     });
     s.on('driver_location', (loc) => {
@@ -1926,12 +2027,10 @@ function AppInner() {
             </View>
 
             {/* Avatar circle */}
-            {/* AI yordamchi — suzuvchi tugma (doim ko'rinadi, 1 tegishда ochiladi) */}
-            <TouchableOpacity
-              style={[s.avatarCircle, { top: insets.top + 64, right: 16, backgroundColor: YELLOW }]}
-              onPress={() => setAiModal(true)} activeOpacity={0.85}>
-              <Ionicons name="sparkles" size={20} color="#000" />
-            </TouchableOpacity>
+            {/* AI yordamchi — SURILADIGAN suzuvchi tugma (istagan joyga ko'chiriladi) */}
+            <DraggableAiButton
+              insets={insets} onPress={() => setAiModal(true)}
+              storageKey="AI_FAB_POS" accent={YELLOW} iconColor="#000" />
             <TouchableOpacity style={[s.avatarCircle, { top: insets.top + 8, right: 16 }]} onPress={() => setTab('profile')}>
               <Text style={s.avatarInitial}>{(user?.name?.[0] || 'U').toUpperCase()}</Text>
             </TouchableOpacity>
@@ -2223,17 +2322,18 @@ function AppInner() {
             </View>
 
             <AnimatedSheet style={[s.tariffScroll, { bottom: TABBAR_H + insets.bottom }]}>
-            <ScrollView contentContainerStyle={{ paddingBottom: 24, paddingTop: 16 }}>
+            {/* Tariflar — ixcham kartalar (hammasi sig'adi; sig'masa scroll).
+                Narx/buyurtma mantig'i o'zgarmadi — faqat layout/rang. */}
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingTop: 14, paddingBottom: 6 }} showsVerticalScrollIndicator={false}>
               {estLoading && Object.keys(estimates).length === 0 ? (
                 CAR_CLASSES.map((c) => (
                   <View key={c.id} style={s.tariffCard}>
-                    <Skeleton width={56} height={56} radius={28} />
-                    <View style={{ flex: 1, marginLeft: 14, gap: 8 }}>
-                      <Skeleton width={100} height={15} />
-                      <Skeleton width={160} height={11} />
-                      <Skeleton width={120} height={10} />
+                    <Skeleton width={48} height={48} radius={24} />
+                    <View style={{ flex: 1, marginLeft: 12, gap: 7 }}>
+                      <Skeleton width={100} height={14} />
+                      <Skeleton width={150} height={10} />
                     </View>
-                    <Skeleton width={80} height={20} />
+                    <Skeleton width={70} height={18} />
                   </View>
                 ))
               ) : CAR_CLASSES.map((c) => {
@@ -2244,51 +2344,49 @@ function AppInner() {
                     style={[s.tariffCard, active && s.tariffCardActive, active && { borderColor: c.color }]}
                     activeOpacity={0.8}
                     onPress={() => setCarClass(c.id)}>
-                    {/* Left color accent bar */}
-                    <View style={{ position: 'absolute', left: 0, top: 10, bottom: 10, width: 3, borderRadius: 2, backgroundColor: active ? c.color : 'transparent' }} />
-                    <CarClassIcon c={c} size={56} active={active} image={carImages[c.id]} />
-                    <View style={{ flex: 1, marginLeft: 14 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={{ color: active ? c.color : WHITE, fontSize: 16, fontWeight: '700' }}>{c.label}</Text>
+                    <CarClassIcon c={c} size={48} active={active} image={carImages[c.id]} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+                        <Text style={{ color: active ? c.color : WHITE, fontSize: 15, fontWeight: '700' }}>{c.label}</Text>
                         {c.badge && (
-                          <View style={{ backgroundColor: c.color + '33', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                            <Text style={{ color: c.color, fontSize: 10, fontWeight: '700' }}>{c.badge}</Text>
+                          <View style={{ backgroundColor: c.color, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 1 }}>
+                            <Text style={{ color: '#15171c', fontSize: 9, fontWeight: '800' }}>{c.badge}</Text>
                           </View>
                         )}
                       </View>
-                      <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>{c.models}</Text>
-                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                          <Text style={{ fontSize: 10 }}>👤</Text>
-                          <Text style={{ color: GRAY2, fontSize: 11 }}>{c.seats} o'rin</Text>
-                        </View>
-                        {c.features.map((f) => (
-                          <View key={f} style={{ backgroundColor: CARD, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}>
-                            <Text style={{ color: GRAY1, fontSize: 10 }}>{f}</Text>
-                          </View>
-                        ))}
-                        {est?.surge > 1 && <View style={{ backgroundColor: '#FF6B0022', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}><Text style={{ color: '#FF6B00', fontSize: 10 }}>⚡ Talabga qarab</Text></View>}
-                        {est?.is_night && <View style={{ backgroundColor: '#1E3A5F', borderRadius: 5, paddingHorizontal: 5, paddingVertical: 1 }}><Text style={{ color: '#93C5FD', fontSize: 10 }}>🌙 Tungi</Text></View>}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+                        <Text style={{ color: GRAY1, fontSize: 11 }}>👤 {c.seats} o'rin</Text>
+                        <Text style={{ color: GRAY2, fontSize: 11 }}>·</Text>
+                        <Text style={{ color: GRAY1, fontSize: 11 }} numberOfLines={1}>{c.features.join(' · ')}</Text>
+                        {est?.duration_min ? (
+                          <>
+                            <Text style={{ color: GRAY2, fontSize: 11 }}>·</Text>
+                            <Text style={{ color: GRAY1, fontSize: 11 }}>~{est.duration_min} daq</Text>
+                          </>
+                        ) : null}
+                        {est?.surge > 1 && <Text style={{ color: '#FF6B00', fontSize: 11 }}>⚡</Text>}
+                        {est?.is_night && <Text style={{ color: GRAY1, fontSize: 11 }}>🌙</Text>}
                       </View>
                     </View>
-                    <View style={{ alignItems: 'flex-end', minWidth: 88 }}>
+                    <View style={{ alignItems: 'flex-end', minWidth: 78 }}>
                       {est ? (
                         <>
-                          {est.discount_percent > 0 && <Text style={{ color: GRAY2, fontSize: 11, textDecorationLine: 'line-through' }}>{fmt(est.base_price)}</Text>}
-                          <Text style={{ color: active ? c.color : WHITE, fontSize: active ? 20 : 17, fontWeight: '800' }}>
+                          {est.discount_percent > 0 && <Text style={{ color: GRAY2, fontSize: 10, textDecorationLine: 'line-through' }}>{fmt(est.base_price)}</Text>}
+                          <Text style={{ color: active ? c.color : WHITE, fontSize: active ? 18 : 16, fontWeight: '800' }}>
                             {fmt(est.price)}
                           </Text>
                           <Text style={{ color: GRAY2, fontSize: 10 }}>so'm</Text>
-                          {est.duration_min && <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>~{est.duration_min} daq</Text>}
                         </>
                       ) : estLoading ? <ActivityIndicator color={c.color} size="small" /> : <Text style={{ color: GRAY2, fontSize: 12 }}>—</Text>}
                     </View>
                   </TouchableOpacity>
                 );
               })}
+            </ScrollView>
 
-              <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', marginTop: 16, marginBottom: 10, letterSpacing: 0.5, marginHorizontal: 16 }}>TO'LOV USULI</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16, paddingHorizontal: 16 }}>
+            {/* FIXED pastki panel — TO'LOV USULI + katta tugma DOIM ko'rinadi (kesilmaydi) */}
+            <View style={s.tariffFooter}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 42, marginBottom: 12 }} contentContainerStyle={{ alignItems: 'center' }}>
                 {payMethods.map((m) => {
                   const active = payMethod === m.id;
                   const disabled = m.active === false;
@@ -2307,15 +2405,15 @@ function AppInner() {
               </ScrollView>
 
               <TouchableOpacity
-                style={[s.orderCta, (!estimates[carClass] || loading) && { opacity: 0.5 }]}
+                style={[s.orderCta, { marginHorizontal: 0 }, (!estimates[carClass] || loading) && { opacity: 0.5 }]}
                 activeOpacity={0.85}
                 onPress={createOrder}
                 disabled={loading || !estimates[carClass]}>
                 {loading
                   ? <ActivityIndicator color="#000" />
-                  : <Text style={s.orderCtaTxt}>🚖 BUYURTMA BERISH{estimates[carClass] ? ` · ${fmt(estimates[carClass].price)} so'm` : ''}</Text>}
+                  : <Text style={s.orderCtaTxt}>Ketdik{estimates[carClass] ? ` · ${fmt(estimates[carClass].price)} so'm` : ''}</Text>}
               </TouchableOpacity>
-            </ScrollView>
+            </View>
             </AnimatedSheet>
           </View>
         ) : null
@@ -3077,7 +3175,7 @@ const BG = '#0A0A0A';
 const CARD = '#141414';
 const CARD2 = '#1E1E1E';
 const BORDER = '#282828';
-const YELLOW = '#FFC700';
+const YELLOW = '#FFCC00'; // KetdikGo brend sarig'i (butun ilova — ko'k olib tashlandi)
 const GREEN = '#22C55E';
 const RED = '#FF453A';
 const WHITE = '#FFFFFF';
@@ -3331,21 +3429,32 @@ const s = StyleSheet.create({
     backgroundColor: CARD,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
+    // Ixcham kartalar scroll qiladi, TO'LOV+tugma pastda FIXED turadi (column layout)
+    flexDirection: 'column',
   },
   tariffCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: CARD2,
-    borderRadius: 16,
-    padding: 14,
-    paddingLeft: 18,
+    borderRadius: 14,
+    padding: 10,
+    paddingLeft: 12,
     marginHorizontal: 16,
-    marginBottom: 10,
+    marginBottom: 8,
     borderWidth: 1.5,
     borderColor: 'transparent',
     overflow: 'hidden',
   },
   tariffCardActive: { backgroundColor: '#111' },
+  // Pastki FIXED panel: to'lov usuli + katta tugma (scroll qilinmaydi, kesilmaydi)
+  tariffFooter: {
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+    paddingTop: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    backgroundColor: CARD,
+  },
   payChip: { backgroundColor: CARD2, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginRight: 8 },
   payChipActive: { backgroundColor: YELLOW },
   payChipTxt: { color: WHITE, fontSize: 14 },
