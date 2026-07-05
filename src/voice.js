@@ -65,23 +65,37 @@ export function announce(text, audioUrl) {
   if (!playAnnouncementAudio(audioUrl)) speak(text);
 }
 
-// ---- T-07: YANGI BUYURTMA OVOZI (haydovchi mashina haydayotgan bo'lsa ham eshitsin) ----
-// Haydovchi ekranga qaramaydi — buyurtmani OVOZDAN biladi. Shuning uchun:
-//   • BALAND (volume=1.0),
-//   • TAKRORLANADIGAN (loop) — haydovchi javob berguncha yoki TTL tugagunca,
-//   • telefon "jim" rejimida ham (setAudioModeAsync playsInSilentMode yuqorida).
-// source: { uri } (admin yuklagan ovoz, lokalga keshlangan) YOKI require() bilan
-// kelgan ilova ichidagi zaxira asset (admin ovoz bermasa — doim ishlaydi).
+// ---- T-14: YANGI BUYURTMA OVOZI — BOSHLASH/TO'XTATISH aniq boshqariladi ----
+// Haydovchi ekranga qaramaydi — buyurtmani OVOZDAN biladi. Baland (volume=1.0),
+// TAKRORLANADIGAN — LEKIN native `loop` EMAS. Native loop'да remove()'dan keyin ham
+// ovoz davom etardi (accept/cancel/offline'да to'xtamas edi) va yangi taklifда
+// ustma-ust chalinardi (DUBLIKAT). Endi: har o'ynash tugaganда O'ZIMIZ qayta
+// o'ynaymiz (_orderStop bayrog'i bilan). stopOrderAlert() = bayroq + pause + remove:
+// bir buyurtma = bir ovoz sessiyasi, DARROV to'xtaydi, dublikat yo'q.
 let _orderPlayer = null;
+let _orderStop = true;
 export function stopOrderAlert() {
-  if (_orderPlayer) { try { _orderPlayer.remove(); } catch (_) {} _orderPlayer = null; }
+  _orderStop = true; // qayta o'ynash listeneri to'xtaydi
+  if (_orderPlayer) {
+    try { _orderPlayer.pause(); } catch (_) {}
+    try { _orderPlayer.remove(); } catch (_) {}
+    _orderPlayer = null;
+  }
 }
 export function playOrderAlert(source) {
-  stopOrderAlert();
+  stopOrderAlert();     // avvalgi sessiyani TO'LIQ to'xtatamiz — dublikat bo'lmaydi
+  _orderStop = false;
   try {
     const p = createAudioPlayer(source);
     try { p.volume = 1.0; } catch (_) {}
-    try { p.loop = true; } catch (_) {}   // haydovchi javob bergunca takrorlanadi
+    try {
+      p.addListener('playbackStatusUpdate', (st) => {
+        // Faqat SHU player hali faol va to'xtatilmagan bo'lsa qayta o'ynaymiz.
+        if (st && st.didJustFinish && !_orderStop && _orderPlayer === p) {
+          try { p.seekTo(0); p.play(); } catch (_) {}
+        }
+      });
+    } catch (_) {}
     p.play();
     _orderPlayer = p;
     return true;
@@ -89,4 +103,24 @@ export function playOrderAlert(source) {
     _orderPlayer = null;
     return false;
   }
+}
+
+// ---- T-17: HOLAT OVOZI (bir martalik) — admin yuklagan ovoz o'z holatда ----
+// source: { uri } (admin ovozi, lokalga keshlangan) yoki null. Admin ovozi USTUN;
+// bo'lmasa fallbackText TTS bilan aytiladi. Bir martalik (loop emas).
+let _statusPlayer = null;
+function stopStatusSound() { if (_statusPlayer) { try { _statusPlayer.remove(); } catch (_) {} _statusPlayer = null; } }
+export function playStatusSound(source, fallbackText) {
+  stopStatusSound();
+  if (source) {
+    try {
+      const p = createAudioPlayer(source);
+      try { p.volume = 1.0; } catch (_) {}
+      try { p.addListener('playbackStatusUpdate', (st) => { if (st && st.didJustFinish) stopStatusSound(); }); } catch (_) {}
+      p.play();
+      _statusPlayer = p;
+      return;
+    } catch (e) { stopStatusSound(); }
+  }
+  if (fallbackText) speak(fallbackText); // zaxira: admin ovoz yo'q bo'lsa TTS
 }
