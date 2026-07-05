@@ -15,7 +15,9 @@ var carIcon=L.divIcon({className:'',html:'<div style="font-size:26px;line-height
 var map=L.map('map',{zoomControl:false});
 L.control.zoom({position:'topright'}).addTo(map);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-map.setView([41.31,69.24],13);
+// H-08: default markaz — Angor (Surxondaryo), Toshkent [41.31,69.24] EMAS.
+// GPS/manzil kelganda quyida joriy joylashuvga markazlashtiriladi (centeredOnce/fitBounds).
+map.setView([37.48,67.16],13);
 var pickupMarker=null,destMarker=null,driverMarker=null,carMarkers=[],fitted=false,centeredOnce=false;
 // T-04: qidiruv radar doirasi — 'searching' bo'lganda pickup atrofida kengayadi.
 var searchCircle=null,searchTimer=null,searchR=120;
