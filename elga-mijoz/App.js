@@ -568,6 +568,7 @@ function AppInner() {
   }, [trips]);
   const [balance, setBalance] = useState(null);
   const [chat, setChat] = useState([]);
+  const [aiModal, setAiModal] = useState(false); // AI chat modali (suzuvchi tugmadan 1 tegishда)
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
 
@@ -1519,17 +1520,20 @@ function AppInner() {
   }
   async function sendChat() {
     const text = chatInput.trim();
-    if (!text) return;
+    if (!text || chatLoading) return; // T-20: parallel yuborish holatni buzmasin
     const next = [...chat, { role: 'user', text }];
     setChat(next); setChatInput(''); setChatLoading(true);
     try {
-      const r = await api('/api/ai/chat', 'POST', { messages: next, order_id: order?.id, context_role: 'customer' }, token);
+      // Tejamkorlik: faqat OXIRGI 4 xabar yuboriladi (server ham 6 bilan cheklaydi)
+      const r = await api('/api/ai/chat', 'POST', { messages: next.slice(-4), order_id: order?.id, context_role: 'customer' }, token, 25000, { retries: 1 });
       const reply = r.reply + (r.ticket ? `\n\n📋 Murojaat raqami: ${r.ticket}` : '');
       setChat([...next, { role: 'assistant', text: reply }]);
     } catch (e) {
-      setChat([...next, { role: 'assistant', text: 'Kechirasiz, javob berib bo\'lmadi. Keyinroq urinib ko\'ring.' }]);
+      // T-20: jim to'xtamaydi — xato chatda aniq ko'rinadi, qayta yuborsa bo'ladi
+      setChat([...next, { role: 'assistant', text: 'Kechirasiz, javob berib bo\'lmadi. Qayta urinib ko\'ring 🙏' }]);
+    } finally {
+      setChatLoading(false); // har qanday holatda tugma qayta ochiladi
     }
-    setChatLoading(false);
   }
 
   // ====================== EKRANLAR ======================
@@ -1922,6 +1926,12 @@ function AppInner() {
             </View>
 
             {/* Avatar circle */}
+            {/* AI yordamchi — suzuvchi tugma (doim ko'rinadi, 1 tegishда ochiladi) */}
+            <TouchableOpacity
+              style={[s.avatarCircle, { top: insets.top + 64, right: 16, backgroundColor: YELLOW }]}
+              onPress={() => setAiModal(true)} activeOpacity={0.85}>
+              <Ionicons name="sparkles" size={20} color="#000" />
+            </TouchableOpacity>
             <TouchableOpacity style={[s.avatarCircle, { top: insets.top + 8, right: 16 }]} onPress={() => setTab('profile')}>
               <Text style={s.avatarInitial}>{(user?.name?.[0] || 'U').toUpperCase()}</Text>
             </TouchableOpacity>
@@ -2432,7 +2442,7 @@ function AppInner() {
               ))}
             </View>
 
-            <TouchableOpacity style={s.aiEntryCard} activeOpacity={0.8} onPress={() => {}}>
+            <TouchableOpacity style={s.aiEntryCard} activeOpacity={0.8} onPress={() => setAiModal(true)}>
               <Ionicons name="sparkles" size={18} color={YELLOW} style={{ marginRight: 10 }} />
               <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>KetdikGo AI yordamchi</Text>
               <View style={{ backgroundColor: GRAY2, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
@@ -2768,6 +2778,43 @@ function AppInner() {
             )}
             <TouchableOpacity onPress={() => setCancelModal(false)} style={{ marginTop: 12, alignItems: 'center' }}>
               <Text style={{ color: GRAY1 }}>Ortga</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* KetdikGo AI yordamchi Modal — suzuvchi tugma / Yordam kartasidan ochiladi */}
+      <Modal visible={aiModal} animationType="slide" onRequestClose={() => setAiModal(false)}>
+        <View style={{ flex: 1, backgroundColor: BG }}>
+          <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: BORDER, flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => setAiModal(false)} style={{ marginRight: 12 }}>
+              <Ionicons name="arrow-back" size={24} color={WHITE} />
+            </TouchableOpacity>
+            <Ionicons name="sparkles" size={18} color={YELLOW} style={{ marginRight: 8 }} />
+            <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>KetdikGo AI yordamchi</Text>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 8 }}>
+            {chat.length === 0 && (
+              <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginTop: 24 }}>
+                Savolingizni yozing — KetdikGo AI darrov javob beradi.{'\n'}(narx, bonus, buyurtma, haydovchi...)
+              </Text>
+            )}
+            {chat.map((m, i) => (
+              <View key={i} style={[s.bubble, m.role === 'user' ? s.bubbleUser : s.bubbleAI]}>
+                <Text style={m.role === 'user' ? s.bubbleUserTxt : s.bubbleAITxt}>{m.text}</Text>
+              </View>
+            ))}
+            {chatLoading && <ActivityIndicator color={YELLOW} style={{ marginTop: 8 }} />}
+          </ScrollView>
+          <View style={[s.chatRow, { paddingHorizontal: 16, paddingBottom: insets.bottom + 12, paddingTop: 8 }]}>
+            <TextInput
+              style={s.chatInput}
+              placeholder="Savolingiz..." placeholderTextColor={GRAY2}
+              value={chatInput} onChangeText={setChatInput}
+              onSubmitEditing={sendChat} returnKeyType="send"
+            />
+            <TouchableOpacity style={s.chatSendBtn} onPress={sendChat} disabled={chatLoading}>
+              <Ionicons name="send" size={18} color="#000" />
             </TouchableOpacity>
           </View>
         </View>

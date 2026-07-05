@@ -578,6 +578,70 @@ export default function App() {
 }
 
 // ===== KetdikGo brend wordmark (matn asosida) — Ket sariq, dik oq, Go sariq =====
+// AI yordamchi modali (haydovchi) — bosh ekrandagi suzuvchi tugmadan 1 tegishда
+// ochiladi. Holat komponent ichida (ilova ochiq ekan suhbat saqlanadi).
+// Tejamkor: faqat oxirgi 4 xabar yuboriladi; timeout+retry — jim to'xtamaydi (T-20).
+function AiChatModal({ visible, onClose, token, insets }) {
+  const [msgs, setMsgs] = useState([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function send() {
+    const text = input.trim();
+    if (!text || busy) return;
+    const next = [...msgs, { role: 'user', text }];
+    setMsgs(next); setInput(''); setBusy(true);
+    try {
+      const r = await api('/api/ai/chat', 'POST', { messages: next.slice(-4), context_role: 'driver' }, token, 25000, { retries: 1 });
+      setMsgs([...next, { role: 'assistant', text: r.reply + (r.ticket ? `\n\n📋 Murojaat: ${r.ticket}` : '') }]);
+    } catch (e) {
+      setMsgs([...next, { role: 'assistant', text: 'Kechirasiz, javob berib bo\'lmadi. Qayta urinib ko\'ring 🙏' }]);
+    } finally { setBusy(false); }
+  }
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, backgroundColor: BG }}>
+        <View style={{ paddingTop: (insets?.top || 0) + 12, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: BORDER, flexDirection: 'row', alignItems: 'center' }}>
+          <TouchableOpacity onPress={onClose} style={{ marginRight: 12 }}>
+            <Ionicons name="arrow-back" size={24} color={WHITE} />
+          </TouchableOpacity>
+          <Ionicons name="sparkles" size={18} color={YELLOW} style={{ marginRight: 8 }} />
+          <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>KetdikGo AI yordamchi</Text>
+        </View>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+          {msgs.length === 0 && (
+            <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginTop: 24 }}>
+              Savol yozing — AI darrov javob beradi.{'\n'}(daromad, reyting, to'lov, buyurtma...)
+            </Text>
+          )}
+          {msgs.map((m, i) => (
+            <View key={i} style={{
+              alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start',
+              backgroundColor: m.role === 'user' ? YELLOW : CARD2,
+              borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8,
+              marginBottom: 8, maxWidth: '85%',
+            }}>
+              <Text style={{ color: m.role === 'user' ? '#000' : WHITE, fontSize: 14 }}>{m.text}</Text>
+            </View>
+          ))}
+          {busy && <ActivityIndicator color={YELLOW} style={{ marginVertical: 6 }} />}
+        </ScrollView>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 8, paddingBottom: (insets?.bottom || 0) + 12 }}>
+          <TextInput
+            style={{ flex: 1, backgroundColor: CARD2, borderRadius: 12, borderWidth: 1, borderColor: BORDER, color: WHITE, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 }}
+            placeholder="Savol yozing..." placeholderTextColor={GRAY2}
+            value={input} onChangeText={setInput}
+            onSubmitEditing={send} returnKeyType="send"
+          />
+          <TouchableOpacity onPress={send} disabled={busy} activeOpacity={0.8}
+            style={{ backgroundColor: YELLOW, borderRadius: 12, padding: 10 }}>
+            <Ionicons name="send" size={18} color="#000" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 // T-10: Taksometr/safar ekrani ochiq turganda ekran DOIM yoniq. useKeepAwake HOOK'i
 // lifecycle bilan boshqaradi (mount'da yoqadi, unmount'da o'chiradi) — imperativ
 // activate/deactivate'dan ishonchliroq. Faol safarda render qilinadi.
@@ -732,6 +796,8 @@ function AppInner() {
 
   // Chat
   const [chatModal, setChatModal] = useState(false);
+  // AI yordamchi modali (burchakdagi kichik tugma ochadi)
+  const [aiModal, setAiModal] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
 
@@ -1939,6 +2005,19 @@ function AppInner() {
             </TouchableOpacity>
           </View>
 
+          {/* ── AI yordamchi — kichik burchak tugmasi (haydashga xalaqit bermaydi) ── */}
+          <TouchableOpacity
+            style={{
+              position: 'absolute', top: insets.top + 62, right: 12,
+              width: 42, height: 42, borderRadius: 21,
+              backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center',
+              elevation: 5, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
+            }}
+            onPress={() => setAiModal(true)}
+            activeOpacity={0.8}>
+            <Ionicons name="sparkles" size={20} color="#1A1500" />
+          </TouchableOpacity>
+
           {/* ── Pastki panel — buyurtma YO'Q: online sheet ── */}
           {!order && (
             <View style={[s.bottom, { bottom: TABBAR_H + insets.bottom }]}>
@@ -2136,6 +2215,9 @@ function AppInner() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* ===== ✨ AI YORDAMCHI MODALI (burchakdagi tugma ochadi) ===== */}
+      <AiChatModal visible={aiModal} onClose={() => setAiModal(false)} token={token} insets={insets} />
 
       {/* Tab bar — vektor ikonalar (faol: to'ldirilgan, nofaol: chiziqli) */}
       {!order && (
@@ -2755,7 +2837,8 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
     const next = [...aiChat, { role: 'user', text }];
     setAiChat(next); setAiInput(''); setAiLoading(true);
     try {
-      const r = await api('/api/ai/chat', 'POST', { messages: next.slice(-12), context_role: 'driver' }, token);
+      // Tejamkorlik: faqat oxirgi 4 xabar (token tejash); timeout+retry — jim to'xtamasin
+      const r = await api('/api/ai/chat', 'POST', { messages: next.slice(-4), context_role: 'driver' }, token, 25000, { retries: 1 });
       const reply = r.reply + (r.ticket ? `\n\n📋 Murojaat raqami: ${r.ticket}` : '');
       setAiChat([...next, { role: 'assistant', text: reply }]);
     } catch (e) {
