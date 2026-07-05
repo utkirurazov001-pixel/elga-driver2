@@ -16,6 +16,7 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import * as KeepAwake from 'expo-keep-awake';
+import { useKeepAwake } from 'expo-keep-awake';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 // Ovozli buyurtma base64'ini vaqtinchalik faylga yozish uchun (legacy API —
 // base64 yozishda eng ishonchli yo'l). expo-audio file URI'ni o'ynaydi.
@@ -573,6 +574,11 @@ export default function App() {
 }
 
 // ===== KetdikGo brend wordmark (matn asosida) — Ket sariq, dik oq, Go sariq =====
+// T-10: Taksometr/safar ekrani ochiq turganda ekran DOIM yoniq. useKeepAwake HOOK'i
+// lifecycle bilan boshqaradi (mount'da yoqadi, unmount'da o'chiradi) — imperativ
+// activate/deactivate'dan ishonchliroq. Faol safarda render qilinadi.
+function TripKeepAwake() { useKeepAwake('trip-meter'); return null; }
+
 function ElgaLogo({ size = 56, tagline = false }) {
   // T-05: KetdikGo brendi. Oldingi "ELGA TAXI" qoldig'i ("TAXI" so'zi) olib tashlandi —
   // brend endi faqat "KetdikGo" + slogan "Belgila. Ko'r. Ketdik.".
@@ -726,7 +732,12 @@ function AppInner() {
   const [chatInput, setChatInput] = useState('');
 
   // Jonli hisoblagich (taximetr) va safar yakuni
-  const [meter, setMeter] = useState(null); // { km, minutes, fare }
+  const [meter, setMeter] = useState(null); // { km, minutes, fare } — SERVER hisoblagich (~4s)
+  // T-11: LOKAL real-time taksometr — har GPS'da (tarmoq kutmasdan) yangilanadi.
+  const [liveMeter, setLiveMeter] = useState(null); // { km, fare }
+  // Server 'meter' eventidan olingan interpolatsiya bazasi: fare = offset + km*perKm.
+  const meterBaseRef = useRef(null); // { offset, perKm, metered }
+  const liveMeterAtRef = useRef(0);  // re-render throttle (ms)
   const [completedTrip, setCompletedTrip] = useState(null); // yakunlangan safar (baholash uchun)
 
   // Tarmoq holati (zaif internetga chidamlilik)
@@ -1069,10 +1080,20 @@ function AppInner() {
       if (!chatModal) notify('💬 Mijoz', msg.text || '');
     });
     // Faqat o'zgargan qiymatda yangilaymiz — bekorga re-render qilmaymiz
-    s.on('meter', (m) => setMeter((prev) => {
-      if (prev && m && prev.km === m.km && prev.minutes === m.minutes && prev.fare === m.fare) return prev;
-      return m;
-    }));
+    s.on('meter', (m) => {
+      // T-11: server hisoblagichidan lokal interpolatsiya bazasini olamiz.
+      // fare = offset + km*perKm  (offset = server_fare - server_km*perKm).
+      if (m && typeof m.fare === 'number') {
+        const perKm = Number(m.perKm) || 0;
+        meterBaseRef.current = { offset: m.fare - (Number(m.km) || 0) * perKm, perKm, metered: perKm > 0 };
+        // Server qiymati bilan lokal tabloni ham sinxronlaymiz (drift bo'lmasin)
+        setLiveMeter({ km: Number(m.km) || 0, fare: m.fare });
+      }
+      setMeter((prev) => {
+        if (prev && m && prev.km === m.km && prev.minutes === m.minutes && prev.fare === m.fare) return prev;
+        return m;
+      });
+    });
     // Jonli kutish haqi — backend 'arrived' holatida har 3 sek yuboradi
     s.on('wait_update', (d) => {
       setOrder((p) => p ? { ...p, wait_fee: d.waitFee || 0, price: d.totalFare || p.price } : p);
@@ -1264,6 +1285,19 @@ function AppInner() {
             if (now - (tk.savedAt || 0) > 5000) { // ~5s throttle — restart mid-trip'da tiklanadi
               tk.savedAt = now;
               AsyncStorage.setItem(TRIP_KM_KEY, JSON.stringify({ orderId: tk.orderId, km: tk.km })).catch(() => {});
+            }
+            // T-11: LOKAL real-time taksometr tablosi — server (~4s) kutilmasdan,
+            // har GPS'da km + narx yangilanadi. Narx = offset + km*perKm (server
+            // 'meter' bazasidan). Oddiy (metered emas) buyurtmada narx fiks — faqat
+            // km yangilanadi. ~1.2s throttle (bekorga re-render qilmaymiz).
+            if (now - liveMeterAtRef.current >= 1200) {
+              liveMeterAtRef.current = now;
+              const km = Number(tk.km.toFixed(2));
+              const b = meterBaseRef.current;
+              setLiveMeter((prev) => {
+                if (b && b.metered) return { km, fare: Math.round((b.offset + tk.km * b.perKm) / 500) * 500 };
+                return { km, fare: prev ? prev.fare : (ao.price || 0) };
+              });
             }
           }
         }
@@ -1543,13 +1577,13 @@ function AppInner() {
         speak(`Safar yakunlandi. ${fmt(net)} so'm ishlandingiz.`);
         setCompletedTrip(finishedOrder);
         setOrder(null);
-        setMeter(null);
+        setMeter(null); setLiveMeter(null); meterBaseRef.current = null;
         setChatMessages([]);
         loadEarnings();
         updatePersistentNotif('Buyurtma kutilmoqda...');
       } else if (action === 'reject') {
         setOrder(null);
-        setMeter(null);
+        setMeter(null); setLiveMeter(null); meterBaseRef.current = null;
         setChatMessages([]);
         loadEarnings();
         updatePersistentNotif('Buyurtma kutilmoqda...');
@@ -1576,10 +1610,10 @@ function AppInner() {
           tripKmRef.current = { orderId: null, km: 0, prevLoc: null, savedAt: 0 };
           AsyncStorage.removeItem(TRIP_KM_KEY).catch(() => {});
           setCompletedTrip(order);
-          setOrder(null); setMeter(null); setChatMessages([]);
+          setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setChatMessages([]);
           updatePersistentNotif('Buyurtma kutilmoqda... (oflayn — sinxronlanadi)');
         } else if (action === 'reject') {
-          setOrder(null); setMeter(null); setChatMessages([]);
+          setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setChatMessages([]);
         } else {
           setOrder((p) => (p ? { ...p, status: statusAfter(action) } : p));
         }
@@ -1767,6 +1801,8 @@ function AppInner() {
   return (
     <View style={s.flex}>
       <StatusBar style="light" />
+      {/* T-10: faol safar/taksometr — ekran DOIM yoniq (hook mount/unmount bilan) */}
+      {['assigned', 'accepted', 'arrived', 'in_progress'].includes(order?.status) && <TripKeepAwake />}
 
       {/* Tarmoq holati banneri — internet yo'q yoki navbat sinxronlanmoqda */}
       {(!netOnline || queuedCount > 0) && (
@@ -1934,7 +1970,7 @@ function AppInner() {
               style={[s.bottom, { bottom: insets.bottom }]}
               contentContainerStyle={{ paddingBottom: 8 }}>
               <OrderPanel
-                order={order} loading={loading} meter={meter}
+                order={order} loading={loading} meter={meter} liveMeter={liveMeter}
                 onAction={orderAction} onNavigate={navigateTo}
                 onCall={callCustomer} onChat={() => { loadChatHistory(order.id); setChatModal(true); }}
                 onPlayVoice={playVoiceOrder} voiceBusy={voiceStatus === 'loading'}
@@ -2114,7 +2150,7 @@ function CountdownBar() {
 }
 
 // ---- Buyurtma paneli (holat tugmalari) ----
-function OrderPanel({ order, loading, meter, onAction, onNavigate, onCall, onChat, onPlayVoice, voiceBusy }) {
+function OrderPanel({ order, loading, meter, liveMeter, onAction, onNavigate, onCall, onChat, onPlayVoice, voiceBusy }) {
   const st = order.status;
   const isNew = st === 'searching' || st === 'assigned';
   const showCustomer = ['accepted', 'arrived', 'in_progress'].includes(st) && !!order.customer_phone;
@@ -2227,23 +2263,28 @@ function OrderPanel({ order, loading, meter, onAction, onNavigate, onCall, onCha
           {/* Safar davomida — jonli hisoblagich + manzilga yo'l + yakunlash */}
           {st === 'in_progress' && (
             <View style={{ gap: 8, marginTop: 8 }}>
-              {/* Jonli taximetr (hisoblagichli buyurtmalar uchun) */}
-              {!!(meter || order.metered) && (
+              {/* T-11: Jonli taximetr — LOKAL real-time (liveMeter) ustun; server
+                  qiymati (meter) zaxira. Katta, aniq raqamlar (haydaganda o'qish oson). */}
+              {!!(liveMeter || meter || order.metered) && (() => {
+                const dispKm = (liveMeter && liveMeter.km != null) ? liveMeter.km : (meter ? meter.km : (order.distance_km || 0));
+                const dispFare = (liveMeter && liveMeter.fare != null) ? liveMeter.fare : (meter ? meter.fare : order.price);
+                return (
                 <View style={s.meterBox}>
                   <View>
                     <Text style={{ color: GREEN, fontSize: 11, fontWeight: '600', letterSpacing: 0.4 }}>SAFAR DAVOM ETMOQDA</Text>
-                    <Text style={{ color: GRAY1, fontSize: 13, marginTop: 4 }}>
-                      {meter ? `${meter.km} km · ${meter.minutes} daq` : (order.distance_km ? `${order.distance_km} km` : ' ')}
+                    <Text style={{ color: WHITE, fontSize: 22, fontWeight: '800', marginTop: 4 }}>
+                      {Number(dispKm).toFixed(1)} <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '600' }}>km</Text>
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ color: WHITE, fontSize: 26, fontWeight: '800', lineHeight: 28 }}>
-                      {fmt(meter ? meter.fare : order.price)}
+                    <Text style={{ color: YELLOW, fontSize: 34, fontWeight: '800', lineHeight: 36 }}>
+                      {fmt(dispFare)}
                     </Text>
                     <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>so'm</Text>
                   </View>
                 </View>
-              )}
+                );
+              })()}
               <TouchableOpacity style={s.btnNav} onPress={() => onNavigate(order.to_lat, order.to_lng)} activeOpacity={0.8}>
                 <Ionicons name="navigate" size={18} color="#fff" style={{ marginRight: 8 }} />
                 <Text style={s.btnTxtW}>MANZILGA YO'L</Text>
