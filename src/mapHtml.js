@@ -19,6 +19,10 @@ export function mapHTML() {
 <style>body,html{margin:0;padding:0;width:100%;height:100%;}#map,#gmap{position:absolute;top:0;left:0;width:100%;height:100%;}</style>
 </head><body><div id="map"></div><div id="gmap" style="display:none"></div><script>
 var _eng='leaflet',_last=null;
+// Google Maps xatosini (RefererNotAllowed/BillingNotEnabled/ApiNotActivated/InvalidKey)
+// RN'ga yuboramiz — nega OSM'ga qaytganini ANIQ bilish uchun. Google bu xatolarni
+// console.error orqali chiqaradi (va "site URL to be authorized" ni ham beradi).
+try{var _ce=console&&console.error?console.error.bind(console):function(){};if(console)console.error=function(){try{var m=Array.prototype.join.call(arguments,' ');if(/Google Maps|MapError|BillingNotEnabled|ApiNotActivated|RefererNotAllowed|InvalidKey|ExpiredKey/i.test(m)){window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'gmapError',msg:String(m).slice(0,600)}));}}catch(e){}return _ce.apply(console,arguments);};}catch(e){}
 // ── Zaxira: Leaflet + OpenStreetMap (kalitsiz) ──
 function ic(c){return L.icon({iconUrl:'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-'+c+'.png',shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',iconSize:[25,41],iconAnchor:[12,41],popupAnchor:[1,-34],shadowSize:[41,41]});}
 var greenIcon=ic('green'),redIcon=ic('red');
@@ -58,7 +62,7 @@ window.__gmInit=function(){
     if(_last)googleUpdate(_last);
   }catch(e){}
 };
-window.gm_authFailure=function(){ _eng='leaflet'; try{document.getElementById('gmap').style.display='none';document.getElementById('map').style.display='block';}catch(e){} };
+window.gm_authFailure=function(){ try{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'gmapError',msg:'gm_authFailure — Google kalit rad etildi (referer cheklovi yoki billing yoqilmagan yoki Maps JavaScript API yoqilmagan). Google Cloud kalitini tekshiring.'}));}catch(e){} _eng='leaflet'; try{document.getElementById('gmap').style.display='none';document.getElementById('map').style.display='block';}catch(e){} };
 window.__useGoogle=function(key){
   if(!key||gReady||document.getElementById('gm-src'))return;
   var s=document.createElement('script'); s.id='gm-src';

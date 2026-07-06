@@ -688,7 +688,10 @@ function AppInner() {
   const creatingOrderRef = useRef(false);                 // ikki marta buyurtma yaratilmasin (double-tap)
   const healthTimerRef = useRef(null);                    // reachability heartbeat timeri
   const [netOnline, setNetOnline] = useState(true);       // internet bormi (banner uchun)
-  const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
+  // baseUrl — WebView hujjatiga BARQAROR origin beradi. Google Maps kaliti "HTTP referrer"
+  // cheklovi bilan bo'lsa, bu domenni (ketdikgo.uz/*) ruxsat ro'yxatiga qo'shish kifoya.
+  // baseUrl'siz origin 'about:blank'/'null' bo'lib, Google RefererNotAllowedMapError beradi.
+  const mapSource = useRef({ html: mapHTML(), baseUrl: 'https://ketdikgo.uz/' }).current; // bir marta yaratiladi, qayta yuklanmaydi
   const mapDataRef = useRef({});                          // joriy xarita ma'lumoti (so'nggi)
   const orderStepRef = useRef(null);                      // onWebViewMessage barqaror bo'lishi uchun (orderStep ref orqali o'qiladi)
   const [mapReady, setMapReady] = useState(false);
@@ -1249,6 +1252,7 @@ function AppInner() {
     try {
       const msg = JSON.parse(e.nativeEvent.data);
       if (msg.type === 'mapReady') { setMapReady(true); pushMap(); enableGoogleMap(); return; }
+      if (msg.type === 'gmapError') { console.warn('[GoogleMaps]', msg.msg); try { captureException(new Error('GoogleMaps: ' + msg.msg), { kind: 'gmap' }); } catch (_) {} return; }
       if (msg.type === 'mapClick') {
         if (orderStepRef.current === 'confirm') {
           const addr = await reverseGeocode(msg.lat, msg.lng);
