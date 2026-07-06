@@ -15,12 +15,16 @@ export function mapHTML() {
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>body,html{margin:0;padding:0;width:100%;height:100%;}#map,#gmap{position:absolute;top:0;left:0;width:100%;height:100%;}</style>
-</head><body><div id="map"></div><div id="gmap" style="display:none"></div><script>
+</head><body><div id="map"></div><div id="gmap" style="display:none"></div><div id="dbg" style="position:absolute;left:6px;bottom:6px;z-index:99999;max-width:82%;font:11px/1.35 monospace;color:#fff;background:rgba(0,0,0,.62);padding:4px 7px;border-radius:6px;pointer-events:none">xarita: OSM (Google kaliti kutilmoqda)</div><script>
 var _eng='leaflet',_last=null;
+// KO'RINADIGAN diagnostika: xarita holatini/xatosini ekranда pastki chapда ko'rsatamiz —
+// telefonда WebView konsolini ochmasdan AYNAN sababni bilish uchun. __setDbg — RN (App.js)
+// ham shu badge'ni yangilay oladi (masalan "KALIT KELMADI").
+function _dbg(t){try{var e=document.getElementById('dbg');if(e)e.textContent='xarita: '+t;}catch(_){}}
+window.__setDbg=function(t){_dbg(t);};
 // Google Maps xatosini (RefererNotAllowed/BillingNotEnabled/ApiNotActivated/InvalidKey)
-// RN'ga yuboramiz — nega OSM'ga qaytganini ANIQ bilish uchun. Google bu xatolarni
-// console.error orqali chiqaradi (va "site URL to be authorized" ni ham beradi).
-try{var _ce=console&&console.error?console.error.bind(console):function(){};if(console)console.error=function(){try{var m=Array.prototype.join.call(arguments,' ');if(/Google Maps|MapError|BillingNotEnabled|ApiNotActivated|RefererNotAllowed|InvalidKey|ExpiredKey/i.test(m)){window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'gmapError',msg:String(m).slice(0,600)}));}}catch(e){}return _ce.apply(console,arguments);};}catch(e){}
+// RN'ga yuboramiz + badge'да ko'rsatamiz. Google bu xatolarni console.error orqali chiqaradi.
+try{var _ce=console&&console.error?console.error.bind(console):function(){};if(console)console.error=function(){try{var m=Array.prototype.join.call(arguments,' ');if(/Google Maps|MapError|BillingNotEnabled|ApiNotActivated|RefererNotAllowed|InvalidKey|ExpiredKey/i.test(m)){_dbg('Google XATO: '+String(m).slice(0,160));window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'gmapError',msg:String(m).slice(0,600)}));}}catch(e){}return _ce.apply(console,arguments);};}catch(e){}
 // ── Zaxira: Leaflet + OpenStreetMap ──
 function colorIcon(c){return L.icon({iconUrl:'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-'+c+'.png',shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',iconSize:[25,41],iconAnchor:[12,41],popupAnchor:[1,-34],shadowSize:[41,41]});}
 var blueIcon=colorIcon('blue'),redIcon=colorIcon('red'),yellowIcon=colorIcon('gold');
@@ -91,16 +95,20 @@ window.__gmInit=function(){
     gReady=true; _eng='google';
     document.getElementById('map').style.display='none';
     document.getElementById('gmap').style.display='block';
+    _dbg('Google OK');
     if(_last)googleUpdate(_last);
-  }catch(e){}
+  }catch(e){ _dbg('__gmInit xato: '+String(e&&e.message||e).slice(0,120)); }
 };
-window.gm_authFailure=function(){ try{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'gmapError',msg:'gm_authFailure — Google kalit rad etildi (referer cheklovi yoki billing yoqilmagan yoki Maps JavaScript API yoqilmagan). Google Cloud kalitini tekshiring.'}));}catch(e){} _eng='leaflet'; try{document.getElementById('gmap').style.display='none';document.getElementById('map').style.display='block';}catch(e){} };
+window.gm_authFailure=function(){ _dbg('AUTH XATO -> OSM (kalit rad etildi: referer/billing/API tekshiring)'); try{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'gmapError',msg:'gm_authFailure — Google kalit rad etildi (referer cheklovi yoki billing yoqilmagan yoki Maps JavaScript API yoqilmagan). Google Cloud kalitini tekshiring.'}));}catch(e){} _eng='leaflet'; try{document.getElementById('gmap').style.display='none';document.getElementById('map').style.display='block';}catch(e){} };
 window.__useGoogle=function(key){
-  if(!key||gReady||document.getElementById('gm-src'))return;
+  if(gReady||document.getElementById('gm-src'))return;
+  if(!key){ _dbg('KALIT KELMADI (bosh) — backend google maydoni bosh yoki ilovaga yetmadi'); window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'gmapError',msg:'__useGoogle: kalit BOSH keldi (backend /api/loc/mapkey google maydoni bosh — ENV GOOGLE_MAPS_API_KEY yoki backend deploy tekshiring)'})); return; }
+  _dbg('Google yuklanmoqda... (kalit '+String(key).length+' belgi)');
   var s=document.createElement('script'); s.id='gm-src';
   s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(key)+'&callback=__gmInit&loading=async';
-  s.async=true; s.onerror=function(){};
+  s.async=true; s.onerror=function(){ _dbg('Google JS yuklanmadi (tarmoq yoki URL)'); window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'gmapError',msg:'script onerror — Google Maps JS yuklanmadi (tarmoq/URL)'})); };
   document.head.appendChild(s);
+  setTimeout(function(){ if(!gReady){ _dbg('Google 10s javob bermadi -> OSM (yuqoridagi xato yoki tarmoq)'); } },10000);
 };
 // ── Dispatcher: RN injectJavaScript(updateMap) ──
 window.updateMap=function(d){ _last=d; if(_eng==='google')googleUpdate(d); else leafletUpdate(d); };
