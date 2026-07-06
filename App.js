@@ -1136,6 +1136,62 @@ function AppInner() {
     mapRef.current.injectJavaScript(`window.updateMap(${JSON.stringify(d)});true;`);
   }, [mapReady, myLoc, order?.from_lat, order?.from_lng, order?.to_lat, order?.to_lng]);
 
+  // ── M-07: ILOVA ICHIDA yo'nalish (route) — OSRM (bepul, OSM asosida) ──
+  // accepted/arrived: haydovchi -> MIJOZ (olib ketish nuqtasi); in_progress: -> MANZIL.
+  // Ko'chalar bo'ylab chiziq (OSRM public API), km + ETA chip xaritada ko'rinadi.
+  // Batareya: eng ko'pi 15 soniyada bir marta so'raladi (har GPS'da EMAS); nishon
+  // o'zgarsa darrov. OSRM xato bo'lsa — eski chiziq qoladi (jim), tashqi navigatsiya
+  // tugmasi (navigateTo) o'z joyida qo'shimcha tanlov sifatida qoladi.
+  const [routeInfo, setRouteInfo] = useState(null); // { km, min } — chip uchun
+  const routeFetchRef = useRef({ ts: 0, key: '' });
+  useEffect(() => {
+    // Nishon: accepted/arrived -> pickup, in_progress -> destination
+    let target = null;
+    if (order && ['assigned', 'accepted', 'arrived'].includes(order.status) && order.from_lat != null) {
+      target = { lat: order.from_lat, lng: order.from_lng };
+    } else if (order && order.status === 'in_progress' && order.to_lat != null) {
+      target = { lat: order.to_lat, lng: order.to_lng };
+    }
+    if (!target || !myLoc || !mapReady || !mapRef.current) {
+      if (!target && mapRef.current && routeFetchRef.current.key) {
+        routeFetchRef.current = { ts: 0, key: '' };
+        mapRef.current.injectJavaScript('window.clearRoute&&window.clearRoute();true;');
+        setRouteInfo(null);
+      }
+      return;
+    }
+    const key = `${order.id}:${order.status === 'in_progress' ? 'dest' : 'pick'}`;
+    const now = Date.now();
+    // Throttle: nishon o'zgarmagan bo'lsa 15s dan tez-tez so'ramaymiz (batareya/OSRM)
+    if (routeFetchRef.current.key === key && now - routeFetchRef.current.ts < 15000) return;
+    routeFetchRef.current = { ts: now, key };
+    (async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${myLoc.lng},${myLoc.lat};${target.lng},${target.lat}?overview=full&geometries=geojson`;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(timer);
+        const j = await res.json();
+        const route = j?.routes?.[0];
+        if (!route || !route.geometry?.coordinates?.length) return;
+        // GeoJSON [lng,lat] -> [lat,lng]; juda uzun bo'lsa siyraklashtiramiz (inject hajmi)
+        let pts = route.geometry.coordinates.map((c) => [c[1], c[0]]);
+        if (pts.length > 400) {
+          const step = Math.ceil(pts.length / 400);
+          pts = pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
+        }
+        if (mapRef.current) {
+          mapRef.current.injectJavaScript(`window.drawRoute&&window.drawRoute(${JSON.stringify(pts)});true;`);
+        }
+        setRouteInfo({
+          km: +(route.distance / 1000).toFixed(1),
+          min: Math.max(1, Math.round(route.duration / 60)),
+        });
+      } catch (e) { /* OSRM vaqtincha xato — eski chiziq/chip qoladi */ }
+    })();
+  }, [mapReady, myLoc, order?.id, order?.status]);
+
   // Socketni kerakli holatga keltiramiz. Socket.IO o'zi (reconnectionAttempts: Infinity)
   // qayta ulanib turadi — uning backoff jarayonini bekorga uzmaymiz:
   //   • ulangan      → hech narsa qilmaymiz
@@ -2102,6 +2158,25 @@ function AppInner() {
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* ── M-07: yo'nalish chipi — mijozgacha/manzilgacha km + ETA (ilova ichida) ── */}
+          {order && routeInfo && (
+            <View style={{
+              position: 'absolute', top: insets.top + 62, left: 12,
+              flexDirection: 'row', alignItems: 'center', gap: 6,
+              backgroundColor: 'rgba(10,10,10,0.82)', borderRadius: 12,
+              borderWidth: 1, borderColor: YELLOW + '55',
+              paddingHorizontal: 12, paddingVertical: 8,
+            }}>
+              <Ionicons name="navigate" size={14} color={YELLOW} />
+              <Text style={{ color: WHITE, fontSize: 13, fontWeight: '700' }}>
+                {routeInfo.km} km · ~{routeInfo.min} daq
+              </Text>
+              <Text style={{ color: GRAY1, fontSize: 11 }}>
+                {order.status === 'in_progress' ? 'manzilgacha' : 'mijozgacha'}
+              </Text>
+            </View>
+          )}
 
           {/* ── AI yordamchi — SURILADIGAN tugma (istagan joyga ko'chiriladi, chetga yopishadi) ── */}
           <DraggableAiButton insets={insets} onPress={() => setAiModal(true)} storageKey="AI_FAB_POS" />

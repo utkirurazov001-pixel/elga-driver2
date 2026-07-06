@@ -66,6 +66,7 @@ window.__gmInit=function(){
     document.getElementById('gmap').style.display='block';
     _dbg('Google OK');
     if(_last)googleUpdate(_last);
+    if(_lastRoute)googleRoute(_lastRoute); // M-07: dvigatel almashganda yo'nalish saqlanadi
   }catch(e){ _dbg('__gmInit xato: '+String(e&&e.message||e).slice(0,120)); }
 };
 window.gm_authFailure=function(){ _dbg('AUTH XATO -> OSM (kalit rad etildi: referer/billing/API tekshiring)'); try{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'gmapError',msg:'gm_authFailure — Google kalit rad etildi (referer cheklovi yoki billing yoqilmagan yoki Maps JavaScript API yoqilmagan). Google Cloud kalitini tekshiring.'}));}catch(e){} _eng='leaflet'; try{document.getElementById('gmap').style.display='none';document.getElementById('map').style.display='block';}catch(e){} };
@@ -79,6 +80,33 @@ window.__useGoogle=function(key){
   document.head.appendChild(s);
   setTimeout(function(){ if(!gReady){ _dbg('Google 10s javob bermadi -> OSM (yuqoridagi xato yoki tarmoq)'); } },10000);
 };
+// ── M-07: YO'NALISH chizig'i (route) — ILOVA ICHIDA, ikkala dvigatelda ──
+// RN OSRM'dan yo'nalishni oladi va window.drawRoute([[lat,lng],...]) chaqiradi.
+// Sariq chiziq (brend) + to'q hoshiya — xaritada aniq ko'rinadi. clearRoute — o'chirish.
+// Dvigatel almashsa (__gmInit) oxirgi yo'nalish qayta chiziladi (_lastRoute).
+var _lastRoute=null;
+var lRoute=null,lRouteCase=null;   // Leaflet polylines (hoshiya + asosiy)
+var gRoute=null,gRouteCase=null;   // Google polylines
+function leafletRoute(pts){
+  try{
+    if(lRoute){map.removeLayer(lRoute);lRoute=null;} if(lRouteCase){map.removeLayer(lRouteCase);lRouteCase=null;}
+    if(!pts||!pts.length)return;
+    lRouteCase=L.polyline(pts,{color:'#15171c',weight:8,opacity:0.85}).addTo(map);
+    lRoute=L.polyline(pts,{color:'#FFCC00',weight:5,opacity:0.95}).addTo(map);
+  }catch(e){}
+}
+function googleRoute(pts){
+  if(!gReady||!gmap)return;
+  try{
+    if(gRoute){gRoute.setMap(null);gRoute=null;} if(gRouteCase){gRouteCase.setMap(null);gRouteCase=null;}
+    if(!pts||!pts.length)return;
+    var path=pts.map(function(p){return {lat:p[0],lng:p[1]};});
+    gRouteCase=new google.maps.Polyline({path:path,strokeColor:'#15171c',strokeWeight:8,strokeOpacity:0.85,map:gmap});
+    gRoute=new google.maps.Polyline({path:path,strokeColor:'#FFCC00',strokeWeight:5,strokeOpacity:0.95,map:gmap});
+  }catch(e){}
+}
+window.drawRoute=function(pts){ _lastRoute=pts; if(_eng==='google')googleRoute(pts); else leafletRoute(pts); };
+window.clearRoute=function(){ _lastRoute=null; leafletRoute(null); googleRoute(null); };
 // ── Dispatcher: RN injectJavaScript(updateMap) ──
 window.updateMap=function(d){ _last=d; if(_eng==='google')googleUpdate(d); else leafletUpdate(d); };
 window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'mapReady'}));
