@@ -1025,7 +1025,8 @@ function AppInner() {
         if (online && !watchRef.current) startTracking();
         // T-08: fon'dan qaytganda faol safarda bo'lsa ekranни qayta uyg'oq qilamiz
         // (keep-awake tag ba'zi qurilmalarда fon'ga o'tganда bo'shashi mumkin).
-        if (inTripRef.current) keepAwakeOn();
+        // M-03: onlayn kutish rejimida ham xuddi shunday qayta yoqamiz.
+        if (inTripRef.current || online) keepAwakeOn();
       }
     };
     const appSub = AppState.addEventListener('change', onAppState);
@@ -1380,8 +1381,12 @@ function AppInner() {
   useEffect(() => {
     const inTrip = !!order?.status && TRIP_AWAKE_STATUSES.includes(order.status);
     inTripRef.current = inTrip;
-    if (inTrip) keepAwakeOn(); else keepAwakeOff();
-  }, [order?.status]);
+    // M-03: ONLAYN (buyurtma kutish) rejimida ham ekran YONIQ tursin — haydovchi
+    // qo'lda tegib turmasin, buyurtmani o'tkazib yubormasin. OFLAYN va safar
+    // tashqarisida O'CHIRILADI (batareya tejaladi). T-08/T-10 mexanizmi o'zgarmadi
+    // — shart faqat `online` bilan kengaytirildi.
+    if (inTrip || online) keepAwakeOn(); else keepAwakeOff();
+  }, [order?.status, online]);
 
   // Faol buyurtma bormi (GPS callback ichida ref orqali, stale closure'siz)
   function isOrderActive() {
