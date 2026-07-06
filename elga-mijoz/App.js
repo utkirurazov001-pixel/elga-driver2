@@ -1962,6 +1962,21 @@ function AppInner() {
                     <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>
                       {[order.driver_car, order.driver_color, order.driver_plate].filter(Boolean).join(' · ')}
                     </Text>
+{/* M-04: xizmat belgilari (A/C, bagaj) — haydovchi profilidan, narxga ta'sir yo'q */}
+                    {(order.driver_ac || order.driver_baggage) && (
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                        {!!order.driver_ac && (
+                          <View style={{ backgroundColor: CARD2, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                            <Text style={{ color: WHITE, fontSize: 11 }}>❄️ A/C</Text>
+                          </View>
+                        )}
+                        {!!order.driver_baggage && (
+                          <View style={{ backgroundColor: CARD2, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                            <Text style={{ color: WHITE, fontSize: 11 }}>🧳 Bagaj</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
                     {(() => {
                       // M-05: ETA + masofa. Pickup nuqtasi: pickup state → order.from_lat
                       // (resume'da pickup bo'sh bo'ladi — order'dan olamiz). ETA — shahar
