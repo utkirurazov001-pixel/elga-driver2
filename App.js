@@ -1094,6 +1094,23 @@ function AppInner() {
   // effekt (mapReady deps) yuboradi.
   const onMapReady = useCallback(() => setMapReady(true), []);
 
+  // Google Maps'ni yoqish: kalitni backenddan olamiz (/api/loc/mapkey → google) va
+  // WebView'ga bir marta uzatamiz. Kalit bo'lsa xarita Google'ga o'tadi; bo'lmasa/
+  // xato bo'lsa OpenStreetMap zaxirasida qoladi. Kalit KODDA yozilmaydi (ENV → backend).
+  const googleMapReqRef = useRef(false);
+  useEffect(() => {
+    if (!mapReady || !mapRef.current || !token || googleMapReqRef.current) return;
+    googleMapReqRef.current = true;
+    (async () => {
+      try {
+        const r = await api('/api/loc/mapkey', 'GET', null, token, 8000, { retries: 1 });
+        if (r && r.google && mapRef.current) {
+          mapRef.current.injectJavaScript(`window.__useGoogle(${JSON.stringify(r.google)});true;`);
+        }
+      } catch (e) { /* zaxira: OpenStreetMap */ }
+    })();
+  }, [mapReady, token]);
+
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const d = {

@@ -1227,13 +1227,28 @@ function AppInner() {
     webviewRef.current.injectJavaScript(`window.updateMap(${JSON.stringify(mapDataRef.current)});true;`);
   }
 
+  // Google Maps'ni yoqish: kalitni backenddan olamiz (/api/loc/mapkey → google) va
+  // WebView'ga bir marta uzatamiz. Kalit bo'lsa Google'ga o'tadi; bo'lmasa/xato bo'lsa
+  // OpenStreetMap zaxirasida qoladi. Kalit KODDA yozilmaydi (ENV → backend).
+  const googleMapReqRef = useRef(false);
+  async function enableGoogleMap() {
+    if (googleMapReqRef.current || !webviewRef.current) return;
+    googleMapReqRef.current = true;
+    try {
+      const r = await api('/api/loc/mapkey', 'GET', null, tokenRef.current || token, 8000, { retries: 1 });
+      if (r && r.google && webviewRef.current) {
+        webviewRef.current.injectJavaScript(`window.__useGoogle(${JSON.stringify(r.google)});true;`);
+      }
+    } catch (e) { /* zaxira: OpenStreetMap */ }
+  }
+
   // Barqaror handler (useCallback []) — ClientMap memoizatsiyasi buzilmasligi uchun.
   // Joriy orderStep ni orderStepRef orqali o'qiymiz; pushMap faqat ref'lardan
   // foydalanadi, shuning uchun birinchi render closure'i ham har doim to'g'ri ishlaydi.
   const onWebViewMessage = useCallback(async (e) => {
     try {
       const msg = JSON.parse(e.nativeEvent.data);
-      if (msg.type === 'mapReady') { setMapReady(true); pushMap(); return; }
+      if (msg.type === 'mapReady') { setMapReady(true); pushMap(); enableGoogleMap(); return; }
       if (msg.type === 'mapClick') {
         if (orderStepRef.current === 'confirm') {
           const addr = await reverseGeocode(msg.lat, msg.lng);
