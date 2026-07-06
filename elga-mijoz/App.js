@@ -1846,9 +1846,14 @@ function AppInner() {
   // onWebViewMessage barqaror (useCallback) — joriy orderStep ni ref orqali o'qiydi.
   orderStepRef.current = orderStep;
   // Joriy holatga qarab xarita ma'lumotini tayyorlaymiz (so'nggi qiymat ref'da turadi).
+  // M-06: FAOL buyurtmada pickup/manzil zaxirasi — ORDER PAYLOAD'idan.
+  // Ilova qayta ochilganda (resume) `pickup`/`dest`/`myLoc` state'lari BO'SH bo'ladi —
+  // ilgari lat:0,lng:0 (okean!) ga tushib, mijoz xaritada NA olib ketish nuqtasini,
+  // NA haydovchini ko'rardi ("bir-birini ko'rmaydi"ning resume'dagi sababi).
+  // order.from_lat/to_lat serverdan HAR DOIM keladi — zaxira sifatida ishlatamiz.
   mapDataRef.current = order ? {
-    lat: mapBase?.lat ?? 0, lng: mapBase?.lng ?? 0,
-    destLat: dest?.lat ?? null, destLng: dest?.lng ?? null,
+    lat: mapBase?.lat ?? order.from_lat ?? null, lng: mapBase?.lng ?? order.from_lng ?? null,
+    destLat: dest?.lat ?? order.to_lat ?? null, destLng: dest?.lng ?? order.to_lng ?? null,
     driverLat: driverLoc?.lat ?? null, driverLng: driverLoc?.lng ?? null,
     nearby: [], pickupMode: false,
     // T-04: qidiruv paytida xaritada kengayuvchi radius doirasi (radar effekti)
