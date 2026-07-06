@@ -88,7 +88,7 @@ const BG = '#0A0A0A';
 const CARD = '#141414';
 const CARD2 = '#1E1E1E';
 const BORDER = '#282828';
-const YELLOW = '#FFC700';
+const YELLOW = '#FFCC00'; // KetdikGo brend sarig'i (butun ilova — ko'k olib tashlandi)
 const GREEN = '#22C55E';
 const RED = '#FF453A';
 const WHITE = '#FFFFFF';
@@ -2453,8 +2453,8 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
                 <Text style={s.custName}>{order.customer_name || 'Mijoz'}</Text>
                 <Text style={s.custPhone}>{fmtPhone(order.customer_phone)}</Text>
               </View>
-              <TouchableOpacity style={[s.callBtn, { marginRight: 8, backgroundColor: '#0A2540' }]} onPress={() => onChat()}>
-                <Ionicons name="chatbubble" size={18} color="#007AFF" />
+              <TouchableOpacity style={[s.callBtn, { marginRight: 8, backgroundColor: CARD2 }]} onPress={() => onChat()}>
+                <Ionicons name="chatbubble" size={18} color={YELLOW} />
               </TouchableOpacity>
               <TouchableOpacity style={s.callBtn} onPress={() => onCall(order.customer_phone)}>
                 <Ionicons name="call" size={18} color={GREEN} />
@@ -2469,8 +2469,8 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
           {st === 'accepted' && (
             <View style={{ gap: 8, marginTop: 8 }}>
               <TouchableOpacity style={s.btnNav} onPress={() => onNavigate(order.from_lat, order.from_lng)} activeOpacity={0.8}>
-                <Ionicons name="navigate" size={18} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={s.btnTxtW}>MIJOZGA YO'L</Text>
+                <Ionicons name="navigate" size={18} color="#15171c" style={{ marginRight: 8 }} />
+                <Text style={[s.btnTxtW, { color: '#15171c' }]}>MIJOZGA YO'L</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.btn} onPress={() => onAction('arrived')} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>YETIB KELDIM</Text>}
@@ -2522,8 +2522,8 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
                 </View>
               )}
               <TouchableOpacity style={s.btnNav} onPress={() => onNavigate(order.to_lat, order.to_lng)} activeOpacity={0.8}>
-                <Ionicons name="navigate" size={18} color="#fff" style={{ marginRight: 8 }} />
-                <Text style={s.btnTxtW}>MANZILGA YO'L</Text>
+                <Ionicons name="navigate" size={18} color="#15171c" style={{ marginRight: 8 }} />
+                <Text style={[s.btnTxtW, { color: '#15171c' }]}>MANZILGA YO'L</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.btn} onPress={() => onAction('complete')} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>SAFARNI YAKUNLASH</Text>}
@@ -2642,10 +2642,10 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
               </View>
             </View>
             <TouchableOpacity
-              style={{ backgroundColor: '#005EEB', borderRadius: 12, height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              style={{ backgroundColor: YELLOW, borderRadius: 12, height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
               onPress={() => setTopupModal(true)}
               activeOpacity={0.85}>
-              <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700' }}>Click orqali to'ldirish</Text>
+              <Text style={{ color: '#15171c', fontSize: 16, fontWeight: '700' }}>Click orqali to'ldirish</Text>
             </TouchableOpacity>
           </View>
 
@@ -2674,11 +2674,11 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
                   ))}
                 </View>
                 <TouchableOpacity
-                  style={{ backgroundColor: '#005EEB', borderRadius: 14, height: 54, alignItems: 'center', justifyContent: 'center', opacity: topupLoading ? 0.6 : 1 }}
+                  style={{ backgroundColor: YELLOW, borderRadius: 14, height: 54, alignItems: 'center', justifyContent: 'center', opacity: topupLoading ? 0.6 : 1 }}
                   onPress={doTopup}
                   disabled={topupLoading}
                   activeOpacity={0.85}>
-                  {topupLoading ? <ActivityIndicator color={WHITE} /> : <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700' }}>Click orqali to'lash</Text>}
+                  {topupLoading ? <ActivityIndicator color="#15171c" /> : <Text style={{ color: '#15171c', fontSize: 16, fontWeight: '700' }}>Click orqali to'lash</Text>}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => { setTopupModal(false); setTopupAmount(''); }} style={{ marginTop: 14, alignItems: 'center' }}>
                   <Text style={{ color: GRAY1, fontSize: 15 }}>Bekor qilish</Text>
@@ -3323,7 +3323,7 @@ const s = StyleSheet.create({
   btn: { backgroundColor: '#FFC700', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 6 },
   btnTxt: { color: '#000', fontSize: 17, fontWeight: 'bold' },
   btnTxtW: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  btnNav: { backgroundColor: '#1976D2', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 6 },
+  btnNav: { backgroundColor: YELLOW, padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 6 },
   btnHalf: { flex: 1, padding: 16, borderRadius: 12, alignItems: 'center', marginHorizontal: 4 },
   row: { flexDirection: 'row', marginTop: 8 },
   link: { color: '#FFC700', textAlign: 'center', marginTop: 14, fontSize: 15 },
