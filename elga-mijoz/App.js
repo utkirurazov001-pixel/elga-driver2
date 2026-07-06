@@ -146,6 +146,20 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// M-05: Android bildirishnoma KANALI — backend push'lari channelId:'order-status'
+// bilan keladi ("Haydovchi yo'lda", "Yetib keldi"...). Kanalsiz Android 8+ da push
+// past muhimlikda (ovozsiz, kechikkan) yoki umuman ko'rinmay qolardi — real testdagi
+// "push kelmayapti"ning ilova tomonidagi sababi. HIGH = ovoz + banner (heads-up).
+if (Platform.OS === 'android') {
+  Notifications.setNotificationChannelAsync('order-status', {
+    name: 'Buyurtma holati',
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: 'default',
+    vibrationPattern: [0, 250, 250, 250],
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  }).catch(() => {});
+}
+
 // ============================================================
 //  TARMOQ QATLAMI — zaif/uzilgan internetga chidamli (haydovchi ilovasi bilan bir xil)
 //  • deviceId / requestId / Idempotency-Key — takror so'rovlardan himoya
@@ -575,6 +589,17 @@ function AppInner() {
   const estCacheKey = useRef(null);
   const [order, setOrder] = useState(null);
   const [driverLoc, setDriverLoc] = useState(null);
+  // M-05: socket driver_location oxirgi kelgan vaqti. Socket jim bo'lsa (o'lik/yo'q),
+  // haydovchi joylashuvini order payload'idagi driver_lat/lng dan olamiz (poll/resume) —
+  // marker va ETA REST orqali ham ishlaydi. Socket jonli bo'lsa unga xalaqit bermaymiz.
+  const driverLocSockTsRef = useRef(0);
+  const seedDriverLocFromOrder = (o) => {
+    if (!o || o.driver_lat == null || o.driver_lng == null) return;
+    if (Date.now() - driverLocSockTsRef.current < 12000) return; // socket jonli — tegmaymiz
+    const lat = Number(o.driver_lat), lng = Number(o.driver_lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    setDriverLoc((prev) => (prev && prev.lat === lat && prev.lng === lng) ? prev : { lat, lng });
+  };
   const [nearby, setNearby] = useState([]);
   const [carClass, setCarClass] = useState('ekonom');
   const [payMethod, setPayMethod] = useState('cash');
@@ -763,7 +788,11 @@ function AppInner() {
       loadPopularPlaces();
       startPinHalo();
       // Push token — ilova yopiq/fon holatida ham "Haydovchi topildi/yetib keldi" kelishi uchun (#push-missing).
-      if (!pushRegisteredRef.current) { pushRegisteredRef.current = true; registerPushToken(token); }
+      // M-05: muvaffaqiyatni kuzatamiz — token olinmasa (permission keyin berildi /
+      // tarmoq xatosi) foreground'da QAYTA uriniladi (quyidagi onAppState'da).
+      if (!pushRegisteredRef.current) {
+        registerPushToken(token).then((t) => { pushRegisteredRef.current = !!t; });
+      }
     })();
     // Push bosilib ilova ochilganda holatni serverdan tiklaymiz.
     const respSub = Notifications.addNotificationResponseReceivedListener(() => {
@@ -798,6 +827,11 @@ function AppInner() {
       if (prev && /inactive|background/.test(prev) && next === 'active') {
         ensureSocketConnected();
         resumeActiveOrder();
+        // M-05: push token hali ro'yxatdan o'tmagan bo'lsa (permission endi berilgan
+        // bo'lishi mumkin) — qayta urinamiz. Muvaffaqiyatda bayroq o'rnatiladi.
+        if (!pushRegisteredRef.current && tokenRef.current) {
+          registerPushToken(tokenRef.current).then((t) => { pushRegisteredRef.current = !!t; });
+        }
       }
     };
     const appSub = AppState.addEventListener('change', onAppState);
@@ -884,6 +918,7 @@ function AppInner() {
         }
         // T-16: markaziy mashina orqali — eskirgan poll javobi holatni ORQAGA qaytarmasin
         applyServerOrder(fresh);
+        seedDriverLocFromOrder(fresh); // M-05: socket jim bo'lsa marker/ETA poll'dan
       } catch (_) {}
     };
     poll();
@@ -1031,6 +1066,7 @@ function AppInner() {
       if (o && o.id && finishedOrderIdRef.current === o.id) return;
       // T-16: holat MARKAZIY mashinadan o'tadi (regress/resurrect/race himoyasi bir joyda)
       applyServerOrder(o);
+      seedDriverLocFromOrder(o); // M-05: haydovchi markeri/ETA payload'dan ham tiklanadi
       if (o.status === 'accepted') {
         arrivedNotified.current = false;
         const nm = o.driver_name || 'Haydovchi';
@@ -1063,6 +1099,7 @@ function AppInner() {
       }
     });
     s.on('driver_location', (loc) => {
+      driverLocSockTsRef.current = Date.now(); // M-05: socket jonli — poll seed'i chetlanadi
       // Bir xil koordinata kelsa re-render qilmaymiz (xarita ham o'zgarmaydi)
       setDriverLoc((prev) => (prev && loc && prev.lat === loc.lat && prev.lng === loc.lng) ? prev : loc);
       setOrder((prev) => {
@@ -1181,6 +1218,7 @@ function AppInner() {
       const r = await api('/api/me/active-order', 'GET', null, tokenRef.current || token);
       if (r?.order) {
         applyServerOrder(r.order);
+        seedDriverLocFromOrder(r.order); // M-05: resume'da ham marker/ETA darrov
         setOrderStep(null);
       } else if (r && orderTouchedAtRef.current <= startedAt) {
         // Server: faol buyurtma yo'q → lokaldagi eskirgan buyurtmani tozalaymiz.
@@ -1919,11 +1957,21 @@ function AppInner() {
                     <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>
                       {[order.driver_car, order.driver_color, order.driver_plate].filter(Boolean).join(' · ')}
                     </Text>
-                    {driverLoc && pickup && order.status === 'accepted' && (
-                      <Text style={{ color: GREEN, fontSize: 12, marginTop: 2 }}>
-                        📍 {(distKm(driverLoc.lat, driverLoc.lng, (pickup || myLoc).lat, (pickup || myLoc).lng) * 1000).toFixed(0)} m uzoqlikda
-                      </Text>
-                    )}
+                    {(() => {
+                      // M-05: ETA + masofa. Pickup nuqtasi: pickup state → order.from_lat
+                      // (resume'da pickup bo'sh bo'ladi — order'dan olamiz). ETA — shahar
+                      // tezligi ~25 km/soat bo'yicha taxmin (kamida 1 daqiqa).
+                      if (!driverLoc || order.status !== 'accepted') return null;
+                      const p = pickup || myLoc || (order.from_lat != null ? { lat: order.from_lat, lng: order.from_lng } : null);
+                      if (!p) return null;
+                      const dKm = distKm(driverLoc.lat, driverLoc.lng, p.lat, p.lng);
+                      const etaMin = Math.max(1, Math.round((dKm / 25) * 60));
+                      return (
+                        <Text style={{ color: GREEN, fontSize: 12, marginTop: 2 }}>
+                          🚗 ~{etaMin} daq · {dKm < 1 ? `${(dKm * 1000).toFixed(0)} m` : `${dKm.toFixed(1)} km`} uzoqlikda
+                        </Text>
+                      );
+                    })()}
                   </View>
                   <View style={{ gap: 8 }}>
                     {order.driver_phone && (
