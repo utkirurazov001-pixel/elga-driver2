@@ -807,6 +807,8 @@ const MapPanel = React.memo(React.forwardRef(function MapPanel({ source, style, 
         try {
           const m = JSON.parse(e.nativeEvent.data);
           if (m.type === 'mapReady') onReady && onReady();
+          // Google xaritasi nega OSM'ga qaytdi — aniq sababni log qilamiz (referer/billing/API)
+          else if (m.type === 'gmapError') { console.warn('[GoogleMaps]', m.msg); try { captureException(new Error('GoogleMaps: ' + m.msg), { kind: 'gmap' }); } catch (_) {} }
         } catch (err) {}
       }}
       javaScriptEnabled
@@ -908,7 +910,10 @@ function AppInner() {
   const lastWaitReportRef = useRef(0); // oxirgi /midwait vaqti (ms)
   const chatOutboxRef = useRef([]);  // socket uzilganda yuborilmagan chat xabarlar (#chat-loss)
   const pushRegisteredRef = useRef(false); // push token bir marta ro'yxatga olinadi
-  const mapSource = useRef({ html: mapHTML() }).current; // bir marta yaratiladi, qayta yuklanmaydi
+  // baseUrl — WebView hujjatiga BARQAROR origin beradi. Google Maps kaliti "HTTP referrer"
+  // cheklovi bilan bo'lsa, bu domenni (ketdikgo.uz/*) ruxsat ro'yxatiga qo'shish kifoya.
+  // baseUrl'siz origin 'about:blank'/'null' bo'lib, Google RefererNotAllowedMapError beradi.
+  const mapSource = useRef({ html: mapHTML(), baseUrl: 'https://ketdikgo.uz/' }).current; // bir marta yaratiladi, qayta yuklanmaydi
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
