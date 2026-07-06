@@ -1239,10 +1239,19 @@ function AppInner() {
     googleMapReqRef.current = true;
     try {
       const r = await api('/api/loc/mapkey', 'GET', null, tokenRef.current || token, 8000, { retries: 1 });
-      if (r && r.google && webviewRef.current) {
-        webviewRef.current.injectJavaScript(`window.__useGoogle(${JSON.stringify(r.google)});true;`);
+      const gk = r && r.google ? String(r.google) : '';
+      if (gk && webviewRef.current) {
+        webviewRef.current.injectJavaScript(`window.__useGoogle(${JSON.stringify(gk)});true;`);
+      } else if (webviewRef.current) {
+        // Kalit BO'SH keldi — sababni xaritada ko'rsatamiz (backend/ENV muammosi)
+        const d = 'KALIT KELMADI — backend /api/loc/mapkey google maydoni bosh (Render ENV GOOGLE_MAPS_API_KEY tekshiring yoki backend redeploy qiling)';
+        webviewRef.current.injectJavaScript(`window.__setDbg&&window.__setDbg(${JSON.stringify(d)});true;`);
+        console.warn('[GoogleMaps] mapkey google bo\'sh:', JSON.stringify(r));
+        try { captureException(new Error('GoogleMaps: mapkey google empty'), { kind: 'gmap' }); } catch (_) {}
       }
-    } catch (e) { /* zaxira: OpenStreetMap */ }
+    } catch (e) {
+      try { webviewRef.current && webviewRef.current.injectJavaScript(`window.__setDbg&&window.__setDbg(${JSON.stringify('mapkey so\'rovi xato: ' + String((e && e.message) || e).slice(0, 80))});true;`); } catch (_) {}
+    }
   }
 
   // Barqaror handler (useCallback []) — ClientMap memoizatsiyasi buzilmasligi uchun.
