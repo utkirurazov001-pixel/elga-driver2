@@ -587,6 +587,7 @@ function AppInner() {
   const [estimates, setEstimates] = useState({});
   const [estLoading, setEstLoading] = useState(false);
   const estCacheKey = useRef(null);
+  const [promoCode, setPromoCode] = useState(''); // Q3: promo-kod (ixtiyoriy)
   const [order, setOrder] = useState(null);
   const [driverLoc, setDriverLoc] = useState(null);
   // M-05: socket driver_location oxirgi kelgan vaqti. Socket jim bo'lsa (o'lik/yo'q),
@@ -1481,7 +1482,8 @@ function AppInner() {
   async function fetchAllEstimates() {
     const from = pickup || myLoc;
     if (!from || !dest) return;
-    const key = `${from.lat.toFixed(5)},${from.lng.toFixed(5)}>${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}`;
+    const promoUse = promoCode.trim().toUpperCase();
+    const key = `${from.lat.toFixed(5)},${from.lng.toFixed(5)}>${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}>${promoUse}`;
     if (estCacheKey.current === key && Object.keys(estimates).length) return;
     estCacheKey.current = key;
     setEstLoading(true);
@@ -1490,7 +1492,7 @@ function AppInner() {
       const roadKm = await fetchRoadKm(from, dest);
       const results = await Promise.all(
         CAR_CLASSES.map((c) =>
-          api('/api/orders/estimate', 'POST', { from, to: dest, car_class: c.id, ...(roadKm ? { road_km: roadKm } : {}) }, token)
+          api('/api/orders/estimate', 'POST', { from, to: dest, car_class: c.id, ...(roadKm ? { road_km: roadKm } : {}), ...(promoUse ? { promo_code: promoUse } : {}) }, token)
             .then((est) => [c.id, est])
             .catch(() => [c.id, null])
         )
@@ -1535,6 +1537,7 @@ function AppInner() {
       const r = await api('/api/orders', 'POST', {
         from, to: dest, car_class: carClass, payment_method: payMethod,
         ...(roadKm ? { road_km: roadKm } : {}),
+        ...(promoCode.trim() ? { promo_code: promoCode.trim().toUpperCase() } : {}), // Q3
       }, token, 15000, { idempotencyKey: uuid(), retries: 2 });
       const o = r.order || r;
       // T-16: yaratish vaqtini belgilaymiz — parallel ketayotgan eski "faol buyurtma
@@ -2684,6 +2687,27 @@ function AppInner() {
                 })}
               </ScrollView>
 
+              {/* Q3: promo-kod (ixtiyoriy) — backend estimate/buyurtmada qo'llaydi,
+                  chegirma narxga darhol kiritiladi (promo_applied/promo_invalid). */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                <TextInput
+                  style={{ flex: 1, backgroundColor: CARD2, color: WHITE, borderRadius: 12, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13 }}
+                  placeholder="Promo-kod (ixtiyoriy)" placeholderTextColor={GRAY2}
+                  autoCapitalize="characters" autoCorrect={false}
+                  value={promoCode} onChangeText={setPromoCode}
+                />
+                <TouchableOpacity
+                  style={{ backgroundColor: CARD2, borderRadius: 12, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 14, justifyContent: 'center' }}
+                  onPress={() => { estCacheKey.current = null; fetchAllEstimates(); }}>
+                  <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700' }}>Qo'llash</Text>
+                </TouchableOpacity>
+              </View>
+              {estimates[carClass]?.promo_applied && (
+                <Text style={{ color: GREEN, fontSize: 12, marginBottom: 8 }}>✓ Promo-kod qo'llandi — chegirma narxga kiritildi</Text>
+              )}
+              {estimates[carClass]?.promo_invalid && (
+                <Text style={{ color: RED, fontSize: 12, marginBottom: 8 }}>Promo-kod yaroqsiz yoki muddati tugagan</Text>
+              )}
               <TouchableOpacity
                 style={[s.orderCta, { marginHorizontal: 0 }, (!estimates[carClass] || loading) && { opacity: 0.5 }]}
                 activeOpacity={0.85}
