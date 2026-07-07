@@ -1874,7 +1874,10 @@ function AppInner() {
         setChatMessages([]);
         loadEarnings();
         updatePersistentNotif('Buyurtma kutilmoqda...');
-      } else if (action === 'reject') {
+      } else if (action === 'reject' || action === 'cancel') {
+        // F-04: 'cancel' — faol (accepted/arrived) safarni bekor qilish. Backend
+        // accepted'da buyurtmani boshqa haydovchiga qaytaradi (requeue), mijozga
+        // xabar boradi; haydovchi holati tozalanadi — xuddi reject kabi.
         setOrder(null);
         setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0;
         setChatMessages([]);
@@ -1906,7 +1909,7 @@ function AppInner() {
           setCompletedTrip(order);
           setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0; setChatMessages([]);
           updatePersistentNotif('Buyurtma kutilmoqda... (oflayn — sinxronlanadi)');
-        } else if (action === 'reject') {
+        } else if (action === 'reject' || action === 'cancel') {
           setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0; setChatMessages([]);
         } else {
           setOrder((p) => (p ? { ...p, status: statusAfter(action) } : p));
@@ -2470,6 +2473,19 @@ function CountdownBar() {
 
 // ---- Buyurtma paneli (holat tugmalari) ----
 function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNavigate, onCall, onChat, onPlayVoice, voiceBusy }) {
+  // F-04: faol safarni (accepted/arrived) bekor qilish — tasdiq bilan.
+  // accepted'da backend buyurtmani boshqa haydovchiga qaytaradi (requeue),
+  // arrived'da bekor qilinadi; ikkala holatda ham mijozga xabar boradi.
+  function confirmCancelTrip() {
+    Alert.alert(
+      'Safarni bekor qilish',
+      "Rostdan bekor qilasizmi? Buyurtma sizdan olinadi va mijozga xabar beriladi.",
+      [
+        { text: "Yo'q", style: 'cancel' },
+        { text: 'Ha, bekor qilish', style: 'destructive', onPress: () => onAction('cancel') },
+      ]
+    );
+  }
   const st = order.status;
   const isNew = st === 'searching' || st === 'assigned';
   const showCustomer = ['accepted', 'arrived', 'in_progress'].includes(st) && !!order.customer_phone;
@@ -2569,14 +2585,25 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
               <TouchableOpacity style={s.btn} onPress={() => onAction('arrived')} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>YETIB KELDIM</Text>}
               </TouchableOpacity>
+              {/* F-04: haydovchi safardan oldin voz kechishi mumkin — backend buyurtmani
+                  boshqa haydovchiga qaytaradi (requeue), mijoz xabar oladi. */}
+              <TouchableOpacity style={{ alignItems: 'center', paddingVertical: 8 }} onPress={confirmCancelTrip} disabled={loading}>
+                <Text style={{ color: RED, fontSize: 13, fontWeight: '600' }}>Safarni bekor qilish</Text>
+              </TouchableOpacity>
             </View>
           )}
 
           {/* Yetib keldi — safarni boshlash */}
           {st === 'arrived' && (
-            <TouchableOpacity style={[s.btn, { marginTop: 12 }]} onPress={() => onAction('start')} disabled={loading} activeOpacity={0.85}>
-              {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>SAFARNI BOSHLASH</Text>}
-            </TouchableOpacity>
+            <View style={{ gap: 8, marginTop: 12 }}>
+              <TouchableOpacity style={s.btn} onPress={() => onAction('start')} disabled={loading} activeOpacity={0.85}>
+                {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>SAFARNI BOSHLASH</Text>}
+              </TouchableOpacity>
+              {/* F-04: mijoz chiqmadi va h.k. — haydovchi bekor qila oladi, mijoz xabar oladi */}
+              <TouchableOpacity style={{ alignItems: 'center', paddingVertical: 8 }} onPress={confirmCancelTrip} disabled={loading}>
+                <Text style={{ color: RED, fontSize: 13, fontWeight: '600' }}>Safarni bekor qilish</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           {/* Safar davomida — jonli hisoblagich + manzilga yo'l + yakunlash */}
