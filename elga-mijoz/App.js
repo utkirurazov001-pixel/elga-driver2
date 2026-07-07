@@ -954,10 +954,12 @@ function AppInner() {
   // ---- Faol buyurtmani davriy yangilash (socket push o'tkazib yuborilsa ham) ----
   // Haydovchi qabul qilganda uning ma'lumotlari mijozga aniq ko'rinishi uchun
   // kutish/yo'ldagi holatda har 5 sekundda serverdan faol buyurtmani olamiz.
+  // F-03: in_progress ham ro'yxatda — avval safar boshlangach poll to'xtar edi,
+  // socket uzilsa taksometr/haydovchi markeri safar oxirigacha qotib qolardi.
   useEffect(() => {
     const st = order?.status;
     const oid = order?.id;
-    if (!oid || !['searching', 'assigned', 'accepted', 'arrived'].includes(st)) return;
+    if (!oid || !['searching', 'assigned', 'accepted', 'arrived', 'in_progress'].includes(st)) return;
     let stopped = false;
     const poll = async () => {
       try {
@@ -1312,7 +1314,14 @@ function AppInner() {
   }
 
   async function notify(title, body) {
-    try { await Notifications.scheduleNotificationAsync({ content: { title, body }, trigger: null }); } catch (e) {}
+    // F-03: Android'da 'order-status' kanali (HIGH + ovoz + tebranish) — kanalsiz
+    // lokal bildirishnoma default (past) kanalga tushib, jim/kechikib ko'rinardi.
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: { title, body, sound: 'default' },
+        trigger: Platform.OS === 'android' ? { channelId: 'order-status' } : null,
+      });
+    } catch (e) {}
   }
 
   function resetOrder() {
