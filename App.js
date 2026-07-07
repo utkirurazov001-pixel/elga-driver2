@@ -2988,6 +2988,9 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
   const [editCar, setEditCar] = useState('');
   const [editPlate, setEditPlate] = useState('');
   const [editColor, setEditColor] = useState('');
+  // M-04: mashina xizmatlari (checkbox) — faqat ma'lumot, narxga ta'sir qilmaydi
+  const [editAc, setEditAc] = useState(false);
+  const [editBaggage, setEditBaggage] = useState(false);
   const [editCard, setEditCard] = useState('');
 
   // Saving states
@@ -3033,7 +3036,7 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
   const saveCar = async () => {
     setSavingCar(true);
     try {
-      await api('/api/me/profile', 'PATCH', { car_model: editCar, car_number: editPlate, car_color: editColor }, token);
+      await api('/api/me/profile', 'PATCH', { car_model: editCar, car_number: editPlate, car_color: editColor, has_ac: editAc, has_baggage: editBaggage }, token);
       Alert.alert('Saqlandi', 'Avtomobil ma\'lumotlari yangilandi');
       setCarModal(false);
     } catch (e) {
@@ -3126,7 +3129,11 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
 
       {/* Menyu */}
       <View style={[s.profMenu, { marginTop: 20 }]}>
-        <ProfRow icon="car-outline" title="Avtomobil ma'lumotlari" onPress={() => { setEditCar(car); setEditPlate(plate); setEditColor(color); setCarModal(true); }} />
+        <ProfRow icon="car-outline" title="Avtomobil ma'lumotlari" onPress={() => {
+          setEditCar(car); setEditPlate(plate); setEditColor(color); setCarModal(true);
+          // M-04: joriy xizmat belgilarini serverdan olamiz (user prop eskirgan bo'lishi mumkin)
+          api('/api/me/profile', 'GET', null, token, 8000).then((r) => { setEditAc(!!r.has_ac); setEditBaggage(!!r.has_baggage); }).catch(() => {});
+        }} />
         <ProfRow icon="document-text-outline" title="Hujjatlar" detail="Tasdiqlangan" />
         <ProfRow icon="card-outline" title="To'lov va karta" detail={bankCard ? '●●●● ' + bankCard.slice(-4) : undefined} last onPress={() => { setEditCard(bankCard ? formatCardInput(bankCard) : ''); setCardModal(true); }} />
       </View>
@@ -3180,6 +3187,22 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
                 value={editColor}
                 onChangeText={setEditColor}
               />
+            </View>
+            {/* M-04: xizmatlar — mijoz haydovchi kartasida belgi sifatida ko'radi (narxga ta'sir yo'q) */}
+            <View style={{ backgroundColor: CARD2, borderRadius: 14, padding: 16, marginBottom: 24 }}>
+              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 12 }}>Xizmatlar (mijozga ko'rinadi)</Text>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}
+                onPress={() => setEditAc(!editAc)} activeOpacity={0.7}>
+                <Ionicons name={editAc ? 'checkbox' : 'square-outline'} size={24} color={editAc ? YELLOW : GRAY2} />
+                <Text style={{ color: WHITE, fontSize: 15, marginLeft: 12, flex: 1 }}>❄️ Konditsioner (A/C)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}
+                onPress={() => setEditBaggage(!editBaggage)} activeOpacity={0.7}>
+                <Ionicons name={editBaggage ? 'checkbox' : 'square-outline'} size={24} color={editBaggage ? YELLOW : GRAY2} />
+                <Text style={{ color: WHITE, fontSize: 15, marginLeft: 12, flex: 1 }}>🧳 Bagaj / katta yuk</Text>
+              </TouchableOpacity>
             </View>
             <TouchableOpacity style={s.btn} onPress={saveCar} activeOpacity={0.8} disabled={savingCar}>
               {savingCar
