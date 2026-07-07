@@ -727,6 +727,65 @@ function AppInner() {
     if (mapReady) pushMap();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapReady, pickup, myLoc, dest, driverLoc, nearby, order, orderStep]);
+
+  // F-02: ILOVA ICHIDA yo'nalish chizig'i (OSRM, bepul) — mijoz xaritasida ham.
+  // accepted: HAYDOVCHIdan olib ketish nuqtasigacha; in_progress: manzilgacha (B).
+  // Haydovchi ilovasidagi M-07 bilan bir xil rejim: 15s throttle (batareya/OSRM),
+  // 8s timeout, 400 nuqta siyraklashtirish. OSRM xato bo'lsa — eski chiziq qoladi (jim).
+  const [routeInfo, setRouteInfo] = useState(null); // { km, min } — chip uchun
+  const routeFetchRef = useRef({ ts: 0, key: '' });
+  useEffect(() => {
+    let start = null, target = null;
+    if (order && order.status === 'accepted') {
+      // Haydovchi yo'lda: haydovchi joylashuvidan olib ketish nuqtasigacha
+      start = driverLoc;
+      target = pickup || (order.from_lat != null ? { lat: order.from_lat, lng: order.from_lng } : null);
+    } else if (order && order.status === 'in_progress') {
+      // Safar: joriy nuqtadan (haydovchi ≈ mijoz mashinada) manzilgacha
+      start = driverLoc || pickup || (order.from_lat != null ? { lat: order.from_lat, lng: order.from_lng } : null);
+      target = dest || (order.to_lat != null ? { lat: order.to_lat, lng: order.to_lng } : null);
+    }
+    if (!start || !target || !mapReady || !webviewRef.current) {
+      // Faol yo'nalish bosqichi tugadi (arrived/completed/bekor) — chiziqni tozalaymiz
+      if ((!order || !['accepted', 'in_progress'].includes(order.status)) && webviewRef.current && routeFetchRef.current.key) {
+        routeFetchRef.current = { ts: 0, key: '' };
+        webviewRef.current.injectJavaScript('window.clearRoute&&window.clearRoute();true;');
+        setRouteInfo(null);
+      }
+      return;
+    }
+    const key = `${order.id}:${order.status === 'in_progress' ? 'dest' : 'pick'}`;
+    const now = Date.now();
+    // Throttle: nishon o'zgarmagan bo'lsa 15s dan tez-tez so'ramaymiz
+    if (routeFetchRef.current.key === key && now - routeFetchRef.current.ts < 15000) return;
+    routeFetchRef.current = { ts: now, key };
+    (async () => {
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${target.lng},${target.lat}?overview=full&geometries=geojson`;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(timer);
+        const j = await res.json();
+        const route = j?.routes?.[0];
+        if (!route || !route.geometry?.coordinates?.length) return;
+        // GeoJSON [lng,lat] -> [lat,lng]; juda uzun bo'lsa siyraklashtiramiz (inject hajmi)
+        let pts = route.geometry.coordinates.map((c) => [c[1], c[0]]);
+        if (pts.length > 400) {
+          const step = Math.ceil(pts.length / 400);
+          pts = pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
+        }
+        if (webviewRef.current) {
+          webviewRef.current.injectJavaScript(`window.drawRoute&&window.drawRoute(${JSON.stringify(pts)});true;`);
+        }
+        setRouteInfo({
+          km: +(route.distance / 1000).toFixed(1),
+          min: Math.max(1, Math.round(route.duration / 60)),
+        });
+      } catch (e) { /* OSRM vaqtincha xato — eski chiziq/chip qoladi */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, driverLoc, pickup, dest, order?.id, order?.status]);
   const tokenRef = useRef(null);
   const nearbyTimer = useRef(null);
   const appStateRef = useRef(AppState.currentState);
@@ -1941,6 +2000,22 @@ function AppInner() {
             ) : (
               <View style={[s.fill, s.center]}>
                 <ActivityIndicator color={YELLOW} size="large" />
+              </View>
+            )}
+
+            {/* F-02: yo'nalish chipi — masofa + taxminiy vaqt (OSRM'dan) */}
+            {routeInfo && ['accepted', 'in_progress'].includes(order.status) && (
+              <View style={{
+                position: 'absolute', top: insets.top + 10, left: 12,
+                backgroundColor: 'rgba(21,23,28,0.85)', borderRadius: 12,
+                paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: '#333',
+              }}>
+                <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700' }}>
+                  🧭 {routeInfo.km} km · ~{routeInfo.min} daq
+                </Text>
+                <Text style={{ color: '#ccc', fontSize: 11 }}>
+                  {order.status === 'in_progress' ? 'manzilgacha' : 'haydovchi yetib kelishi'}
+                </Text>
               </View>
             )}
 
