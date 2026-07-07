@@ -1416,9 +1416,13 @@ function AppInner() {
     if (!order) return;
     setLoading(true);
     try {
+      // P1: yangi manzil narxi ham yo'l masofasi bo'yicha (boshlanish — buyurtmadagi from)
+      const fromPt = order.from_lat != null ? { lat: order.from_lat, lng: order.from_lng } : (pickup || myLoc);
+      const roadKm = fromPt ? await fetchRoadKm(fromPt, { lat: place.lat, lng: place.lng }) : null;
       const r = await api(`/api/orders/${order.id}/destination`, 'POST', {
         to_lat: place.lat, to_lng: place.lng,
         to_address: place.address || place.name,
+        ...(roadKm ? { road_km: roadKm } : {}),
       }, token);
       if (r.order) {
         setOrder(r.order);
@@ -1441,6 +1445,33 @@ function AppInner() {
     Alert.alert(type === 'home' ? 'Uy manzili saqlandi' : 'Ish manzili saqlandi', place.address);
   }
 
+  // ---- P1 (A-1): HAQIQIY YO'L masofasi — narx to'g'ri chiziq bo'yicha emas ----
+  // Kanal/daryo ortidagi manzilga to'g'ri chiziq 3 km, real yo'l 8 km bo'lishi mumkin.
+  // OSRM'dan (F-02 dagi kabi, bepul) from→dest yo'l km olamiz va estimate/buyurtmaga
+  // road_km sifatida yuboramiz — backend allaqachon qabul qiladi va 0.95x..3x oraliqda
+  // himoyalaydi (pricing.js). OSRM javob bermasa — null: server o'zi to'g'ri chiziqqa
+  // tushadi, hech narsa buzilmaydi. Natija keshlanadi (bitta from→dest = bitta so'rov).
+  const roadKmCacheRef = useRef({ key: '', km: null });
+  async function fetchRoadKm(from, to) {
+    const key = `${from.lat.toFixed(5)},${from.lng.toFixed(5)}>${to.lat.toFixed(5)},${to.lng.toFixed(5)}`;
+    if (roadKmCacheRef.current.key === key) return roadKmCacheRef.current.km;
+    let km = null;
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 6000);
+      const res = await fetch(
+        `https://router.project-osrm.org/route/v1/driving/${from.lng},${from.lat};${to.lng},${to.lat}?overview=false`,
+        { signal: ctrl.signal }
+      );
+      clearTimeout(timer);
+      const j = await res.json();
+      const d = j?.routes?.[0]?.distance;
+      if (typeof d === 'number' && d > 0) km = +(d / 1000).toFixed(2);
+    } catch (_) { /* OSRM vaqtincha yo'q — to'g'ri chiziq zaxirasi ishlaydi */ }
+    roadKmCacheRef.current = { key, km };
+    return km;
+  }
+
   // ---- Narx: har bir tarif uchun parallel + kesh ----
   async function fetchAllEstimates() {
     const from = pickup || myLoc;
@@ -1450,9 +1481,11 @@ function AppInner() {
     estCacheKey.current = key;
     setEstLoading(true);
     try {
+      // P1: avval yo'l masofasi (keshdan bo'lsa bir zumda), keyin 4 tarif paralel
+      const roadKm = await fetchRoadKm(from, dest);
       const results = await Promise.all(
         CAR_CLASSES.map((c) =>
-          api('/api/orders/estimate', 'POST', { from, to: dest, car_class: c.id }, token)
+          api('/api/orders/estimate', 'POST', { from, to: dest, car_class: c.id, ...(roadKm ? { road_km: roadKm } : {}) }, token)
             .then((est) => [c.id, est])
             .catch(() => [c.id, null])
         )
@@ -1491,8 +1524,12 @@ function AppInner() {
     try {
       // Idempotency-Key: tarmoq uzilib qayta urinilsa ham AYNAN BITTA buyurtma yaratiladi
       // (server idempotency middleware bir xil kalitga keshlangan javobni qaytaradi).
+      // P1: buyurtma narxi ham estimate bilan BIR XIL yo'l masofasida hisoblansin
+      // (tarif ekranida keshlangan — bu yerda odatda bir zumda qaytadi)
+      const roadKm = await fetchRoadKm(from, dest);
       const r = await api('/api/orders', 'POST', {
         from, to: dest, car_class: carClass, payment_method: payMethod,
+        ...(roadKm ? { road_km: roadKm } : {}),
       }, token, 15000, { idempotencyKey: uuid(), retries: 2 });
       const o = r.order || r;
       // T-16: yaratish vaqtini belgilaymiz — parallel ketayotgan eski "faol buyurtma
