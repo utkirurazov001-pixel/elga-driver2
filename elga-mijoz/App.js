@@ -2012,10 +2012,12 @@ function AppInner() {
               </View>
             )}
 
-            {/* F-02: yo'nalish chipi — masofa + taxminiy vaqt (OSRM'dan) */}
+            {/* F-02: yo'nalish chipi — masofa + taxminiy vaqt (OSRM'dan).
+                P4 (K-4): oflayn banner ko'ringanda chip uning OSTIDAN joy oladi
+                (avval ustma-ust tushardi — banner top:insets.top, chip +10). */}
             {routeInfo && ['accepted', 'in_progress'].includes(order.status) && (
               <View style={{
-                position: 'absolute', top: insets.top + 10, left: 12,
+                position: 'absolute', top: insets.top + (netOnline ? 10 : 42), left: 12,
                 backgroundColor: 'rgba(21,23,28,0.85)', borderRadius: 12,
                 paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: '#333',
               }}>
@@ -2026,6 +2028,36 @@ function AppInner() {
                   {order.status === 'in_progress' ? 'manzilgacha' : 'haydovchi yetib kelishi'}
                 </Text>
               </View>
+            )}
+
+            {/* P4 (T-2): safar davomida MANZIL NOMI xaritada pill — mijoz qayoqqa
+                ketayotganini doim biladi (chip ostidan joy oladi). */}
+            {order.status === 'in_progress' && (order.to_address || dest?.address) && (
+              <View style={{
+                position: 'absolute', left: 12, maxWidth: '62%',
+                top: insets.top + (netOnline ? 10 : 42) + (routeInfo ? 52 : 0),
+                backgroundColor: 'rgba(21,23,28,0.85)', borderRadius: 10,
+                paddingVertical: 5, paddingHorizontal: 9, borderWidth: 1, borderColor: '#333',
+              }}>
+                <Text numberOfLines={1} style={{ color: WHITE, fontSize: 11.5 }}>
+                  🏁 {order.to_address || dest?.address}
+                </Text>
+              </View>
+            )}
+
+            {/* P4 (T-2): SOS — XARITAGA qotirilgan (Yandex qolipi): varaq qancha
+                aylantirilsa ham doim ko'rinadi va bir bosishda ochiladi. */}
+            {['accepted', 'arrived', 'in_progress'].includes(order.status) && (
+              <TouchableOpacity
+                onPress={() => setSosModal(true)}
+                activeOpacity={0.8}
+                style={{
+                  position: 'absolute', top: insets.top + (netOnline ? 10 : 42), right: 12,
+                  width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+                  backgroundColor: 'rgba(21,23,28,0.9)', borderWidth: 1.5, borderColor: RED,
+                }}>
+                <Text style={{ color: RED, fontSize: 13, fontWeight: '800' }}>SOS</Text>
+              </TouchableOpacity>
             )}
 
             <AnimatedSheet style={[s.activeSheet, { bottom: TABBAR_H + insets.bottom }]}>
