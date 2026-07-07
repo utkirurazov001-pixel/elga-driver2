@@ -198,7 +198,13 @@
       id: d.id, full_name: name, name: name, ini: ini(name), phone: d.phone,
       driver_id: d.driver_id, car: d.car || [d.car_model, d.car_number].filter(Boolean).join(' · '),
       online: !!d.online, busy: !!d.busy,
-      status: d.online ? (d.busy ? 'busy' : 'online') : 'offline',
+      // Q7b: sahifalar 'free' kutadi ('online' emas) — jonli rejimda "Bo'sh"
+      // hisoblagichlari 0 ko'rinardi. + REAL joylashuv (backend Q7a lat/lng beradi):
+      // lat bor bo'lsa map.js soxta koordinata chizmaydi.
+      status: d.online ? (d.busy ? 'busy' : 'free') : 'offline',
+      lat: (d.lat != null ? Number(d.lat) : undefined),
+      lng: (d.lng != null ? Number(d.lng) : undefined),
+      gps_at: d.gps_at || null,
       trips: (d.trips!=null?d.trips:d.trips_done), earned: d.earned,
       rating: d.rating,
       balance: bal ? bal.balance : (d.balance!=null?d.balance:0),
