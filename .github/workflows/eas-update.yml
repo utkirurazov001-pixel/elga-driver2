@@ -46,7 +46,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.token.outputs.ok == 'true'
         with:
-          node-version: 20
+          node-version: 22
 
       - name: EAS CLI
         if: steps.token.outputs.ok == 'true'
@@ -60,8 +60,8 @@ jobs:
         if: steps.token.outputs.ok == 'true'
         run: |
           npm ci
-          eas update --channel preview --non-interactive --message "auto: ${{ github.sha }}"
-          eas update --channel production --non-interactive --message "auto: ${{ github.sha }}"
+          eas update --channel preview --platform android --non-interactive --message "auto: ${{ github.sha }}"
+          eas update --channel production --platform android --non-interactive --message "auto: ${{ github.sha }}"
 
       # Mijoz ilovasi
       - name: Mijoz OTA
@@ -69,5 +69,5 @@ jobs:
         working-directory: elga-mijoz
         run: |
           npm ci
-          eas update --channel preview --non-interactive --message "auto: ${{ github.sha }}"
-          eas update --channel production --non-interactive --message "auto: ${{ github.sha }}"
+          eas update --channel preview --platform android --non-interactive --message "auto: ${{ github.sha }}"
+          eas update --channel production --platform android --non-interactive --message "auto: ${{ github.sha }}"
