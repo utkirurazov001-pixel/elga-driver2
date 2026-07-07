@@ -863,6 +863,13 @@ function AppInner() {
   const [aiModal, setAiModal] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
+  // A2: chat yopiq holatda kelgan o'qilmagan xabarlar soni (tugmadagi badge)
+  const [chatUnread, setChatUnread] = useState(0);
+  // A2: socket handler bir marta o'rnatiladi — chatModal'ni stale closure'siz
+  // o'qish uchun ref (aks holda handler ichida chatModal DOIM false bo'lardi)
+  const chatModalRef = useRef(false);
+  chatModalRef.current = chatModal;
+  const chatListRef = useRef(null); // A2: chat ro'yxati — oxirgi xabarga avto-scroll
 
   // Jonli hisoblagich (taximetr) va safar yakuni
   const [meter, setMeter] = useState(null); // { km, minutes, fare } — SERVER hisoblagich (~4s)
@@ -1247,7 +1254,7 @@ function AppInner() {
       // buyurtma kelsa ham ilova qulamaydi.
       try {
         setOrder(o || null);
-        setChatMessages([]);
+        setChatMessages([]); setChatUnread(0); // A2: yangi buyurtma — eski chat/badge tozalanadi
         // Offer TTL: qabul qilinmasa o'zi yo'qoladi (fantom bo'lib qolmasin).
         // Server bergan ttl bo'lsa (ms) shuni, aks holda 30s. Faqat OFFER uchun.
         clearOfferTimer();
@@ -1286,7 +1293,7 @@ function AppInner() {
       playStatusSound(adminSound('order_cancelled'), null);
       notify('Buyurtma bekor qilindi', '');
       setOrder(null);
-      setChatMessages([]);
+      setChatMessages([]); setChatUnread(0); // A2: badge ham tozalanadi
       updatePersistentNotif('Buyurtma kutilmoqda...');
     });
     // Boshqa haydovchi oldindan oldi (yoki offer muddati tugadi) — offer'ni yopamiz
@@ -1304,8 +1311,16 @@ function AppInner() {
       return { ...p, ...o };
     }));
     s.on('chat_message', (msg) => {
+      // A2: server xabarni ikkala tomonga yuboradi — o'z xabarimiz echo'si
+      // takrorlanmasin (lokal nusxa sendChat'da allaqachon qo'shilgan)
+      if (msg?.sender_role === 'driver') return;
       setChatMessages((prev) => [...prev, msg]);
-      if (!chatModal) notify('💬 Mijoz', msg.text || '');
+      // A2: chatModal o'rniga chatModalRef — handler stale closure'da chatModal
+      // doim false edi (modal ochiq bo'lsa ham notify chiqardi)
+      if (!chatModalRef.current) {
+        setChatUnread((c) => c + 1); // badge: sariq doira ichida son
+        notify('💬 Mijoz', msg.text || '');
+      }
     });
     // Faqat o'zgargan qiymatda yangilaymiz — bekorga re-render qilmaymiz
     s.on('meter', (m) => {
@@ -1390,6 +1405,11 @@ function AppInner() {
       // Yengil so'rov: bitta urinish, qisqa timeout (poll/reconnect baribir qayta chaqiradi)
       const r = await api('/api/me/active-order', 'GET', null, token, 8000, { retries: 0 });
       if (r && r.order) {
+        // A2: resume'da YANGI (yoki boshqa) buyurtma tiklansa — chat tarixi ham
+        // tiklanadi (ilova qayta ochilganda eski xabarlar yo'qolmasin).
+        // orderRef har renderda yangilanadi — poll har 5s'da qayta yuklamaydi.
+        const prevOrder = orderRef.current;
+        if (!prevOrder || prevOrder.id !== r.order.id) loadChatHistory(r.order.id);
         // Bor buyurtma — eski holat bilan birlashtirib yangilaymiz (flicker bo'lmaydi)
         setOrder((prev) => (prev && prev.id === r.order.id) ? { ...prev, ...r.order } : r.order);
       } else if (r) {
@@ -1876,7 +1896,7 @@ function AppInner() {
         setCompletedTrip(finishedOrder);
         setOrder(null);
         setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0;
-        setChatMessages([]);
+        setChatMessages([]); setChatUnread(0); // A2: badge ham tozalanadi
         loadEarnings();
         updatePersistentNotif('Buyurtma kutilmoqda...');
       } else if (action === 'reject' || action === 'cancel') {
@@ -1885,7 +1905,7 @@ function AppInner() {
         // xabar boradi; haydovchi holati tozalanadi — xuddi reject kabi.
         setOrder(null);
         setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0;
-        setChatMessages([]);
+        setChatMessages([]); setChatUnread(0); // A2: badge ham tozalanadi
         loadEarnings();
         updatePersistentNotif('Buyurtma kutilmoqda...');
       } else {
@@ -1896,6 +1916,7 @@ function AppInner() {
           updatePersistentNotif('Safar davom etmoqda...');
         } else if (action === 'accept') {
           updatePersistentNotif('Buyurtma qabul qilindi · Yo\'lda');
+          loadChatHistory(orderId); // A2: qabul qilingach mavjud chat tarixi darrov yuklanadi
         } else if (action === 'arrived') {
           updatePersistentNotif('Mijoz oldida · Kutilmoqda');
         }
@@ -1912,10 +1933,10 @@ function AppInner() {
           tripKmRef.current = { orderId: null, km: 0, prevLoc: null, savedAt: 0 };
           AsyncStorage.removeItem(TRIP_KM_KEY).catch(() => {});
           setCompletedTrip(order);
-          setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0; setChatMessages([]);
+          setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0; setChatMessages([]); setChatUnread(0);
           updatePersistentNotif('Buyurtma kutilmoqda... (oflayn — sinxronlanadi)');
         } else if (action === 'reject' || action === 'cancel') {
-          setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0; setChatMessages([]);
+          setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0; setChatMessages([]); setChatUnread(0);
         } else {
           setOrder((p) => (p ? { ...p, status: statusAfter(action) } : p));
         }
@@ -1945,12 +1966,14 @@ function AppInner() {
     const text = chatInput.trim();
     if (!text || !order) return;
     const payload = { orderId: order.id, text };
+    // A2: holat belgisi — darhol ketdi (✓) yoki outbox'da kutyapti (⏳)
+    let sentNow = false;
     if (socketRef.current?.connected) {
-      try { socketRef.current.emit('chat', payload); } catch (e) { chatOutboxRef.current.push(payload); }
+      try { socketRef.current.emit('chat', payload); sentNow = true; } catch (e) { chatOutboxRef.current.push(payload); }
     } else {
       chatOutboxRef.current.push(payload); // qayta ulanganda flushChatOutbox() yuboradi
     }
-    setChatMessages((prev) => [...prev, { sender_role: 'driver', text }]);
+    setChatMessages((prev) => [...prev, { sender_role: 'driver', text, pending: !sentNow }]);
     setChatInput('');
   }
 
@@ -2296,7 +2319,8 @@ function AppInner() {
               <OrderPanel
                 order={order} loading={loading} meter={meter} liveMeter={liveMeter} tripWait={tripWait}
                 onAction={orderAction} onNavigate={navigateTo}
-                onCall={callCustomer} onChat={() => { loadChatHistory(order.id); setChatModal(true); }}
+                onCall={callCustomer} onChat={() => { loadChatHistory(order.id); setChatUnread(0); setChatModal(true); }}
+                chatUnread={chatUnread}
                 onPlayVoice={playVoiceOrder} voiceBusy={voiceStatus === 'loading'}
               />
             </ScrollView>
@@ -2356,15 +2380,24 @@ function AppInner() {
               </TouchableOpacity>
             </View>
             <FlatList
+              ref={chatListRef}
               data={chatMessages}
               keyExtractor={(_, i) => String(i)}
               style={{ flex: 1, paddingHorizontal: 16 }}
               contentContainerStyle={{ paddingTop: 12, paddingBottom: 8 }}
+              // A2: ochilganda va yangi xabar kelganda oxirgi xabarga avto-scroll
+              onContentSizeChange={() => { try { chatListRef.current?.scrollToEnd({ animated: true }); } catch (e) {} }}
               renderItem={({ item }) => {
                 const mine = item.sender_role === 'driver';
                 return (
                   <View style={[s.chatBubble, mine ? s.chatMine : s.chatTheirs]}>
                     <Text style={{ color: mine ? '#000' : WHITE, fontSize: 15 }}>{item.text}</Text>
+                    {/* A2: yuborilgan xabar holati — ⏳ outbox'da (socket uzik), ✓ yuborildi */}
+                    {mine ? (
+                      <Text style={{ color: 'rgba(0,0,0,0.55)', fontSize: 10, alignSelf: 'flex-end', marginTop: 2 }}>
+                        {item.pending ? '⏳' : '✓'}
+                      </Text>
+                    ) : null}
                   </View>
                 );
               }}
@@ -2488,7 +2521,7 @@ function CountdownBar() {
 }
 
 // ---- Buyurtma paneli (holat tugmalari) ----
-function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNavigate, onCall, onChat, onPlayVoice, voiceBusy }) {
+function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNavigate, onCall, onChat, chatUnread, onPlayVoice, voiceBusy }) {
   // F-04: faol safarni (accepted/arrived) bekor qilish — tasdiq bilan.
   // accepted'da backend buyurtmani boshqa haydovchiga qaytaradi (requeue),
   // arrived'da bekor qilinadi; ikkala holatda ham mijozga xabar boradi.
@@ -2588,6 +2621,12 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
               </View>
               <TouchableOpacity style={[s.callBtn, { marginRight: 8, backgroundColor: CARD2 }]} onPress={() => onChat()}>
                 <Ionicons name="chatbubble" size={18} color={YELLOW} />
+                {/* A2: o'qilmagan xabarlar soni — sariq doira badge */}
+                {chatUnread > 0 ? (
+                  <View style={{ position: 'absolute', top: -5, right: -5, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 }}>
+                    <Text style={{ color: '#000', fontSize: 11, fontWeight: '800' }}>{chatUnread > 9 ? '9+' : chatUnread}</Text>
+                  </View>
+                ) : null}
               </TouchableOpacity>
               <TouchableOpacity style={s.callBtn} onPress={() => onCall(order.customer_phone)}>
                 <Ionicons name="call" size={18} color={GREEN} />
