@@ -1322,8 +1322,13 @@ function AppInner() {
         return m;
       });
     });
-    // Jonli kutish haqi — backend 'arrived' holatida har 3 sek yuboradi
+    // Jonli kutish haqi — backend 'arrived' holatida har 3 sek yuboradi.
+    // P3 (K-1): freeSec/perMin/haq ham serverdan — WaitTimer shu qiymatlarni
+    // ishlatadi (admin tarifni o'zgartirsa ekran darhol mos; lokal 120/500 zaxira).
     s.on('wait_update', (d) => {
+      serverWaitCfg.freeSec = d.freeSec || 0;
+      serverWaitCfg.perMin = d.perMin || 0;
+      serverWaitCfg.fee = d.waitFee || 0;
       setOrder((p) => p ? { ...p, wait_fee: d.waitFee || 0, price: d.totalFare || p.price } : p);
     });
     // Backend haydovchiga ham paid_wait_started yuborishi mumkin
@@ -2413,10 +2418,14 @@ function AppInner() {
   );
 }
 
-// Kutish haqi (backend config bilan mos: FREE_WAIT_SEC=120, WAIT_PER_MIN=500, max 20000)
+// Kutish haqi (LOKAL ZAXIRA: backend config bilan mos FREE_WAIT_SEC=120, WAIT_PER_MIN=500)
 const FREE_WAIT_SEC = 120;
 const WAIT_PER_MIN = 500;
 const WAIT_FEE_MAX = 20000;
+// P3 (K-1): haqiqiy tarif SERVERDAN keladi (socket wait_update.freeSec/perMin/waitFee)
+// — admin panelda o'zgartirilsa ekran darhol mos bo'ladi. Bu obyekt handler'da
+// yangilanadi, WaitTimer har sekund render bo'lgani uchun yangi qiymatni o'zi oladi.
+const serverWaitCfg = { freeSec: 0, perMin: 0, fee: 0 };
 function waitFeeFromSec(sec) {
   const bill = Math.max(0, (sec || 0) - FREE_WAIT_SEC);
   return Math.min(WAIT_FEE_MAX, Math.ceil(bill / 60) * WAIT_PER_MIN);
@@ -2427,13 +2436,16 @@ function WaitTimer({ arrivedAt }) {
   const [sec, setSec] = useState(0);
   const spokenRef = useRef(false);
   useEffect(() => {
+    // Yangi buyurtma kutishi — oldingi buyurtmadan qolgan server haqi eskirgan
+    serverWaitCfg.fee = 0;
     const start = arrivedAt
       ? Date.parse(String(arrivedAt).replace(' ', 'T') + 'Z') || Date.now()
       : Date.now();
     const tick = () => {
       const elapsed = Math.max(0, Math.round((Date.now() - start) / 1000));
       setSec(elapsed);
-      if (elapsed >= FREE_WAIT_SEC && !spokenRef.current) {
+      const freeLimit = serverWaitCfg.freeSec > 0 ? serverWaitCfg.freeSec : FREE_WAIT_SEC;
+      if (elapsed >= freeLimit && !spokenRef.current) {
         spokenRef.current = true;
         speak('Bepul kutish vaqti tugadi. Endi pullik kutish boshlandi.');
       }
@@ -2442,10 +2454,14 @@ function WaitTimer({ arrivedAt }) {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [arrivedAt]);
-  const free = sec < FREE_WAIT_SEC;
-  const remain = Math.max(0, FREE_WAIT_SEC - sec);
+  // P3: server tarifi ustun, lokal konstanta faqat zaxira
+  const freeSec = serverWaitCfg.freeSec > 0 ? serverWaitCfg.freeSec : FREE_WAIT_SEC;
+  const perMin = serverWaitCfg.perMin > 0 ? serverWaitCfg.perMin : WAIT_PER_MIN;
+  const free = sec < freeSec;
+  const remain = Math.max(0, freeSec - sec);
   const mm = (n) => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
-  const fee = waitFeeFromSec(sec);
+  const localFee = Math.min(WAIT_FEE_MAX, Math.ceil(Math.max(0, sec - freeSec) / 60) * perMin);
+  const fee = serverWaitCfg.fee > 0 ? serverWaitCfg.fee : localFee;
   return (
     <View style={s.waitBox}>
       <Text style={s.waitLabel}>⏱ Kutish vaqti: {mm(sec)}</Text>
