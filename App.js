@@ -2511,16 +2511,23 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
       {isNew ? (
         <>
           <CountdownBar />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-            <View>
-              <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '600', letterSpacing: 0.4 }}>YANGI BUYURTMA</Text>
-              <Text style={{ color: GRAY1, fontSize: 13, marginTop: 3 }}>
-                {order.eta_min ? `${order.eta_min} daq uzoqlikda` : 'Yaqin atrofda'}
+          <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '600', letterSpacing: 0.4, marginBottom: 8 }}>YANGI BUYURTMA</Text>
+          {/* P6 (T-4): haydovchi qarori IKKI raqamga bog'liq — mijozgacha masofa/vaqt
+              va narx. Avval masofa 13px kulrang edi (narx 28px) — endi teng katta,
+              yonma-yon (Yandex Pro qolipi). */}
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+            <View style={{ flex: 1, backgroundColor: CARD2, borderRadius: 12, paddingVertical: 10, alignItems: 'center' }}>
+              <Text style={{ color: GREEN, fontSize: 22, fontWeight: '800', lineHeight: 24 }}>
+                {order.eta_min ? `~${order.eta_min} daq` : 'Yaqin'}
               </Text>
+              <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>mijozgacha</Text>
             </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ color: WHITE, fontSize: 28, fontWeight: '800', lineHeight: 30 }}>{fmt(order.price)}</Text>
-              <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>so'm · {order.payment_method === 'cash' ? 'Naqd' : (order.payment_method || 'Naqd')}</Text>
+            <View style={{ flex: 1, backgroundColor: CARD2, borderRadius: 12, paddingVertical: 10, alignItems: 'center' }}>
+              <Text style={{ color: WHITE, fontSize: 22, fontWeight: '800', lineHeight: 24 }}>{fmt(order.price)}</Text>
+              <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>
+                so'm · {order.payment_method === 'cash' ? 'Naqd' : (order.payment_method || 'Naqd')}
+                {order.distance_km ? ` · ${order.distance_km} km` : ''}
+              </Text>
             </View>
           </View>
           {/* Route timeline */}
