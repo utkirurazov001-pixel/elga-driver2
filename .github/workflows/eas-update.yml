@@ -12,6 +12,8 @@
 name: OTA (eas update)
 
 on:
+  # Qo'lda ishga tushirish (birinchi sinov uchun): Actions -> OTA (eas update) -> Run workflow
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
