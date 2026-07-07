@@ -2675,7 +2675,7 @@ function WeekChart({ days }) {
             <View style={{ flex: 1, justifyContent: 'flex-end', width: '70%' }}>
               <Animated.View style={{ height: barH, borderRadius: 6, backgroundColor: isTop ? YELLOW : CARD2, borderWidth: 1, borderColor: isTop ? YELLOW : BORDER }} />
             </View>
-            <Text style={{ color: GRAY2, fontSize: 10, fontWeight: '500' }}>{typeof label === 'number' ? DAY_NAMES[label] : label}</Text>
+            <Text style={{ color: GRAY1, fontSize: 11, fontWeight: '500' }}>{typeof label === 'number' ? DAY_NAMES[label] : label}</Text>
           </View>
         );
       })}
@@ -3461,7 +3461,7 @@ const s = StyleSheet.create({
   map: { flex: 1 },
   loginWrap: { flexGrow: 1, backgroundColor: '#111', justifyContent: 'center', paddingHorizontal: 28, paddingVertical: 60 },
   logo: { color: '#FFC700', fontSize: 56, fontWeight: 'bold', textAlign: 'center' },
-  sub: { color: '#aaa', fontSize: 16, textAlign: 'center', marginBottom: 36 },
+  sub: { color: GRAY1, fontSize: 16, textAlign: 'center', marginBottom: 36 },
   hint: { color: '#ccc', fontSize: 15, textAlign: 'center', marginBottom: 12 },
   input: { backgroundColor: '#222', color: '#fff', fontSize: 18, padding: 16, borderRadius: 12, marginBottom: 14 },
   btn: { backgroundColor: '#FFC700', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 6 },
@@ -3491,30 +3491,30 @@ const s = StyleSheet.create({
     borderTopLeftRadius: 22, borderTopRightRadius: 22,
   },
   orderTitle: { color: '#fff', fontSize: 17, fontWeight: '600' },
-  orderSub: { color: '#aaa', fontSize: 14, marginTop: 2 },
+  orderSub: { color: GRAY1, fontSize: 14, marginTop: 2 },
   orderPrice: { color: '#FFC700', fontSize: 22, fontWeight: 'bold', marginTop: 8, marginBottom: 6 },
   custRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#1c1c1c',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: CARD, // P5: token
     borderRadius: 12, padding: 12, marginTop: 6, marginBottom: 2,
   },
   custName: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  custPhone: { color: '#aaa', fontSize: 14, marginTop: 2 },
-  callBtn: { backgroundColor: '#4CAF50', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10 },
+  custPhone: { color: GRAY1, fontSize: 14, marginTop: 2 },
+  callBtn: { backgroundColor: GREEN, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10 }, // P5: eski Material yashili -> brend GREEN
   callTxt: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   waitBox: {
-    backgroundColor: '#1c1c1c', borderRadius: 12, padding: 12, marginTop: 8,
+    backgroundColor: CARD, borderRadius: 12, padding: 12, marginTop: 8, // P5: token
     alignItems: 'center',
   },
   waitLabel: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  waitFree: { color: '#4CAF50', fontSize: 14, marginTop: 3 },
-  waitPaid: { color: '#FF9800', fontSize: 14, fontWeight: '600', marginTop: 3 },
+  waitFree: { color: GREEN, fontSize: 14, marginTop: 3 },
+  waitPaid: { color: YELLOW, fontSize: 14, fontWeight: '600', marginTop: 3 },
   tabBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     paddingTop: 8,
     flexDirection: 'row', backgroundColor: BG, borderTopWidth: 1, borderTopColor: BORDER,
   },
   tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 3 },
-  tabTxt: { color: GRAY2, fontSize: 11, fontWeight: '500' },
+  tabTxt: { color: GRAY1, fontSize: 12, fontWeight: '600' }, // P5 (K-3): kontrast 2.2:1 -> 6.9:1
   tabActive: { color: YELLOW, fontWeight: '600' },
 
   // Tarix / Profil ekranlari
@@ -3579,8 +3579,8 @@ const s = StyleSheet.create({
   chatSendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center' },
   earnWrap: { flex: 1, backgroundColor: BG },
   earnTitle: { color: WHITE, fontSize: 26, fontWeight: 'bold', marginBottom: 18 },
-  card: { backgroundColor: '#1c1c1c', borderRadius: 16, padding: 18, marginBottom: 12 },
-  cardLabel: { color: '#aaa', fontSize: 14 },
+  card: { backgroundColor: CARD, borderRadius: 16, padding: 18, marginBottom: 12 },
+  cardLabel: { color: GRAY1, fontSize: 14 },
   cardValue: { color: '#FFC700', fontSize: 28, fontWeight: 'bold', marginTop: 4 },
   cardSub: { color: '#888', fontSize: 13, marginTop: 2 },
   refreshBtn: { backgroundColor: '#FFC700', padding: 14, borderRadius: 12, alignItems: 'center', marginTop: 8, marginBottom: 70 },
