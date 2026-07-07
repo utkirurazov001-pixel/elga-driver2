@@ -452,3 +452,21 @@ textarea.input{resize:vertical;min-height:88px;line-height:1.5}
   .content{padding:18px 14px 40px}.topbar{padding:0 14px}
   .dl{grid-template-columns:1fr}
 }
+
+/* B1: global qidiruv dropdown (topbar) */
+.gs-drop{display:none;position:absolute;top:calc(100% + 8px);left:0;right:0;z-index:60;
+  background:var(--surface,#141414);border:1px solid var(--border,#282828);border-radius:12px;
+  box-shadow:0 12px 34px rgba(0,0,0,.45);overflow:hidden;max-height:380px;overflow-y:auto}
+.gs-drop.open{display:block}
+.gs-row{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer}
+.gs-row:hover{background:var(--surface-2,#1E1E1E)}
+.gs-dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px}
+.gs-dot.free{background:var(--success,#22C55E)}
+.gs-dot.busy{background:var(--warning,#FFCC00)}
+.gs-dot.off{background:var(--text-faint,#48484A)}
+.gs-main{flex:1;min-width:0}
+.gs-nm{font-size:13.5px;font-weight:600;color:var(--text)}
+.gs-sub{font-size:12px;color:var(--text-dim,#8E8E93);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gs-call{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:15px;
+  background:var(--success-soft,rgba(34,197,94,.15));color:var(--success,#22C55E)}
+.gs-empty{padding:14px;font-size:13px;color:var(--text-dim,#8E8E93)}

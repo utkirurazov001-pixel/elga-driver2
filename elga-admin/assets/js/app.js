@@ -173,6 +173,52 @@
     });
     app.querySelector('#bellBtn').addEventListener('click',function(e){ e.stopPropagation(); openNotifPanel(this); });
     app.querySelector('#profileBtn').addEventListener('click',function(e){ e.stopPropagation(); openProfileMenu(this); });
+
+    // B1: GLOBAL QIDIRUV — topbar'dagi maydon avval O'LIK edi (handler yo'q).
+    // Telefon/ID/ism yoziladi -> backend /api/admin/drivers?q= (tayyor edi) ->
+    // dropdown natijalar: holat nuqtasi, mashina, tel havolasi; bosilsa Haydovchilar
+    // ro'yxatiga o'tadi. 300ms debounce, Escape/tashqi klik yopadi.
+    (function(){
+      var box = app.querySelector('.top-search');
+      var inp = box && box.querySelector('input');
+      if(!inp) return;
+      box.style.position = 'relative';
+      var drop = document.createElement('div');
+      drop.className = 'gs-drop';
+      box.appendChild(drop);
+      var t = null;
+      function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+      function close(){ drop.classList.remove('open'); drop.innerHTML=''; }
+      function render(list, q){
+        if(!list.length){ drop.innerHTML = '<div class="gs-empty">Hech narsa topilmadi: «'+esc(q)+'»</div>'; drop.classList.add('open'); return; }
+        drop.innerHTML = list.slice(0,8).map(function(d){
+          var st = d.online ? (d.busy ? 'busy' : 'free') : 'off';
+          return '<div class="gs-row" data-id="'+d.id+'">'+
+            '<span class="gs-dot '+st+'"></span>'+
+            '<div class="gs-main"><div class="gs-nm">'+esc(d.name)+'</div>'+
+            '<div class="gs-sub">'+esc(d.phone||'')+(d.car?' · '+esc(d.car):'')+'</div></div>'+
+            (d.phone?'<a class="gs-call" href="tel:'+esc(d.phone)+'" onclick="event.stopPropagation()">'+window.icon('phone',14)+'</a>':'')+
+          '</div>';
+        }).join('');
+        drop.classList.add('open');
+        drop.querySelectorAll('.gs-row').forEach(function(r){
+          r.addEventListener('click', function(){ close(); inp.value=''; navigate('car','list'); });
+        });
+      }
+      inp.addEventListener('input', function(){
+        var q = inp.value.trim();
+        if(t) clearTimeout(t);
+        if(q.length < 2){ close(); return; }
+        t = setTimeout(function(){
+          window.API.get('/api/admin/drivers?q='+encodeURIComponent(q)).then(function(res){
+            if(inp.value.trim() !== q) return; // eskirgan javob
+            render((res.body && res.body.drivers) || [], q);
+          }).catch(function(){ close(); });
+        }, 300);
+      });
+      inp.addEventListener('keydown', function(e){ if(e.key==='Escape'){ close(); inp.blur(); } });
+      document.addEventListener('click', function(e){ if(!box.contains(e.target)) close(); });
+    })();
     app.querySelector('#logout').addEventListener('click',doLogout);
     var ts=app.querySelector('.top-search input'); if(ts) ts.addEventListener('focus',function(){ this.blur(); openPalette(); });
 
