@@ -2070,7 +2070,20 @@ function AppInner() {
               <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: BORDER }} />
             </View>
             <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
-              <Text style={s.activeStatusTxt}>{statusText(order.status)}</Text>
+              {/* P2 (T-1): sarlavha — accepted'da umumiy holat o'rniga ANIQ javob:
+                  "Yetib keladi: ~X daqiqa" (Yandex qolipi). Boshqa holatlarda statusText. */}
+              <Text style={s.activeStatusTxt}>
+                {(() => {
+                  if (order.status === 'accepted' && driverLoc) {
+                    const p = pickup || myLoc || (order.from_lat != null ? { lat: order.from_lat, lng: order.from_lng } : null);
+                    if (p) {
+                      const etaMin = Math.max(1, Math.round((distKm(driverLoc.lat, driverLoc.lng, p.lat, p.lng) / 25) * 60));
+                      return <>Yetib keladi: <Text style={{ color: YELLOW }}>~{etaMin} daq</Text></>;
+                    }
+                  }
+                  return statusText(order.status);
+                })()}
+              </Text>
 
               {order.driver_name && !['searching', 'assigned'].includes(order.status) && (
                 <View style={s.driverCard}>
@@ -2078,10 +2091,19 @@ function AppInner() {
                     <Text style={{ fontSize: 26, color: GRAY1 }}>{(order.driver_name?.[0] || 'H').toUpperCase()}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: YELLOW, fontSize: 16, fontWeight: '700' }}>{order.driver_name}</Text>
-                    {order.driver_rating && <Text style={{ color: GRAY1, fontSize: 13 }}>⭐ {order.driver_rating}</Text>}
-                    <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>
-                      {[order.driver_car, order.driver_color, order.driver_plate].filter(Boolean).join(' · ')}
+                    {/* P2 (T-1): mijoz mashinani RAQAMDAN topadi — raqam eng katta element,
+                        oq davlat-raqam plastinkasi ko'rinishida (Yandex/Uber qolipi). */}
+                    {order.driver_plate ? (
+                      <View style={{ alignSelf: 'flex-start', backgroundColor: WHITE, borderWidth: 2, borderColor: '#15171c', borderRadius: 7, paddingHorizontal: 10, paddingVertical: 3 }}>
+                        <Text style={{ color: '#15171c', fontSize: 17, fontWeight: '800', letterSpacing: 1.5 }}>{order.driver_plate}</Text>
+                      </View>
+                    ) : null}
+                    <Text style={{ color: GRAY1, fontSize: 12, marginTop: 5 }}>
+                      {[order.driver_color, order.driver_car].filter(Boolean).join(' ')}
+                    </Text>
+                    <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700', marginTop: 2 }}>
+                      {order.driver_name}
+                      {order.driver_rating ? <Text style={{ color: GRAY1, fontWeight: '400' }}> · ⭐ {order.driver_rating}</Text> : null}
                     </Text>
 {/* M-04: xizmat belgilari (A/C, bagaj) — haydovchi profilidan, narxga ta'sir yo'q */}
                     {(order.driver_ac || order.driver_baggage) && (
@@ -2099,20 +2121,24 @@ function AppInner() {
                       </View>
                     )}
                     {(() => {
-                      // M-05: ETA + masofa. Pickup nuqtasi: pickup state → order.from_lat
-                      // (resume'da pickup bo'sh bo'ladi — order'dan olamiz). ETA — shahar
-                      // tezligi ~25 km/soat bo'yicha taxmin (kamida 1 daqiqa).
+                      // M-05: masofa qatori (ETA endi sarlavhada — P2). Pickup: state → order.from_lat.
                       if (!driverLoc || order.status !== 'accepted') return null;
                       const p = pickup || myLoc || (order.from_lat != null ? { lat: order.from_lat, lng: order.from_lng } : null);
                       if (!p) return null;
                       const dKm = distKm(driverLoc.lat, driverLoc.lng, p.lat, p.lng);
-                      const etaMin = Math.max(1, Math.round((dKm / 25) * 60));
                       return (
                         <Text style={{ color: GREEN, fontSize: 12, marginTop: 2 }}>
-                          🚗 ~{etaMin} daq · {dKm < 1 ? `${(dKm * 1000).toFixed(0)} m` : `${dKm.toFixed(1)} km`} uzoqlikda
+                          🚗 {dKm < 1 ? `${(dKm * 1000).toFixed(0)} m` : `${dKm.toFixed(1)} km`} uzoqlikda
                         </Text>
                       );
                     })()}
+                    {/* P2 (K-8): safar davomida manzilgacha qancha qolgani — F-02 dagi
+                        OSRM natijasidan (routeInfo), yangi so'rovsiz. */}
+                    {order.status === 'in_progress' && routeInfo && (
+                      <Text style={{ color: GREEN, fontSize: 12, marginTop: 4 }}>
+                        🏁 Manzilgacha ~{routeInfo.min} daq · {routeInfo.km} km
+                      </Text>
+                    )}
                   </View>
                   <View style={{ gap: 8 }}>
                     {order.driver_phone && (
