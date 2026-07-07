@@ -1178,9 +1178,14 @@ function AppInner() {
       setTripChat((prev) => [...prev, msg]);
       if (!tripChatModal) notify('💬 Haydovchi xabar yubordi', msg.text || '');
     });
-    // Jonli kutish haqi (arrived) — backend har 5 sekunda yuboradi
+    // Jonli kutish haqi (arrived) — backend har 5 sekunda yuboradi.
+    // P3 (K-1): freeSec/perMin ham serverdan olinadi — admin tarifni o'zgartirsa
+    // ekran darhol mos bo'ladi (lokal 120/500 endi faqat zaxira).
     s.on('wait_update', (d) => {
-      setLiveWait({ sec: d.waitSec || 0, fee: d.waitFee || 0, freeLeft: d.freeLeft || 0 });
+      setLiveWait({
+        sec: d.waitSec || 0, fee: d.waitFee || 0, freeLeft: d.freeLeft || 0,
+        freeSec: d.freeSec || 0, perMin: d.perMin || 0,
+      });
       setOrder((prev) => prev ? { ...prev, wait_fee: d.waitFee || 0, price: d.totalFare || prev.price } : prev);
     });
     // Jonli taximetr (in_progress, hisoblagich) — backend har 5 sekunda yuboradi
@@ -2094,7 +2099,7 @@ function AppInner() {
                 <SearchingPulse />
               )}
 
-              {order.status === 'arrived' && <CustomerWaitTimer arrivedAt={order.arrived_at} />}
+              {order.status === 'arrived' && <CustomerWaitTimer arrivedAt={order.arrived_at} cfg={liveWait} />}
 
               {order.price > 0 && (
                 <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginTop: 8 }}>
@@ -3201,7 +3206,7 @@ function waitFeeFromSec(sec) {
 }
 
 // Jonli kutish taymeri — haydovchi yetib kelgach mijozga ko'rsatiladi
-function CustomerWaitTimer({ arrivedAt }) {
+function CustomerWaitTimer({ arrivedAt, cfg }) {
   const [sec, setSec] = useState(0);
   useEffect(() => {
     const start = arrivedAt
@@ -3212,10 +3217,16 @@ function CustomerWaitTimer({ arrivedAt }) {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [arrivedAt]);
-  const free = sec < FREE_WAIT_SEC;
-  const remain = Math.max(0, FREE_WAIT_SEC - sec);
+  // P3 (K-1): bepul oyna/daqiqa narxi SERVERDAN (wait_update.freeSec/perMin) —
+  // admin o'zgartirsa darhol mos; kelmagan bo'lsa lokal konstanta zaxira.
+  const freeSec = (cfg && cfg.freeSec > 0) ? cfg.freeSec : FREE_WAIT_SEC;
+  const perMin = (cfg && cfg.perMin > 0) ? cfg.perMin : WAIT_PER_MIN;
+  const free = sec < freeSec;
+  const remain = Math.max(0, freeSec - sec);
   const mm = (n) => String(Math.floor(n / 60)).padStart(2, '0') + ':' + String(n % 60).padStart(2, '0');
-  const fee = waitFeeFromSec(sec);
+  // Haqiqiy haq — server hisobi ustun (cfg.fee), lokal hisob faqat zaxira
+  const localFee = Math.min(WAIT_FEE_MAX, Math.ceil(Math.max(0, sec - freeSec) / 60) * perMin);
+  const fee = (cfg && cfg.fee > 0) ? cfg.fee : localFee;
   return (
     <View style={{
       backgroundColor: CARD2, borderRadius: 14, padding: 14, marginTop: 12, marginHorizontal: 16,
