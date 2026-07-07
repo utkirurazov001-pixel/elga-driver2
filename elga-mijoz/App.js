@@ -2184,7 +2184,7 @@ function AppInner() {
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity style={s.chatCircle} onPress={() => setTripChatModal(true)}>
-                      <Ionicons name="chatbubble" size={18} color="#007AFF" />
+                      <Ionicons name="chatbubble" size={18} color={YELLOW} />
                     </TouchableOpacity>
                   </View>
                 </View>
