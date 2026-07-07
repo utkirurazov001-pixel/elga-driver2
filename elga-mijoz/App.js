@@ -1040,7 +1040,24 @@ function AppInner() {
   }
 
   async function loadFavorites() {
-    try { const r = await api('/api/me/favorites', 'GET', null, tokenRef.current || token); setFavorites(r.favorites || []); } catch (e) {}
+    try {
+      const r = await api('/api/me/favorites', 'GET', null, tokenRef.current || token);
+      const favs = r.favorites || [];
+      setFavorites(favs);
+      // Q2: YANGI QURILMADA Uy/Ish tiklanadi — serverdagi 'Uy'/'Ish' nomli
+      // sevimlilardan (avval faqat AsyncStorage edi: telefon almashsa yo'qolardi).
+      const hydrate = (nm, cur, setter, key) => {
+        if (cur) return;
+        const f = favs.find((x) => x.name === nm);
+        if (f && f.lat != null) {
+          const place = { lat: f.lat, lng: f.lng, address: f.address || nm };
+          setter(place);
+          AsyncStorage.setItem(key, JSON.stringify(place)).catch(() => {});
+        }
+      };
+      hydrate('Uy', homePlace, setHomePlace, 'home_place');
+      hydrate('Ish', workPlace, setWorkPlace, 'work_place');
+    } catch (e) {}
   }
 
   async function loadPopularPlaces() {
@@ -1447,6 +1464,16 @@ function AppInner() {
     await AsyncStorage.setItem(key, JSON.stringify(place));
     if (type === 'home') setHomePlace(place);
     else setWorkPlace(place);
+    // Q2: serverga ham (favorites, nomi 'Uy'/'Ish') — telefon almashsa/qayta
+    // o'rnatilsa yo'qolmasin. Eski yozuv o'chirilib yangisi qo'yiladi.
+    // Server xatosi lokal saqlashga xalaqit bermaydi (jim).
+    const nm = type === 'home' ? 'Uy' : 'Ish';
+    try {
+      const old = favorites.find((f) => f.name === nm);
+      if (old) await api(`/api/me/favorites/${old.id}`, 'DELETE', null, token);
+      await api('/api/me/favorites', 'POST', { name: nm, address: place.address || nm, lat: place.lat, lng: place.lng }, token);
+      loadFavorites();
+    } catch (_) {}
     Alert.alert(type === 'home' ? 'Uy manzili saqlandi' : 'Ish manzili saqlandi', place.address);
   }
 
