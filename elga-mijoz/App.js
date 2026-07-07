@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, ScrollView, Modal, Linking, FlatList,
+  ActivityIndicator, Alert, ScrollView, Modal, Linking, FlatList, Share,
   Animated, Easing, Image, Dimensions, AppState, Platform, PanResponder,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -555,6 +555,7 @@ function AppInner() {
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [refCode, setRefCode] = useState(''); // Q4: taklif kodi (ixtiyoriy)
   const [step, setStep] = useState('phone');
   const [regToken, setRegToken] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1994,11 +1995,22 @@ function AppInner() {
               value={name}
               onChangeText={setName}
             />
+            {/* Q4: taklif kodi (ixtiyoriy) — do'st kodi bilan kelganга birinchi
+                safar -50% (backend auth.js referral_code ni qabul qiladi) */}
+            <TextInput
+              style={s.input}
+              placeholder="Taklif kodi (ixtiyoriy)"
+              placeholderTextColor={GRAY2}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              value={refCode}
+              onChangeText={setRefCode}
+            />
             <PressableScale style={s.ctaBtn} onPress={async () => {
               if (name.trim().length < 2) { Alert.alert('Xato', 'Ismingizni kiriting'); return; }
               setLoading(true);
               try {
-                const r = await api('/api/auth/verify', 'POST', { phone, code, name: name.trim(), role: 'customer', reg_token: regToken });
+                const r = await api('/api/auth/verify', 'POST', { phone, code, name: name.trim(), role: 'customer', reg_token: regToken, ...(refCode.trim() ? { referral_code: refCode.trim().toUpperCase() } : {}) });
                 await AsyncStorage.setItem('token', r.token);
                 await AsyncStorage.setItem('user', JSON.stringify(r.user));
                 setToken(r.token); setUser(r.user);
@@ -2953,17 +2965,26 @@ function AppInner() {
             )}
 
             {balance?.referral_code && (
-              <TouchableOpacity style={s.referralCard} activeOpacity={0.85}>
+              /* Q4: karta endi ISHLAYDI — bosilganda tizim ulashish oynasi ochiladi
+                 (avval onPress yo'q, o'lik tugma edi). Matnda kod + shartlar. */
+              <TouchableOpacity style={s.referralCard} activeOpacity={0.85}
+                onPress={() => {
+                  Share.share({
+                    message: `KetdikGo'da birinchi safaringga -50% chegirma! ` +
+                      `Ro'yxatdan o'tishda mening taklif kodimni kirit: ${balance.referral_code}\n` +
+                      `Yuklab olish: https://ketdikgo.uz`,
+                  }).catch(() => {});
+                }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                   <Ionicons name="gift" size={22} color={YELLOW} style={{ marginRight: 12 }} />
-                  <View>
-                    <Text style={{ color: WHITE, fontSize: 14, fontWeight: '600' }}>Do'stni taklif qiling</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: WHITE, fontSize: 14, fontWeight: '600' }}>Do'stingni taklif qil — 10 000 so'm bonus</Text>
                     <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>
-                      Referal kodi: <Text style={{ color: YELLOW, fontWeight: '700' }}>{balance.referral_code}</Text>
+                      Kodingiz: <Text style={{ color: YELLOW, fontWeight: '700' }}>{balance.referral_code}</Text> · do'stga birinchi safar -50%
                     </Text>
                   </View>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color={GRAY1} />
+                <Ionicons name="share-social" size={16} color={YELLOW} />
               </TouchableOpacity>
             )}
 
