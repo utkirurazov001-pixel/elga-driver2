@@ -1,0 +1,71 @@
+# ============================================================
+#  P7: AVTOMATIK OTA — main'ga qo'shilgan har bir ilova o'zgarishi
+#  telefonlarga o'zi yetib boradi (eas update, ikkala kanal).
+#
+#  YOQISH (bir martalik): GitHub repo -> Settings -> Secrets and
+#  variables -> Actions -> New repository secret:
+#    Nomi:  EXPO_TOKEN
+#    Qiymati: expo.dev -> hisob -> Access tokens -> Create token
+#  Token qo'shilmaguncha workflow hech narsa buzmaydi — shunchaki
+#  ogohlantirish bilan o'tkazib yuboradi.
+# ============================================================
+name: OTA (eas update)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'App.js'
+      - 'src/**'
+      - 'assets/**'
+      - 'app.json'
+      - 'package.json'
+      - 'elga-mijoz/**'
+
+jobs:
+  ota:
+    runs-on: ubuntu-latest
+    steps:
+      - name: EXPO_TOKEN bormi?
+        id: token
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -n "$EXPO_TOKEN" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::EXPO_TOKEN secret qo'shilmagan — OTA o'tkazib yuborildi (README: Settings->Secrets->EXPO_TOKEN)"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.ok == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.token.outputs.ok == 'true'
+        with:
+          node-version: 20
+
+      - name: EAS CLI
+        if: steps.token.outputs.ok == 'true'
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Haydovchi ilovasi — preview (APK) va production kanallariga
+      - name: Haydovchi OTA
+        if: steps.token.outputs.ok == 'true'
+        run: |
+          npm ci
+          eas update --channel preview --non-interactive --message "auto: ${{ github.sha }}"
+          eas update --channel production --non-interactive --message "auto: ${{ github.sha }}"
+
+      # Mijoz ilovasi
+      - name: Mijoz OTA
+        if: steps.token.outputs.ok == 'true'
+        working-directory: elga-mijoz
+        run: |
+          npm ci
+          eas update --channel preview --non-interactive --message "auto: ${{ github.sha }}"
+          eas update --channel production --non-interactive --message "auto: ${{ github.sha }}"
