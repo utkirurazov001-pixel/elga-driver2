@@ -622,6 +622,13 @@ function AppInner() {
   const [tripChatModal, setTripChatModal] = useState(false);
   const [tripChat, setTripChat] = useState([]);
   const [tripChatInput, setTripChatInput] = useState('');
+  // A2: chat yopiq holatda kelgan o'qilmagan xabarlar soni (chatCircle badge)
+  const [tripChatUnread, setTripChatUnread] = useState(0);
+  // A2: socket handler bir marta o'rnatiladi — tripChatModal'ni stale closure'siz
+  // o'qish uchun ref (aks holda handler ichida tripChatModal DOIM false bo'lardi)
+  const tripChatModalRef = useRef(false);
+  tripChatModalRef.current = tripChatModal;
+  const tripChatScrollRef = useRef(null); // A2: chat ro'yxati — oxirgi xabarga avto-scroll
 
   // SOS modal
   const [sosModal, setSosModal] = useState(false);
@@ -1194,8 +1201,17 @@ function AppInner() {
       });
     });
     s.on('chat_message', (msg) => {
-      setTripChat((prev) => [...prev, msg]);
-      if (!tripChatModal) notify('💬 Haydovchi xabar yubordi', msg.text || '');
+      // A2: server xabarni ikkala tomonga yuboradi — o'z xabarimiz echo'si
+      // takrorlanmasin (lokal nusxa sendTripChat'da allaqachon qo'shilgan)
+      if (msg?.sender_role === 'customer') return;
+      // Server sender_role beradi, ilova role ishlatadi — moslaymiz
+      setTripChat((prev) => [...prev, { role: msg.sender_role || 'driver', text: msg.text }]);
+      // A2: tripChatModal o'rniga tripChatModalRef — handler stale closure'da
+      // tripChatModal doim false edi (modal ochiq bo'lsa ham notify chiqardi)
+      if (!tripChatModalRef.current) {
+        setTripChatUnread((c) => c + 1); // badge: sariq doira ichida son
+        notify('💬 Haydovchi xabar yubordi', msg.text || '');
+      }
     });
     // Jonli kutish haqi (arrived) — backend har 5 sekunda yuboradi.
     // P3 (K-1): freeSec/perMin ham serverdan olinadi — admin tarifni o'zgartirsa
@@ -1223,13 +1239,25 @@ function AppInner() {
     const text = tripChatInput.trim();
     if (!text || !order) return;
     const payload = { orderId: order.id, text };
+    // A2: holat belgisi — darhol ketdi (✓) yoki outbox'da kutyapti (⏳)
+    let sentNow = false;
     if (socketRef.current?.connected) {
-      try { socketRef.current.emit('chat', payload); } catch (e) { chatOutboxRef.current.push(payload); }
+      try { socketRef.current.emit('chat', payload); sentNow = true; } catch (e) { chatOutboxRef.current.push(payload); }
     } else {
       chatOutboxRef.current.push(payload);
     }
-    setTripChat((prev) => [...prev, { role: 'customer', text }]);
+    setTripChat((prev) => [...prev, { role: 'customer', text, pending: !sentNow }]);
     setTripChatInput('');
+  }
+
+  // A2: buyurtma chat tarixi (GET /api/orders/:id/messages) — chat ochilganda
+  // yuklanadi, shunda ilova qayta ochilsa ham eski xabarlar ko'rinadi.
+  // Server sender_role qaytaradi, ilova role ishlatadi — moslab olamiz.
+  async function loadTripChatHistory(orderId) {
+    try {
+      const r = await api(`/api/orders/${orderId}/messages`, 'GET', null, tokenRef.current || token);
+      if (r?.messages) setTripChat(r.messages.map((m) => ({ role: m.sender_role, text: m.text })));
+    } catch (e) { /* tarmoq xatosi — mavjud lokal ro'yxat qoladi */ }
   }
 
   // Qayta ulanganda yuborilmagan chat xabarlarni jo'natamiz.
@@ -1351,6 +1379,8 @@ function AppInner() {
   function resetOrder() {
     setOrder(null); setDest(null); setEstimates({}); estCacheKey.current = null;
     setDriverLoc(null); setOrderStep('dest'); setSearchQ(''); setSearchResults([]); setSearchOpen(false);
+    // A2: eski safar chati keyingi buyurtmaga o'tib qolmasin — chat va badge tozalanadi
+    setTripChat([]); setTripChatUnread(0); setTripChatModal(false);
   }
 
   // ---- Xarita hodisalari ----
@@ -2225,8 +2255,14 @@ function AppInner() {
                         <Ionicons name="call" size={20} color={GREEN} />
                       </TouchableOpacity>
                     )}
-                    <TouchableOpacity style={s.chatCircle} onPress={() => setTripChatModal(true)}>
+                    <TouchableOpacity style={s.chatCircle} onPress={() => { if (order?.id) loadTripChatHistory(order.id); setTripChatUnread(0); setTripChatModal(true); }}>
                       <Ionicons name="chatbubble" size={18} color={YELLOW} />
+                      {/* A2: o'qilmagan xabarlar soni — sariq doira badge */}
+                      {tripChatUnread > 0 ? (
+                        <View style={{ position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 }}>
+                          <Text style={{ color: '#000', fontSize: 11, fontWeight: '800' }}>{tripChatUnread > 9 ? '9+' : tripChatUnread}</Text>
+                        </View>
+                      ) : null}
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -3047,10 +3083,20 @@ function AppInner() {
                 <Ionicons name="close" size={24} color={GRAY1} />
               </TouchableOpacity>
             </View>
-            <ScrollView style={{ flex: 1 }}>
+            <ScrollView
+              style={{ flex: 1 }}
+              ref={tripChatScrollRef}
+              // A2: ochilganda va yangi xabar kelganda oxirgi xabarga avto-scroll
+              onContentSizeChange={() => { try { tripChatScrollRef.current?.scrollToEnd({ animated: true }); } catch (e) {} }}>
               {tripChat.map((m, i) => (
                 <View key={i} style={[s.bubble, m.role === 'customer' ? s.bubbleUser : s.bubbleAI]}>
                   <Text style={m.role === 'customer' ? s.bubbleUserTxt : s.bubbleAITxt}>{m.text}</Text>
+                  {/* A2: yuborilgan xabar holati — ⏳ outbox'da (socket uzik), ✓ yuborildi */}
+                  {m.role === 'customer' ? (
+                    <Text style={{ color: 'rgba(0,0,0,0.55)', fontSize: 10, alignSelf: 'flex-end', marginTop: 2 }}>
+                      {m.pending ? '⏳' : '✓'}
+                    </Text>
+                  ) : null}
                 </View>
               ))}
             </ScrollView>
