@@ -201,6 +201,12 @@ const L = {
     done_lbl: 'Tugadi',
     replay: '↻ Qayta eshitish',
     type_message: 'Xabar yozing...',
+    chat_empty: 'Suhbatni boshlang',
+    chat_sub: 'Safar chati',
+    qr_arrived: 'Yetib keldim',
+    qr_5min: '5 daqiqada yetaman',
+    qr_come_out: 'Chiqing, kutyapman',
+    qr_where: 'Qayerdasiz?',
     ai_title: 'KetdikGo AI yordamchi',
     ai_empty: "Savol yozing — AI darrov javob beradi.\n(daromad, reyting, to'lov, buyurtma...)",
     ai_help_empty: "Savolingizni yozing — KetdikGo AI darrov javob beradi (daromad, reyting, to'lov...).",
@@ -418,6 +424,12 @@ const L = {
     done_lbl: 'Готово',
     replay: '↻ Прослушать ещё раз',
     type_message: 'Напишите сообщение...',
+    chat_empty: 'Начните разговор',
+    chat_sub: 'Чат поездки',
+    qr_arrived: 'Я приехал',
+    qr_5min: 'Буду через 5 минут',
+    qr_come_out: 'Выходите, я жду',
+    qr_where: 'Вы где?',
     ai_title: 'KetdikGo AI-помощник',
     ai_empty: 'Напишите вопрос — AI сразу ответит.\n(доход, рейтинг, оплата, заказ...)',
     ai_help_empty: 'Напишите ваш вопрос — KetdikGo AI сразу ответит (доход, рейтинг, оплата...).',
@@ -552,6 +564,17 @@ const RED = '#FF453A';
 const WHITE = '#FFFFFF';
 const GRAY1 = '#8E8E93';
 const GRAY2 = '#48484A';
+
+// X4: safar chati — soat (HH:MM) formatlash. Xabar obyektidagi ts ixtiyoriy;
+// bo'lmasa render paytida kelgan vaqt (Date.now()) ishlatiladi.
+function fmtClock(ms) {
+  const d = new Date(ms || Date.now());
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+// X4: haydovchi tez javob chiplari (i18n kalitlar — sendChat orqali darrov yuboriladi)
+const DRIVER_QUICK = ['qr_arrived', 'qr_5min', 'qr_come_out', 'qr_where'];
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -1381,6 +1404,9 @@ function AppInner() {
   const chatModalRef = useRef(false);
   chatModalRef.current = chatModal;
   const chatListRef = useRef(null); // A2: chat ro'yxati — oxirgi xabarga avto-scroll
+  // X4: har xabarga birinchi render paytida vaqt tamg'asi (lokal). Xabar yuborish/
+  // qabul mantig'iga tegmasdan faqat ko'rinish uchun — kalit: index|role|matn.
+  const chatTsRef = useRef({});
 
   // Jonli hisoblagich (taximetr) va safar yakuni
   const [meter, setMeter] = useState(null); // { km, minutes, fare } — SERVER hisoblagich (~4s)
@@ -2522,8 +2548,11 @@ function AppInner() {
   // Socket uzilgan bo'lsa xabar yo'qolib ketmasligi uchun outbox'ga saqlaymiz va
   // qayta ulanganda avtomatik yuboramiz (#chat-loss). Ilgari ulanmagan holatda
   // emit jim tushib qolar, mijoz esa xabarni umuman olmasdi.
-  function sendChat() {
-    const text = chatInput.trim();
+  // X4: preset — tez javob chipidan kelgan matn (string). onPress/onSubmitEditing
+  // event obyekti yuboradi — u string emas, shuning uchun chatInput ishlatiladi.
+  // Emit/outbox/pending mantig'i o'zgarmagan.
+  function sendChat(preset) {
+    const text = ((typeof preset === 'string' ? preset : chatInput) || '').trim();
     if (!text || !order) return;
     const payload = { orderId: order.id, text };
     // A2: holat belgisi — darhol ketdi (✓) yoki outbox'da kutyapti (⏳)
@@ -2534,7 +2563,8 @@ function AppInner() {
       chatOutboxRef.current.push(payload); // qayta ulanganda flushChatOutbox() yuboradi
     }
     setChatMessages((prev) => [...prev, { sender_role: 'driver', text, pending: !sentNow }]);
-    setChatInput('');
+    // Chip yuborilganda foydalanuvchi yozayotgan matnni o'chirmaymiz.
+    if (typeof preset !== 'string') setChatInput('');
   }
 
   // Qayta ulanganda yuborilmagan chat xabarlarni jo'natamiz.
@@ -2975,9 +3005,16 @@ function AppInner() {
       <Modal visible={chatModal} transparent animationType="slide" onRequestClose={() => setChatModal(false)}>
         <KeyboardAvoidingView style={s.chatModalWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={s.chatModalSheet}>
+            {/* X4: sarlavha — avatar (bosh harf) + mijoz ismi + holat */}
             <View style={s.chatModalHeader}>
-              <Text style={s.chatModalTitle}>💬 {order?.customer_name || t('customer')}</Text>
-              <TouchableOpacity onPress={() => setChatModal(false)}>
+              <View style={s.chatAvatar}>
+                <Text style={s.chatAvatarTxt}>{(order?.customer_name?.[0] || 'M').toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={s.chatModalTitle} numberOfLines={1}>{order?.customer_name || t('customer')}</Text>
+                <Text style={s.chatHeaderSub} numberOfLines={1}>{t('chat_sub')}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setChatModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="close" size={22} color={GRAY1} />
               </TouchableOpacity>
             </View>
@@ -2986,24 +3023,57 @@ function AppInner() {
               data={chatMessages}
               keyExtractor={(_, i) => String(i)}
               style={{ flex: 1, paddingHorizontal: 16 }}
-              contentContainerStyle={{ paddingTop: 12, paddingBottom: 8 }}
+              contentContainerStyle={{ paddingTop: 12, paddingBottom: 8, flexGrow: 1 }}
+              keyboardShouldPersistTaps="handled"
               // A2: ochilganda va yangi xabar kelganda oxirgi xabarga avto-scroll
               onContentSizeChange={() => { try { chatListRef.current?.scrollToEnd({ animated: true }); } catch (e) {} }}
-              renderItem={({ item }) => {
+              // X4: bo'sh holat — markazda kulrang ishora
+              ListEmptyComponent={(
+                <View style={s.chatEmpty}>
+                  <Ionicons name="chatbubbles-outline" size={54} color={GRAY2} />
+                  <Text style={s.chatEmptyTxt}>{t('chat_empty')}</Text>
+                </View>
+              )}
+              renderItem={({ item, index }) => {
                 const mine = item.sender_role === 'driver';
+                // X4: ketma-ket bir kishidan kelgan xabarlar zich (kichik oraliq)
+                const prev = chatMessages[index - 1];
+                const grouped = prev && prev.sender_role === item.sender_role;
+                // X4: vaqt tamg'asi — birinchi render'da lokal belgilanadi (ts ixtiyoriy)
+                const key = index + '|' + item.sender_role + '|' + item.text;
+                if (chatTsRef.current[key] == null) chatTsRef.current[key] = item.ts || Date.now();
+                const clock = fmtClock(chatTsRef.current[key]);
                 return (
-                  <View style={[s.chatBubble, mine ? s.chatMine : s.chatTheirs]}>
-                    <Text style={{ color: mine ? '#000' : WHITE, fontSize: 15 }}>{item.text}</Text>
-                    {/* A2: yuborilgan xabar holati — ⏳ outbox'da (socket uzik), ✓ yuborildi */}
-                    {mine ? (
-                      <Text style={{ color: 'rgba(0,0,0,0.55)', fontSize: 10, alignSelf: 'flex-end', marginTop: 2 }}>
-                        {item.pending ? '⏳' : '✓'}
-                      </Text>
-                    ) : null}
+                  <View style={[s.chatRow2, mine ? s.chatRowMine : s.chatRowTheirs, { marginTop: grouped ? 2 : 10 }]}>
+                    <View style={[s.chatBubble, mine ? s.chatMine : s.chatTheirs]}>
+                      <Text style={[s.chatBubbleTxt, { color: mine ? '#000' : WHITE }]}>{item.text}</Text>
+                      <View style={s.chatMetaRow}>
+                        <Text style={[s.chatTime, { color: mine ? 'rgba(0,0,0,0.5)' : GRAY1 }]}>{clock}</Text>
+                        {/* A2: yuborilgan xabar holati — ⏳ outbox'da (socket uzik), ✓ yuborildi */}
+                        {mine ? (
+                          <Text style={[s.chatTime, { color: 'rgba(0,0,0,0.5)', marginLeft: 4 }]}>
+                            {item.pending ? '⏳' : '✓'}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
                   </View>
                 );
               }}
             />
+            {/* X4: tez javoblar — gorizontal chiplar, bosilsa darrov yuboriladi */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={s.qrRow}
+              contentContainerStyle={s.qrContent}
+              keyboardShouldPersistTaps="handled">
+              {DRIVER_QUICK.map((k) => (
+                <TouchableOpacity key={k} style={s.qrChip} activeOpacity={0.7} onPress={() => sendChat(t(k))}>
+                  <Text style={s.qrChipTxt}>{t(k)}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
             <View style={s.chatInputRow}>
               <TextInput
                 style={s.chatInput}
@@ -3014,7 +3084,10 @@ function AppInner() {
                 onSubmitEditing={sendChat}
                 returnKeyType="send"
               />
-              <TouchableOpacity style={s.chatSendBtn} onPress={sendChat}>
+              <TouchableOpacity
+                style={[s.chatSendBtn, !chatInput.trim() && { opacity: 0.4 }]}
+                onPress={sendChat}
+                disabled={!chatInput.trim()}>
                 <Ionicons name="send" size={20} color="#000" />
               </TouchableOpacity>
             </View>
@@ -4283,13 +4356,30 @@ const s = StyleSheet.create({
   // Chat
   chatModalWrap: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
   chatModalSheet: { backgroundColor: CARD, borderTopLeftRadius: 22, borderTopRightRadius: 22, maxHeight: '75%', minHeight: 320 },
-  chatModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18, borderBottomWidth: 1, borderBottomColor: BORDER },
+  chatModalHeader: { flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: BORDER },
   chatModalTitle: { color: WHITE, fontSize: 17, fontWeight: '700' },
-  chatBubble: { maxWidth: '78%', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 16, marginBottom: 8 },
-  chatMine: { backgroundColor: YELLOW, alignSelf: 'flex-end', borderBottomRightRadius: 4 },
-  chatTheirs: { backgroundColor: CARD2, alignSelf: 'flex-start', borderBottomLeftRadius: 4 },
+  chatHeaderSub: { color: GRAY1, fontSize: 12, marginTop: 2 },
+  chatAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: CARD2, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: BORDER },
+  chatAvatarTxt: { color: YELLOW, fontSize: 18, fontWeight: '800' },
+  // X4: pufakcha qatori — tomonni belgilaydi (mine o'ng, theirs chap)
+  chatRow2: { width: '100%' },
+  chatRowMine: { alignItems: 'flex-end' },
+  chatRowTheirs: { alignItems: 'flex-start' },
+  chatBubble: { maxWidth: '78%', paddingVertical: 9, paddingHorizontal: 13, borderRadius: 18 },
+  chatMine: { backgroundColor: YELLOW, borderBottomRightRadius: 4 },
+  chatTheirs: { backgroundColor: CARD2, borderBottomLeftRadius: 4 },
+  chatBubbleTxt: { fontSize: 15, lineHeight: 20 },
+  chatMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 3 },
+  chatTime: { fontSize: 10 },
+  chatEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 40 },
+  chatEmptyTxt: { color: GRAY1, fontSize: 14, marginTop: 10 },
+  // X4: tez javob chiplari
+  qrRow: { maxHeight: 46, borderTopWidth: 1, borderTopColor: BORDER },
+  qrContent: { paddingHorizontal: 12, paddingVertical: 8, gap: 8, alignItems: 'center' },
+  qrChip: { backgroundColor: CARD2, borderWidth: 1, borderColor: BORDER, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  qrChipTxt: { color: WHITE, fontSize: 13, fontWeight: '600' },
   chatInputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, borderTopWidth: 1, borderTopColor: BORDER },
-  chatInput: { flex: 1, backgroundColor: CARD2, color: WHITE, fontSize: 15, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: BORDER },
+  chatInput: { flex: 1, backgroundColor: CARD2, color: WHITE, fontSize: 15, paddingHorizontal: 16, paddingVertical: 11, borderRadius: 22, borderWidth: 1, borderColor: BORDER },
   chatSendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center' },
   earnWrap: { flex: 1, backgroundColor: BG },
   earnTitle: { color: WHITE, fontSize: 26, fontWeight: 'bold', marginBottom: 18 },
