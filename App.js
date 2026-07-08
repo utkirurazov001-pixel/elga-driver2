@@ -1724,16 +1724,14 @@ function AppInner() {
     routeFetchRef.current = { ts: now, key };
     (async () => {
       try {
-        const url = `https://router.project-osrm.org/route/v1/driving/${myLoc.lng},${myLoc.lat};${target.lng},${target.lat}?overview=full&geometries=geojson`;
-        const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(url, { signal: ctrl.signal });
-        clearTimeout(timer);
-        const j = await res.json();
-        const route = j?.routes?.[0];
-        if (!route || !route.geometry?.coordinates?.length) return;
-        // GeoJSON [lng,lat] -> [lat,lng]; juda uzun bo'lsa siyraklashtiramiz (inject hajmi)
-        let pts = route.geometry.coordinates.map((c) => [c[1], c[0]]);
+        // X3: to'g'ridan-to'g'ri ommaviy OSRM (router.project-osrm.org) O'RNIGA backend
+        // /api/orders/route — keshli, ishonchli, OSRM o'chsa TO'G'RI CHIZIQ zaxirasi
+        // bilan (chiziq/ETA hech qachon "qotib" qolmaydi). Javob: {km,min,geometry:[[lat,lng]..]}.
+        const r = await api('/api/orders/route', 'POST',
+          { from: { lat: myLoc.lat, lng: myLoc.lng }, to: { lat: target.lat, lng: target.lng } },
+          token, 9000, { retries: 1 });
+        let pts = Array.isArray(r?.geometry) ? r.geometry : null;
+        if (!pts || !pts.length) return;
         if (pts.length > 400) {
           const step = Math.ceil(pts.length / 400);
           pts = pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
@@ -1741,11 +1739,8 @@ function AppInner() {
         if (mapRef.current) {
           mapRef.current.injectJavaScript(`window.drawRoute&&window.drawRoute(${JSON.stringify(pts)});true;`);
         }
-        setRouteInfo({
-          km: +(route.distance / 1000).toFixed(1),
-          min: Math.max(1, Math.round(route.duration / 60)),
-        });
-      } catch (e) { /* OSRM vaqtincha xato — eski chiziq/chip qoladi */ }
+        if (r.km != null) setRouteInfo({ km: +Number(r.km).toFixed(1), min: Math.max(1, Math.round(Number(r.min) || 0)) });
+      } catch (e) { /* marshrut vaqtincha xato — eski chiziq/chip qoladi */ }
     })();
   }, [mapReady, myLoc, order?.id, order?.status]);
 
