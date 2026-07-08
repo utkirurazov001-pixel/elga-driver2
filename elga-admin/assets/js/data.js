@@ -227,12 +227,33 @@
     return dt.getDate()+'-'+mm[dt.getMonth()]+' '+dt.getFullYear();
   }
 
+  // ---- B2: HISOBOTLAR (demo) — jonli rejimda api.js /api/admin/report/* dan yangilaydi ----
+  var cancelReport = {
+    days:30, total:47,
+    reasons:[
+      {reason:"Haydovchi uzoq kutildi", count:14, percent:30},
+      {reason:"Mijoz fikridan qaytdi", count:11, percent:23},
+      {reason:"Narx kelishilmadi", count:8, percent:17},
+      {reason:"Sababsiz", count:7, percent:15},
+      {reason:"Haydovchi bekor qildi", count:4, percent:9},
+      {reason:"mijoz (Telegram)", count:3, percent:6}
+    ]
+  };
+  var driverActivity = drivers.slice(0,20).map(function(d,i){
+    var acc = 60+Math.floor(rnd(i+9)*40);
+    return { id:d.id, name:d.full_name, full_name:d.full_name, ini:d.ini, phone:d.phone,
+      trips_done:d.orders_count, accept_rate:(i%7===6?null:acc), rating:+d.rating,
+      today_trips:Math.floor(rnd(i+4)*14), today_earned:Math.floor(rnd(i+6)*380)*1000,
+      online:d.status==='free'||d.status==='busy' };
+  }).sort(function(a,b){ return b.today_trips-a.today_trips; });
+
   window.DB = {
     CITIES:CITIES, TARIFFS:TARIFFS, ROLES:ROLES, PLACES:PLACES,
     drivers:drivers, clients:clients, orders:orders, withdrawals:withdrawals,
     transactions:transactions, complaints:complaints, staff:staff,
     rewards:rewards, redemptions:redemptions, promos:promos, cities:cityRows,
     notifications:notifications, audit:audit, places:places,
+    cancelReport:cancelReport, driverActivity:driverActivity,
     // Yangi manzil kiritilganda lug'atga qo'shib boradi (to'planadi)
     addPlace:function(city,name){
       name=(name||'').trim(); if(!city||!name) return null;

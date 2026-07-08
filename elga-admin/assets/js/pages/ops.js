@@ -172,7 +172,12 @@
   };
 
   /* -------- HISOBOTLAR -------- */
-  window.PAGES.reports2 = function(){
+  // B2: sub-bo'limlar — 'cancels' (bekor sabablari, D4) va 'activity'
+  // (haydovchi faolligi, D5). 'summary' — avvalgi umumiy ko'rinish.
+  window.PAGES.reports2 = function(ctx){
+    var sub = (ctx && ctx.sub) || 'summary';
+    if(sub==='cancels') return reportCancels();
+    if(sub==='activity') return reportActivity();
     var root=document.createElement('div');
     var paid=window.DB.orders.filter(function(o){return o.payment_status==='paid';});
     var revenue=paid.reduce(function(s,o){return s+o.price;},0);
@@ -195,4 +200,75 @@
     root.querySelectorAll('.seg button').forEach(function(b){b.addEventListener('click',function(){b.parentNode.querySelectorAll('button').forEach(function(x){x.classList.remove('on');});b.classList.add('on');});});
     return root;
   };
+
+  /* -------- B2 (D4): BEKOR SABABLARI --------
+     Jonli rejimda /api/admin/report/cancels (30 kun) dan yuklanadi;
+     demo'da DB.cancelReport (data.js) ko'rsatiladi. */
+  function reportCancels(){
+    var node = window.listPage({
+      title:'Bekor sabablari', sub:'So\'nggi 30 kun · sabablar kesimi',
+      placeholder:'Sabab qidirish...', perPage:12, exportName:'ketdikgo-bekor-sabablari',
+      actions:'<button class="btn" data-export>'+window.icon('download',16)+'CSV eksport</button>',
+      beforeTable:function(){
+        var rep = window.DB.cancelReport || {days:30,total:0,reasons:[]};
+        return '<div class="kpis">'+
+          U.kpi({icon:'warn',bg:'var(--danger-soft)',color:'var(--danger)',label:'Jami bekorlar ('+(rep.days||30)+' kun)',val:(rep.total||0)})+
+          U.kpi({icon:'layers',bg:'var(--gold-soft)',color:'var(--gold)',label:'Har xil sabab',val:(rep.reasons||[]).length})+
+        '</div>';
+      },
+      rows:function(st){
+        var rep = window.DB.cancelReport || {reasons:[]};
+        return (rep.reasons||[]).filter(function(x){ return U.matches(x,st.q,['reason']); });
+      },
+      defaultSort:'count', defaultDir:'desc',
+      columns:[
+        {th:'Sabab', sortKey:'reason', csv:function(x){return x.reason;}, render:function(x){return '<b>'+U.esc(x.reason)+'</b>';}},
+        {th:'Soni', sortKey:'count', csv:function(x){return x.count;}, render:function(x){return '<span class="mono gold">'+(x.count||0)+'</span>';}},
+        {th:'Ulush', sortKey:'percent', csv:function(x){return x.percent;}, render:function(x){
+          return '<div style="display:flex;align-items:center;gap:10px"><div class="bar" style="width:120px"><i style="width:'+(x.percent||0)+'%;background:var(--danger)"></i></div><span class="mono">'+(x.percent||0)+'%</span></div>';
+        }}
+      ],
+      emptyTitle:'Bekor qilingan buyurtma yo\'q'
+    });
+    // Jonli yangilash — sahifa ochilganda backenddan qayta so'raymiz
+    if(window.ELGA && window.ELGA.live && window.ELGA.loadCancelReport){
+      window.ELGA.loadCancelReport().then(function(){ node._render && node._render(); }).catch(function(){});
+    }
+    return node;
+  }
+
+  /* -------- B2 (D5): HAYDOVCHI FAOLLIGI --------
+     Jonli rejimda /api/admin/report/driver-activity dan yuklanadi
+     (bugungi safar/daromad, qabul foizi — adolat konteksti, reyting, holat). */
+  function reportActivity(){
+    var node = window.listPage({
+      title:'Haydovchi faolligi', sub:'Bugungi safarlar bo\'yicha · qabul foizi (dispatch adolati) va reyting',
+      placeholder:'Ism yoki telefon...', perPage:10, exportName:'ketdikgo-haydovchi-faolligi',
+      actions:'<button class="btn" data-export>'+window.icon('download',16)+'CSV eksport</button>',
+      rows:function(st){
+        return (window.DB.driverActivity||[]).filter(function(d){ return U.matches(d,st.q,['name','phone']); });
+      },
+      defaultSort:'today_trips', defaultDir:'desc',
+      columns:[
+        {th:'Haydovchi', sortKey:'name', csv:function(d){return d.name;}, render:function(d){return U.cust(d.name,d.ini,d.phone);}},
+        {th:'Bugun: safar', sortKey:'today_trips', csv:function(d){return d.today_trips;}, render:function(d){return '<span class="mono gold">'+(d.today_trips||0)+'</span>';}},
+        {th:'Bugun: daromad', cls:'sum', sortKey:'today_earned', csv:function(d){return d.today_earned;}, render:function(d){return window.money(d.today_earned||0);}},
+        {th:'Qabul %', sortKey:'accept_rate', csv:function(d){return d.accept_rate==null?'':d.accept_rate;}, render:function(d){
+          if(d.accept_rate==null) return '<span class="muted">—</span>';
+          var col = d.accept_rate>=70?'var(--success)':(d.accept_rate>=40?'var(--warning)':'var(--danger)');
+          return '<div style="display:flex;align-items:center;gap:10px"><div class="bar" style="width:90px"><i style="width:'+d.accept_rate+'%;background:'+col+'"></i></div><span class="mono">'+d.accept_rate+'%</span></div>';
+        }},
+        {th:'Reyting', sortKey:'rating', csv:function(d){return d.rating==null?'':d.rating;}, render:function(d){return d.rating==null?'<span class="muted">—</span>':'<span class="mono">★ '+d.rating+'</span>';}},
+        {th:'Jami safar', sortKey:'trips_done', csv:function(d){return d.trips_done;}, render:function(d){return '<span class="mono">'+(d.trips_done||0)+'</span>';}},
+        {th:'Holat', sortKey:'online', csv:function(d){return d.online?'online':'offline';}, render:function(d){
+          return '<span style="display:inline-flex;align-items:center;gap:7px"><span style="width:8px;height:8px;border-radius:50%;background:'+(d.online?'var(--success)':'var(--text-faint)')+'"></span>'+(d.online?'Online':'Oflayn')+'</span>';
+        }}
+      ],
+      emptyTitle:'Ma\'lumot yo\'q'
+    });
+    if(window.ELGA && window.ELGA.live && window.ELGA.loadDriverActivity){
+      window.ELGA.loadDriverActivity().then(function(){ node._render && node._render(); }).catch(function(){});
+    }
+    return node;
+  }
 })();

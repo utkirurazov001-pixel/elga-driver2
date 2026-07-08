@@ -92,13 +92,16 @@
     return root;
   };
 
-  /* ---------------- AUDIT JURNALI ---------------- */
+  /* ---------------- AUDIT JURNALI ----------------
+     B2 (D6): jonli rejimda GET /api/admin/audit dan yangilanadi (api.js
+     loadAudit); demo'da avvalgidek DB.audit namuna yozuvlari ko'rinadi.
+     Jonli yozuvlarda role/ip bo'lmasligi mumkin — bo'sh bo'lsa yashiramiz. */
   window.PAGES.audit = function(ctx){
-    return window.listPage({
+    var node = window.listPage({
       title:'Audit jurnali', sub:'O\'zgarmas (immutable) yozuvlar · faqat super_admin',
-      actions:'<button class="btn">'+window.icon('download',16)+'Eksport</button>',
+      actions:'<button class="btn" data-export>'+window.icon('download',16)+'Eksport</button>',
       placeholder:'Amal, xodim yoki obyekt...',
-      perPage:12,
+      perPage:12, exportName:'ketdikgo-audit',
       filters:function(st){return [
         {key:'entity', value:st.entity||'', options:[window.opt('','Barcha obyektlar'),
           window.opt('orders','Buyurtmalar'),window.opt('drivers','Haydovchilar'),window.opt('withdrawals','Pul yechish'),
@@ -111,14 +114,19 @@
         return {rows:U.paginate(rows,st.page,12), total:rows.length};
       },
       columns:[
-        {th:'Vaqt', render:function(a){return '<span class="muted">'+a.created_at+'</span>';}},
-        {th:'Xodim', render:function(a){return '<b>'+a.user+'</b><br><span class="muted" style="font-size:11px">'+window.roleLabel(a.role)+'</span>';}},
-        {th:'Amal', render:function(a){return '<span class="mono" style="color:var(--gold)">'+a.action+'</span>';}},
-        {th:'Obyekt', render:function(a){return '<span class="tariff-chip">'+a.entity+'</span> <span class="mono muted">'+a.entity_id+'</span>';}},
-        {th:'Tafsilot', render:function(a){return a.detail;}},
-        {th:'IP', render:function(a){return '<span class="mono muted">'+a.ip+'</span>';}}
+        {th:'Vaqt', csv:function(a){return a.created_at;}, render:function(a){return '<span class="muted">'+U.esc(a.created_at||'')+'</span>';}},
+        {th:'Xodim', csv:function(a){return a.user;}, render:function(a){return '<b>'+U.esc(a.user||'—')+'</b>'+(a.role?'<br><span class="muted" style="font-size:11px">'+U.esc(window.roleLabel(a.role))+'</span>':'');}},
+        {th:'Amal', csv:function(a){return a.action;}, render:function(a){return '<span class="mono" style="color:var(--gold)">'+U.esc(a.action||'')+'</span>';}},
+        {th:'Obyekt', csv:function(a){return a.entity;}, render:function(a){return (a.entity?'<span class="tariff-chip">'+U.esc(a.entity)+'</span>':'<span class="muted">—</span>')+(a.entity_id&&a.entity_id!==a.entity?' <span class="mono muted">'+U.esc(a.entity_id)+'</span>':'');}},
+        {th:'Tafsilot', csv:function(a){return a.detail;}, render:function(a){return U.esc(a.detail||'');}},
+        {th:'IP', csv:function(a){return a.ip;}, render:function(a){return '<span class="mono muted">'+U.esc(a.ip||'—')+'</span>';}}
       ]
     });
+    // Jonli rejim: sahifa ochilganda backenddan so'nggi 200 yozuvni olamiz
+    if(window.ELGA && window.ELGA.live && window.ELGA.loadAudit){
+      window.ELGA.loadAudit(200).then(function(){ node._render && node._render(); }).catch(function(){});
+    }
+    return node;
   };
 
   /* ---------------- SOZLAMALAR (sub: general/roles/payments/brand) ---------------- */

@@ -29,7 +29,8 @@
       ['cash','Pul yechish','cash',{t:'gold',n:5}],
       ['wallet','Tranzaksiyalar','wallet',null],
       ['tag','Tariflar','tag',null],
-      ['reports2','Hisobotlar','chart',null],
+      // B2: hisobotlar sub-bo'limlari — bekor sabablari (D4) va haydovchi faolligi (D5)
+      ['reports2','Hisobotlar','chart',null,[['summary','Umumiy'],['cancels','Bekor sabablari'],['activity','Haydovchi faolligi']]],
       ['corporate','Korporativ (B2B)','building',null]
     ]],
     ['Sadoqat dasturi', [

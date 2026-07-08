@@ -129,7 +129,37 @@
         D.withdrawals = arr(r[8],'payouts','withdrawals').map(mapWithdrawal);
         applyStats(r[0] || {});
         self.live = true;
+        // B2: hisobot ma'lumotlari (yangi endpointlar) — parallel yuklanadi;
+        // xato bo'lsa demo qiymat qoladi (sahifa ochilganda ham qayta so'raladi).
+        self.loadCancelReport().catch(function(){});
+        self.loadDriverActivity().catch(function(){});
         return true;
+      });
+    },
+
+    // ---- B2: HISOBOT LOADERLARI (sahifa ochilganda jonli yangilash) ----
+    // Audit jurnali — GET /api/admin/audit (super_admin). DB.audit yangilanadi.
+    loadAudit: function(limit){
+      return this.get('/api/admin/audit?limit='+(limit||200)).then(function(r){
+        if(r.status>=200 && r.status<300 && r.body)
+          window.DB.audit = arr(r.body,'log','audit','logs').map(mapAudit);
+        return window.DB.audit;
+      });
+    },
+    // Bekor sabablari — GET /api/admin/report/cancels?days=30 (finance)
+    loadCancelReport: function(days){
+      return this.get('/api/admin/report/cancels?days='+(days||30)).then(function(r){
+        if(r.status>=200 && r.status<300 && r.body && r.body.ok)
+          window.DB.cancelReport = { days:(r.body.days||30), total:(r.body.total||0), reasons:(r.body.reasons||[]) };
+        return window.DB.cancelReport;
+      });
+    },
+    // Haydovchi faolligi — GET /api/admin/report/driver-activity (finance)
+    loadDriverActivity: function(){
+      return this.get('/api/admin/report/driver-activity').then(function(r){
+        if(r.status>=200 && r.status<300 && r.body && r.body.ok)
+          window.DB.driverActivity = arr(r.body,'drivers').map(mapActivity);
+        return window.DB.driverActivity;
       });
     },
 
@@ -224,7 +254,16 @@
   function mapWithdrawal(w){ var name=w.driver||w.name||''; return { id:w.id, driver:name, driver_ini:ini(name), amount:w.amount, provider:cap(w.provider||w.method), status:w.status, created_at:w.created_at }; }
   function mapComplaint(c){ return { id:c.id, user:c.name||'', phone:c.phone, role:c.role, order_id:c.order_id, text:c.text, status:c.status, created_at:c.created_at }; }
   function mapPromo(p){ return { id:p.id, code:p.code, type:p.type||'percent', value:(p.percent!=null?p.percent:p.value), min_order:p.min_order, limit:(p.max_uses!=null?p.max_uses:p.usage_limit), used:(p.used_count||p.used||0), valid_to:p.valid_to, active:!!(p.active!=null?p.active:p.is_active) }; }
-  function mapAudit(a){ return { id:a.id, user:(a.actor||a.user||a.staff||''), role:a.role, action:a.action, entity:(a.entity||a.target||''), entity_id:(a.entity_id||a.target||''), detail:a.detail, ip:a.ip, created_at:(a.created_at||a.at) }; }
+  // B2: jonli audit_log'da role yo'q — bo'sh qoldiramiz (sahifa o'zi yashiradi).
+  function mapAudit(a){ return { id:a.id, user:(a.actor||a.user||a.staff||''), role:(a.role||''), action:a.action, entity:(a.entity||a.target||''), entity_id:(a.entity_id||a.target||''), detail:(a.detail||''), ip:(a.ip||''), created_at:(a.created_at||a.at) }; }
+  // B2: real /report/driver-activity -> panel faollik qatori
+  function mapActivity(d){
+    var name = d.name || '';
+    return { id:d.id, name:name, full_name:name, ini:ini(name), phone:(d.phone||''),
+      trips_done:(d.trips_done||0), accept_rate:(d.accept_rate!=null?d.accept_rate:null),
+      rating:(d.rating!=null?d.rating:null), today_trips:(d.today_trips||0),
+      today_earned:(d.today_earned||0), online:!!d.is_online };
+  }
 
   /* Yozish amali — live rejimda backendga (/api/admin/...) yuboradi, demo'da no-op. */
   window.apiAction = function(method, path, body){
