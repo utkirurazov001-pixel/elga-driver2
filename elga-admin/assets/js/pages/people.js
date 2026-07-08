@@ -40,7 +40,12 @@
         {th:'Reyting', sortKey:'rating', csv:function(d){return d.rating;}, render:function(d){return '<span class="mono">★ '+d.rating+'</span>';}},
         {th:'Balans', cls:'sum', sortKey:'balance', csv:function(d){return d.balance;}, render:function(d){return window.money(d.balance);}},
         {th:'KYC', sortKey:'kyc_status', csv:function(d){return d.kyc_status;}, render:function(d){return U.kycTag(d.kyc_status);}},
-        {th:'Holat', sortKey:'status', csv:function(d){return d.status;}, render:function(d){return U.driverTag(d.status);}}
+        {th:'Holat', sortKey:'status', csv:function(d){return d.status;}, render:function(d){return U.driverTag(d.status);}},
+        // B3 (J-1): amal ma'lumot KO'RINGAN joyda — qatordan 1 klikda qo'ng'iroq
+        // (avval dispetcher detail modalni ochib telefonni ko'chirishi kerak edi).
+        {th:'', csv:function(){return '';}, render:function(d){
+          return d.phone ? '<a class="btn btn-sm row-call" href="tel:'+String(d.phone).replace(/[^0-9+]/g,'')+'" onclick="event.stopPropagation()" title="Qo\'ng\'iroq">'+window.icon('phone',14)+'</a>' : '';
+        }}
       ],
       onRowClick:function(d, rerender){ window.driverDetail(d, rerender); }
     });

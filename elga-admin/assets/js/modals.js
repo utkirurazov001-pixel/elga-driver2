@@ -82,7 +82,8 @@
           ['Scoring ball', (function(){var s=window.DB.driverScore?window.DB.driverScore(d):null; return s?'<span class="tg '+(s.score>=75?'done':s.score>=50?'wait':'canc')+'">'+s.score+'</span> <span class="muted" style="font-size:11px">qabul '+s.accept+'% · yakun '+s.completion+'%</span>':'—';})()],
           ['KYC', U.kycTag(d.kyc_status)],['Holat', U.driverTag(d.status)]
         ])+'</div></div>',
-      foot:'<button class="btn" data-close>Yopish</button>'+
+      foot:(d.phone?'<a class="btn" href="tel:'+String(d.phone).replace(/[^0-9+]/g,'')+'">'+window.icon('phone',14)+' Qo\'ng\'iroq</a>':'')+
+        '<button class="btn" data-close>Yopish</button>'+
         (d.status==='blocked'
           ? '<button class="btn btn-success" data-unblock>Blokdan chiqarish</button>'
           : '<button class="btn btn-danger" data-block>Bloklash</button>'),
