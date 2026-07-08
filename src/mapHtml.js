@@ -56,7 +56,7 @@ function leafletUpdate(d){
     if(d.pickLat!=null){ if(pickMarker){pickMarker.setLatLng([d.pickLat,d.pickLng]);} else {pickMarker=L.marker([d.pickLat,d.pickLng],{icon:greenIcon}).addTo(map).bindPopup('Mijoz');} } else if(pickMarker){map.removeLayer(pickMarker);pickMarker=null;}
     if(d.dropLat!=null){ if(dropMarker){dropMarker.setLatLng([d.dropLat,d.dropLng]);} else {dropMarker=L.marker([d.dropLat,d.dropLng],{icon:redIcon}).addTo(map).bindPopup('Manzil');} } else if(dropMarker){map.removeLayer(dropMarker);dropMarker=null;}
     var c=d.myLat!=null?[d.myLat,d.myLng]:(d.pickLat!=null?[d.pickLat,d.pickLng]:null);
-    if(_follow&&d.myLat!=null){ map.setView([d.myLat,d.myLng],Math.max(map.getZoom(),16),{animate:true}); centeredOnce=true; }
+    if(_follow&&d.myLat!=null){ map.setView([d.myLat,d.myLng],Math.max(map.getZoom(),16),{animate:false}); centeredOnce=true; }
     else if(c&&!centeredOnce){ map.setView(c,14); centeredOnce=true; }
   }catch(e){}
 }
