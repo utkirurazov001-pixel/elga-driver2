@@ -188,6 +188,9 @@ const L = {
     to_dest_btn: "MANZILGA YO'L",
     complete_trip: 'SAFARNI YAKUNLASH',
     trip_in_progress: 'SAFAR DAVOM ETMOQDA',
+    current_fare_lbl: 'JORIY NARX',
+    live_meter_sub: 'jonli taksometr',
+    per_km_lbl: "SO'M/KM",
     waiting_lbl: 'Kutish',
     free_lbl: 'bepul',
     wait_time: 'Kutish vaqti',
@@ -411,6 +414,9 @@ const L = {
     to_dest_btn: 'МАРШРУТ К МЕСТУ',
     complete_trip: 'ЗАВЕРШИТЬ ПОЕЗДКУ',
     trip_in_progress: 'ПОЕЗДКА ПРОДОЛЖАЕТСЯ',
+    current_fare_lbl: 'ТЕКУЩАЯ ЦЕНА',
+    live_meter_sub: 'живой таксометр',
+    per_km_lbl: 'СУМ/КМ',
     waiting_lbl: 'Ожидание',
     free_lbl: 'бесплатно',
     wait_time: 'Время ожидания',
@@ -1045,11 +1051,17 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
+  // W5: ochilish animatsiyasi — AppInner booting'ni tugatgach (onBootDone)
+  // BrandSplash overlay ko'rinadi va ~1 soniyada o'zi yo'qoladi (unmount).
+  // Overlay App darajasida — PIN/login/asosiy, qaysi ekran bo'lsa ham USTIDA.
+  const [bootDone, setBootDone] = useState(false);
+  const [splashDone, setSplashDone] = useState(false);
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <AppInner />
+        <AppInner onBootDone={() => setBootDone(true)} />
       </ErrorBoundary>
+      {bootDone && !splashDone && <BrandSplash onDone={() => setSplashDone(true)} />}
     </SafeAreaProvider>
   );
 }
@@ -1267,6 +1279,34 @@ function BootLogo() {
   );
 }
 
+// W5: OCHILISH (SPLASH) ANIMATSIYASI — booting tugagach BIR MARTA ko'rinadigan
+// to'liq ekran overlay. Ketma-ketlik: scale 0.92→1 (400ms) → 350ms pauza →
+// opacity 1→0 (300ms) → onDone (ota komponent overlay'ni unmount qiladi).
+// Faqat vizual qatlam — hech qanday mantiq/holatga ta'sir qilmaydi.
+function BrandSplash({ onDone }) {
+  const op = useRef(new Animated.Value(1)).current;
+  const sc = useRef(new Animated.Value(0.92)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(sc, { toValue: 1, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.delay(350),
+      Animated.timing(op, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start(() => onDone && onDone());
+  }, []);
+  return (
+    <Animated.View pointerEvents="none"
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', zIndex: 9999, elevation: 24, opacity: op }}>
+      <Animated.View style={{ alignItems: 'center', transform: [{ scale: sc }] }}>
+        <Text style={{ fontSize: 40, fontWeight: '800', letterSpacing: 0.5 }}>
+          <Text style={{ color: WHITE }}>Ketdik</Text>
+          <Text style={{ color: YELLOW }}>Go</Text>
+        </Text>
+        <Text style={{ color: GRAY1, fontSize: 13, marginTop: 8 }}>{t('driver_app')}</Text>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 // MapPanel — xaritani AppInner ning yuqori chastotali qayta-renderlaridan ajratamiz.
 // AppInner da GPS (har 5 sek), taksometr (`meter`), `soloMeter` va `wait_update`
 // holatlari tez-tez yangilanadi va har safar butun daraxtni qayta render qiladi.
@@ -1296,11 +1336,14 @@ const MapPanel = React.memo(React.forwardRef(function MapPanel({ source, style, 
   );
 }));
 
-function AppInner() {
+function AppInner({ onBootDone }) {
   const insets = useSafeAreaInsets();
   const [booting, setBooting] = useState(true);
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
+  // W5: booting tugadi — App darajasidagi ochilish splash'iga signal beramiz
+  // (overlay shundan keyin ko'rinadi va o'z animatsiyasini boshlaydi)
+  useEffect(() => { if (!booting && onBootDone) onBootDone(); }, [booting]);
   // 🎙 Mijozning ovozli buyurtmasini tinglash (expo-audio + temp fayl orqali).
   // Hech qachon ilovani yiqitmaydi — xato bo'lsa faqat status o'zgaradi.
   const [voiceModal, setVoiceModal] = useState(false);
@@ -3196,6 +3239,21 @@ function CountdownBar() {
 }
 
 // ---- Buyurtma paneli (holat tugmalari) ----
+// W4: hero karta tepasidagi 3px sariq "jonli" chiziq — sekin pulsatsiya
+// (taksometr ishlayotganini ko'rsatadi). Faqat vizual, hisobga tegmaydi.
+function MeterPulseBar() {
+  const op = useRef(new Animated.Value(0.5)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(op, { toValue: 1, duration: 900, useNativeDriver: true }),
+      Animated.timing(op, { toValue: 0.5, duration: 900, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  return <Animated.View style={{ height: 3, backgroundColor: YELLOW, opacity: op }} />;
+}
+
 function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNavigate, onFollow, onCall, onChat, chatUnread, onPlayVoice, voiceBusy }) {
   // F-04: faol safarni (accepted/arrived) bekor qilish — tasdiq bilan.
   // accepted'da backend buyurtmani boshqa haydovchiga qaytaradi (requeue),
@@ -3299,19 +3357,26 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
         </>
       ) : (
         <>
-          <Text style={s.orderTitle}>📍 {safeStr(order.from_address, t('pickup_point'))}</Text>
-          <Text style={s.orderSub}>→ {safeStr(order.to_address, t('dest'))}</Text>
-          <Text style={s.orderPrice}>{fmt(order.price)} {t('som')} · {order.distance_km || '?'} {t('km')}</Text>
-          {/* W1: buyurtmadagi pullik xizmatlar — faol safar davomida ham eslatma */}
-          {!!(order.need_ac || order.need_baggage) && (
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-              {!!order.need_ac && <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '700' }}>{t('extra_ac_lbl')}</Text>}
-              {!!order.need_baggage && <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '700' }}>{t('extra_baggage_lbl')}</Text>}
-            </View>
+          {/* W4: in_progress'da bu sarlavha o'rniga hero karta + mijoz kartasi
+              ko'rsatiladi (pastda); accepted/arrived avvalgidek qoladi. */}
+          {st !== 'in_progress' && (
+            <>
+              <Text style={s.orderTitle}>📍 {safeStr(order.from_address, t('pickup_point'))}</Text>
+              <Text style={s.orderSub}>→ {safeStr(order.to_address, t('dest'))}</Text>
+              <Text style={s.orderPrice}>{fmt(order.price)} {t('som')} · {order.distance_km || '?'} {t('km')}</Text>
+              {/* W1: buyurtmadagi pullik xizmatlar — faol safar davomida ham eslatma */}
+              {!!(order.need_ac || order.need_baggage) && (
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  {!!order.need_ac && <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '700' }}>{t('extra_ac_lbl')}</Text>}
+                  {!!order.need_baggage && <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '700' }}>{t('extra_baggage_lbl')}</Text>}
+                </View>
+              )}
+            </>
           )}
 
-          {/* Mijoz ma'lumoti + qo'ng'iroq + xabar */}
-          {showCustomer && (
+          {/* Mijoz ma'lumoti + qo'ng'iroq + xabar (W4: in_progress'da yangi
+              avatar'li mijoz kartasi ishlatiladi — pastda) */}
+          {showCustomer && st !== 'in_progress' && (
             <View style={s.custRow}>
               <View style={{ flex: 1 }}>
                 <Text style={s.custName}>{order.customer_name || t('customer')}</Text>
@@ -3371,31 +3436,82 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
             </View>
           )}
 
-          {/* Safar davomida — jonli hisoblagich + manzilga yo'l + yakunlash */}
-          {st === 'in_progress' && (
-            <View style={{ gap: 8, marginTop: 8 }}>
-              {/* T-11: Jonli taximetr — LOKAL real-time (liveMeter) ustun; server
-                  qiymati (meter) zaxira. Katta, aniq raqamlar (haydaganda o'qish oson). */}
-              {!!(liveMeter || meter || order.metered) && (() => {
-                const dispKm = (liveMeter && liveMeter.km != null) ? liveMeter.km : (meter ? meter.km : (order.distance_km || 0));
-                const dispFare = (liveMeter && liveMeter.fare != null) ? liveMeter.fare : (meter ? meter.fare : order.price);
-                return (
-                <View style={s.meterBox}>
-                  <View>
-                    <Text style={{ color: GREEN, fontSize: 11, fontWeight: '600', letterSpacing: 0.4 }}>{t('trip_in_progress')}</Text>
-                    <Text style={{ color: WHITE, fontSize: 22, fontWeight: '800', marginTop: 4 }}>
-                      {Number(dispKm).toFixed(1)} <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '600' }}>{t('km')}</Text>
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ color: YELLOW, fontSize: 34, fontWeight: '800', lineHeight: 36 }}>
-                      {fmt(dispFare)}
-                    </Text>
-                    <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>{t('som')}</Text>
-                  </View>
+          {/* Safar davomida — W4: professional taksometr ko'rinishi.
+              MUHIM: qiymat MANBALARI avvalgidek (T-11: lokal liveMeter ustun,
+              server meter zaxira, oxiri order) — faqat KO'RINISH yangilandi. */}
+          {st === 'in_progress' && (() => {
+            const dispKm = (liveMeter && liveMeter.km != null) ? liveMeter.km : (meter ? meter.km : (order.distance_km || 0));
+            const dispFare = (liveMeter && liveMeter.fare != null) ? liveMeter.fare : (meter ? meter.fare : order.price);
+            // Daqiqa — faqat server 'meter' eventidan keladi (lokal hisob yo'q)
+            const dispMin = (meter && meter.minutes != null) ? Math.round(Number(meter.minutes)) : null;
+            // Tarif (so'm/km): server perKm ustun; bo'lmasa buyurtmaning
+            // narx/masofasidan hisoblanadi (MAVJUD ma'lumot, yangi hisob emas)
+            const perKm = (meter && Number(meter.perKm) > 0)
+              ? Math.round(Number(meter.perKm))
+              : ((Number(order.price) > 0 && Number(order.distance_km) > 0)
+                ? Math.round(Number(order.price) / Number(order.distance_km))
+                : null);
+            const waitMin = Math.floor(((tripWait && tripWait.sec) || 0) / 60);
+            const statCard = { flex: 1, backgroundColor: CARD2, borderRadius: 14, borderWidth: 1, borderColor: BORDER, paddingVertical: 12, alignItems: 'center' };
+            const statVal = { color: WHITE, fontSize: 20, fontWeight: '800', lineHeight: 24 };
+            const statUnit = { color: GRAY1, fontSize: 12, fontWeight: '600' };
+            const statLbl = { color: GRAY1, fontSize: 10, fontWeight: '700', letterSpacing: 1, marginTop: 4 };
+            return (
+            <View style={{ gap: 10, marginTop: 8 }}>
+              {/* Hero karta: KATTA jonli narx + pulsli sariq chiziq */}
+              <View style={{ backgroundColor: CARD, borderRadius: 20, borderWidth: 1, borderColor: BORDER, overflow: 'hidden' }}>
+                <MeterPulseBar />
+                <View style={{ alignItems: 'center', paddingVertical: 18, paddingHorizontal: 16 }}>
+                  <Text style={{ color: GRAY1, fontSize: 11, fontWeight: '700', letterSpacing: 2 }}>{t('current_fare_lbl')}</Text>
+                  <Text style={{ color: WHITE, fontSize: 42, fontWeight: '800', lineHeight: 48, marginTop: 6 }}>
+                    {fmt(dispFare)} <Text style={{ color: GRAY1, fontSize: 16, fontWeight: '600' }}>{t('som')}</Text>
+                  </Text>
+                  <Text style={{ color: GREEN, fontSize: 12, fontWeight: '600', marginTop: 4 }}>{t('live_meter_sub')}</Text>
                 </View>
-                );
-              })()}
+              </View>
+              {/* 3 kartochka: masofa / vaqt / tarif (tarif manbasi bo'lmasa — kutish) */}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={statCard}>
+                  <Text style={statVal}>
+                    {Number(dispKm).toFixed(1)} <Text style={statUnit}>{t('km')}</Text>
+                  </Text>
+                  <Text style={statLbl}>{t('distance').toUpperCase()}</Text>
+                </View>
+                <View style={statCard}>
+                  <Text style={statVal}>
+                    {dispMin != null ? dispMin : '—'} <Text style={statUnit}>{t('min_short')}</Text>
+                  </Text>
+                  <Text style={statLbl}>{t('time').toUpperCase()}</Text>
+                </View>
+                {perKm != null ? (
+                  <View style={statCard}>
+                    <Text style={statVal}>{fmt(perKm)}</Text>
+                    <Text style={statLbl}>{t('per_km_lbl')}</Text>
+                  </View>
+                ) : (
+                  <View style={statCard}>
+                    <Text style={statVal}>
+                      {waitMin} <Text style={statUnit}>{t('min_short')}</Text>
+                    </Text>
+                    <Text style={statLbl}>{t('waiting_lbl').toUpperCase()}</Text>
+                  </View>
+                )}
+              </View>
+              {/* W1: pullik xizmat belgilari — hero ostida */}
+              {!!(order.need_ac || order.need_baggage) && (
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {!!order.need_ac && (
+                    <View style={{ backgroundColor: '#1A1400', borderWidth: 1, borderColor: YELLOW, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 6 }}>
+                      <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700' }}>{t('extra_ac_lbl')}</Text>
+                    </View>
+                  )}
+                  {!!order.need_baggage && (
+                    <View style={{ backgroundColor: '#1A1400', borderWidth: 1, borderColor: YELLOW, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 6 }}>
+                      <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700' }}>{t('extra_baggage_lbl')}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
               {/* T-18: kutish holati — uzoq to'xtaganda ko'rinadi (haydovchi tablosi) */}
               {tripWait && (tripWait.waiting || tripWait.fee > 0) && (
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2A2410', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 }}>
@@ -3407,6 +3523,35 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
                   </Text>
                 </View>
               )}
+              {/* W4: mijoz kartasi — avatar + ism + yo'nalish + qo'ng'iroq/chat
+                  (MAVJUD onCall/onChat chaqiriladi, chatUnread badge saqlangan) */}
+              {showCustomer && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: CARD2, borderRadius: 14, borderWidth: 1, borderColor: BORDER, padding: 12, gap: 10 }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ color: '#000', fontSize: 17, fontWeight: '800' }}>
+                      {String(order.customer_name || t('customer')).trim().charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: WHITE, fontSize: 15, fontWeight: '700' }} numberOfLines={1}>{order.customer_name || t('customer')}</Text>
+                    <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+                      {safeStr(order.from_address, t('pickup_point'))} → {safeStr(order.to_address, t('dest'))}
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: CARD, alignItems: 'center', justifyContent: 'center' }} onPress={() => onChat()} activeOpacity={0.7}>
+                    <Ionicons name="chatbubble" size={18} color={YELLOW} />
+                    {/* A2: o'qilmagan xabarlar soni — sariq doira badge */}
+                    {chatUnread > 0 ? (
+                      <View style={{ position: 'absolute', top: -5, right: -5, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 }}>
+                        <Text style={{ color: '#000', fontSize: 11, fontWeight: '800' }}>{chatUnread > 9 ? '9+' : chatUnread}</Text>
+                      </View>
+                    ) : null}
+                  </TouchableOpacity>
+                  <TouchableOpacity style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: GREEN, alignItems: 'center', justifyContent: 'center' }} onPress={() => onCall(order.customer_phone)} activeOpacity={0.7}>
+                    <Ionicons name="call" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              )}
               {/* W2: asosiy tugma ILOVA ICHIDA navigator (follow) — begona ilovaga chiqarmaydi */}
               <TouchableOpacity style={s.btnNav} onPress={() => onFollow && onFollow()} activeOpacity={0.8}>
                 <Ionicons name="navigate" size={18} color="#15171c" style={{ marginRight: 8 }} />
@@ -3416,11 +3561,14 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
                 style={{ alignItems: 'center', paddingVertical: 6 }}>
                 <Text style={{ color: GRAY1, fontSize: 12, textDecorationLine: 'underline' }}>{t('external_nav')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.btn} onPress={() => onAction('complete')} disabled={loading} activeOpacity={0.85}>
+              {/* Katta yakunlash tugmasi (mavjud onAction('complete')) */}
+              <TouchableOpacity style={{ backgroundColor: YELLOW, borderRadius: 14, paddingVertical: 15, alignItems: 'center' }}
+                onPress={() => onAction('complete')} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>{t('complete_trip')}</Text>}
               </TouchableOpacity>
             </View>
-          )}
+            );
+          })()}
         </>
       )}
     </View>
