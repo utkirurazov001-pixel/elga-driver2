@@ -1024,11 +1024,17 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
+  // W5: ochilish animatsiyasi — AppInner booting'ni tugatgach (onBootDone)
+  // BrandSplash overlay ko'rinadi va ~1 soniyada o'zi yo'qoladi (unmount).
+  // Overlay App darajasida — PIN/login/asosiy, qaysi ekran bo'lsa ham USTIDA.
+  const [bootDone, setBootDone] = useState(false);
+  const [splashDone, setSplashDone] = useState(false);
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <AppInner />
+        <AppInner onBootDone={() => setBootDone(true)} />
       </ErrorBoundary>
+      {bootDone && !splashDone && <BrandSplash onDone={() => setSplashDone(true)} />}
     </SafeAreaProvider>
   );
 }
@@ -1108,6 +1114,34 @@ function BootLogo() {
   );
 }
 
+// W5: OCHILISH (SPLASH) ANIMATSIYASI — booting tugagach BIR MARTA ko'rinadigan
+// to'liq ekran overlay (haydovchi ilovasi bilan bir xil qolip). Ketma-ketlik:
+// scale 0.92→1 (400ms) → 350ms pauza → opacity 1→0 (300ms) → onDone (ota
+// komponent overlay'ni unmount qiladi). Faqat vizual — mantiqqa ta'sir qilmaydi.
+function BrandSplash({ onDone }) {
+  const op = useRef(new Animated.Value(1)).current;
+  const sc = useRef(new Animated.Value(0.92)).current;
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(sc, { toValue: 1, duration: 400, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.delay(350),
+      Animated.timing(op, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start(() => onDone && onDone());
+  }, []);
+  return (
+    <Animated.View pointerEvents="none"
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', zIndex: 9999, elevation: 24, opacity: op }}>
+      <Animated.View style={{ alignItems: 'center', transform: [{ scale: sc }] }}>
+        <Text style={{ fontSize: 40, fontWeight: '800', letterSpacing: 0.5 }}>
+          <Text style={{ color: WHITE }}>Ketdik</Text>
+          <Text style={{ color: YELLOW }}>Go</Text>
+        </Text>
+        <Text style={{ color: GRAY1, fontSize: 13, marginTop: 8 }}>{t('client_app')}</Text>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
 // ClientMap — xaritani AppInner ning yuqori chastotali qayta-renderlaridan ajratamiz.
 // driver_location (har ~2 sek), order_update, meter holatlari tez-tez yangilanadi va
 // har safar butun daraxtni qayta render qilib, WebView elementini ham qayta moslashtirardi.
@@ -1128,11 +1162,14 @@ const ClientMap = React.memo(React.forwardRef(function ClientMap({ source, style
   );
 }));
 
-function AppInner() {
+function AppInner({ onBootDone }) {
   const insets = useSafeAreaInsets();
   const [booting, setBooting] = useState(true);
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
+  // W5: booting tugadi — App darajasidagi ochilish splash'iga signal beramiz
+  // (overlay shundan keyin ko'rinadi va o'z animatsiyasini boshlaydi)
+  useEffect(() => { if (!booting && onBootDone) onBootDone(); }, [booting]);
 
   // Login
   const [phone, setPhone] = useState('');
