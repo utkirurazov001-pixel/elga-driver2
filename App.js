@@ -1879,6 +1879,23 @@ function AppInner({ onBootDone }) {
     s.on('disconnect', () => { setSocketConnected(false); });
     s.on('connect_error', (e) => { setSocketConnected(false); console.warn('Socket xato:', e.message); });
 
+    // Q5 (PARALLEL taklif): buyurtmani boshqa haydovchi olib qo'ydi — bizdagi
+    // taklif kartasi darhol yopiladi (TTL kutilmaydi), ovoz to'xtaydi.
+    s.on('offer_taken', (d) => {
+      try {
+        const oid = d && d.orderId;
+        if (!oid) return;
+        setOrder((prev) => {
+          if (prev && prev.id === oid && OFFER_STATUSES.includes(prev.status)) {
+            clearOfferTimer(); stopOrderAlert();
+            updatePersistentNotif(t('waiting_order'));
+            return null;
+          }
+          return prev;
+        });
+      } catch (e) {}
+    });
+
     s.on('new_order', (o) => {
       // Butun handler xavfsiz: noto'g'ri/yetishmaydigan maydonli (masalan ovozli)
       // buyurtma kelsa ham ilova qulamaydi.
