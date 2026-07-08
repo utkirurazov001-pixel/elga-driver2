@@ -304,6 +304,25 @@ const L = {
     logout_confirm: 'Hisobdan chiqishni tasdiqlaysizmi?',
     none_yet: "Hali yo'q",
     pay_methods_info: "💵 Naqd — haydovchiga to'laysiz\n\n💰 Bonus balans — har safardan keshbek, keyingi safarda ishlatiladi\n\n💳 Karta — tez kunda. Payme, Click, Uzcard qo'shiladi",
+    // Y1: sevimli manzillar bottom-sheet
+    fav_go: 'Ketdik',
+    fav_add_new: "+ Yangi manzil qo'shish",
+    fav_pick_recent: "So'nggi manzillardan tanlang",
+    fav_name_ph: 'Manzil nomi (masalan: Uy)',
+    fav_save: 'Saqlash',
+    no_recent: "So'nggi manzillar hali yo'q — avval bitta safar qiling",
+    // Y1: to'lov usuli sheet
+    pay_choose_t: "To'lov usuli",
+    pay_cash: 'Naqd pul',
+    pay_cash_sub: "Safar oxirida haydovchiga to'laysiz",
+    pay_card_sub: 'Payme · Click · Uzcard',
+    pay_bonus: 'Bonus balans',
+    use_next_trip: 'Keyingi safarga ishlatish',
+    // Y1: safarlar statistikasi
+    stats_trips: 'JAMI SAFAR',
+    stats_spent: 'JAMI SARF',
+    stats_dist: "YO'L",
+    thousand_short: 'ming',
     language: 'TIL',
     cashback_t: 'Keshbek',
     added_to_balance: "balansga qo'shildi",
@@ -559,6 +578,25 @@ const L = {
     logout_confirm: 'Вы действительно хотите выйти из аккаунта?',
     none_yet: 'Пока нет',
     pay_methods_info: '💵 Наличные — платите водителю\n\n💰 Бонусный баланс — кэшбек с каждой поездки, используется в следующей\n\n💳 Карта — скоро. Добавим Payme, Click, Uzcard',
+    // Y1: sevimli manzillar bottom-sheet
+    fav_go: 'Поехали',
+    fav_add_new: '+ Добавить адрес',
+    fav_pick_recent: 'Выберите из недавних адресов',
+    fav_name_ph: 'Название адреса (напр.: Дом)',
+    fav_save: 'Сохранить',
+    no_recent: 'Недавних адресов пока нет — сначала совершите поездку',
+    // Y1: to'lov usuli sheet
+    pay_choose_t: 'Способ оплаты',
+    pay_cash: 'Наличные',
+    pay_cash_sub: 'Платите водителю в конце поездки',
+    pay_card_sub: 'Payme · Click · Uzcard',
+    pay_bonus: 'Бонусный баланс',
+    use_next_trip: 'Использовать в следующей поездке',
+    // Y1: safarlar statistikasi
+    stats_trips: 'ПОЕЗДОК',
+    stats_spent: 'ПОТРАЧЕНО',
+    stats_dist: 'ПУТЬ',
+    thousand_short: 'тыс',
     language: 'ЯЗЫК',
     cashback_t: 'Кэшбек',
     added_to_balance: 'добавлено на баланс',
@@ -579,6 +617,15 @@ const L = {
 };
 let LANG = 'uz';
 function t(k) { return (L[LANG] && L[LANG][k]) || L.uz[k] || k; }
+
+// Y1: katta summani qisqartirish — 1 250 000 → '1.3 mln', 125 000 → '125 ming'
+// (safarlar statistikasi kartalarida joy tejash uchun)
+function fmtShortSum(v) {
+  const n = Number(v) || 0;
+  if (n >= 1000000) return (n / 1000000).toFixed(n % 1000000 === 0 ? 0 : 1) + ' mln';
+  if (n >= 1000) return Math.round(n / 1000) + ' ' + t('thousand_short');
+  return String(n);
+}
 
 // G2: osilib qoladigan chaqiruvlar (GPS fix, geokod) UI oqimini bloklamasin —
 // muddat o'tsa reject bo'ladi, chaqiruvchi .catch bilan davom etadi.
@@ -1215,6 +1262,13 @@ function AppInner() {
   // Modallar
   const [cancelModal, setCancelModal] = useState(false);
   const [customReason, setCustomReason] = useState('');
+  // Y1: profil menyusidagi sheet'lar (avval Alert.alert edi — o'lik oynalar)
+  const [favSheet, setFavSheet] = useState(false);       // sevimli manzillar bottom-sheet
+  const [favAddMode, setFavAddMode] = useState(false);   // "+ Yangi manzil" — recentPlaces ro'yxati
+  const [favPickPlace, setFavPickPlace] = useState(null); // tanlangan so'nggi manzil (nom kutilyapti)
+  const [favNewName, setFavNewName] = useState('');      // yangi sevimli uchun nom
+  const [paySheet, setPaySheet] = useState(false);       // to'lov usulini tanlash sheet'i
+  const [useBonus, setUseBonus] = useState(false);       // keyingi buyurtmaga bonus ishlatish (use_bonus)
   const [rateModal, setRateModal] = useState(false);
   const [rateOrderId, setRateOrderId] = useState(null);
   const [completedOrder, setCompletedOrder] = useState(null); // yakunlangan safar tafsiloti
@@ -1297,6 +1351,17 @@ function AppInner() {
     });
     return result;
   }, [trips, lang]);
+  // Y1: tarix tepasidagi 3 mini karta — faqat yakunlangan (completed) safarlar bo'yicha.
+  // Bitta ham completed bo'lmasa null qaytadi va kartalar umuman chizilmaydi.
+  const tripStats = useMemo(() => {
+    const done = trips.filter((tp) => tp.status === 'completed');
+    if (!done.length) return null;
+    return {
+      count: done.length,
+      spent: done.reduce((a, tp) => a + (Number(tp.price) || 0), 0),
+      dist: done.reduce((a, tp) => a + (Number(tp.distance_km) || 0), 0),
+    };
+  }, [trips]);
   const [balance, setBalance] = useState(null);
   const [chat, setChat] = useState([]);
   const [aiModal, setAiModal] = useState(false); // AI chat modali (suzuvchi tugmadan 1 tegishда)
@@ -1760,6 +1825,18 @@ function AppInner() {
 
   async function removeFavorite(id) {
     try { await api(`/api/me/favorites/${id}`, 'DELETE', null, token); loadFavorites(); } catch (e) {}
+  }
+
+  // Y1: sevimlilar sheet'idan yangi manzil — so'nggi manzillardan tanlanadi va
+  // foydalanuvchi bergan nom bilan serverga (POST /api/me/favorites) saqlanadi.
+  async function saveFavoriteNamed() {
+    const p = favPickPlace; const nm = favNewName.trim();
+    if (!p || !nm) return;
+    try {
+      await api('/api/me/favorites', 'POST', { name: nm, address: p.address, lat: p.lat, lng: p.lng }, token);
+      setFavAddMode(false); setFavPickPlace(null); setFavNewName('');
+      loadFavorites();
+    } catch (e) { Alert.alert(t('error'), e.message); }
   }
 
   function startPinHalo() {
@@ -2250,8 +2327,10 @@ function AppInner() {
         ...(roadKm ? { road_km: roadKm } : {}),
         ...(promoCode.trim() ? { promo_code: promoCode.trim().toUpperCase() } : {}), // Q3
         ...(schedAt ? { scheduled_at: schedAt.toISOString() } : {}), // C1
+        ...(useBonus ? { use_bonus: true } : {}), // Y1: bonus balansdan (narxning 50% gacha, backend hisoblaydi)
       }, token, 15000, { idempotencyKey: uuid(), retries: 2 });
       setSchedAt(null); // C1: keyingi buyurtma yana 'hozir' bo'lib boshlansin
+      if (useBonus) { setUseBonus(false); loadBalance(); } // Y1: bonus BIR safarga ishlatiladi — keyin o'chadi
       const o = r.order || r;
       // T-16: yaratish vaqtini belgilaymiz — parallel ketayotgan eski "faol buyurtma
       // yo'q" javobi bu YANGI buyurtmani o'chirib yubormasin (#order-disappear race)
@@ -3586,6 +3665,24 @@ function AppInner() {
             maxToRenderPerBatch={10}
             windowSize={7}
             keyExtractor={(item, i) => item.type === 'header' ? 'h' + i : String(item.item.id)}
+            // Y1: tepada 3 mini karta — JAMI SAFAR / JAMI SARF / YO'L (faqat completed'lardan,
+            // tripStats null bo'lsa umuman chizilmaydi)
+            ListHeaderComponent={tripStats ? (
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                <View style={[s.statCard, { flex: 1, alignItems: 'center', paddingVertical: 12 }]}>
+                  <Text style={{ color: YELLOW, fontSize: 18, fontWeight: '800' }}>{tripStats.count}</Text>
+                  <Text style={{ color: GRAY1, fontSize: 10, fontWeight: '700', letterSpacing: 0.5, marginTop: 3 }}>{t('stats_trips')}</Text>
+                </View>
+                <View style={[s.statCard, { flex: 1, alignItems: 'center', paddingVertical: 12 }]}>
+                  <Text style={{ color: WHITE, fontSize: 18, fontWeight: '800' }} numberOfLines={1}>{fmtShortSum(tripStats.spent)}</Text>
+                  <Text style={{ color: GRAY1, fontSize: 10, fontWeight: '700', letterSpacing: 0.5, marginTop: 3 }}>{t('stats_spent')}</Text>
+                </View>
+                <View style={[s.statCard, { flex: 1, alignItems: 'center', paddingVertical: 12 }]}>
+                  <Text style={{ color: WHITE, fontSize: 18, fontWeight: '800' }} numberOfLines={1}>{tripStats.dist >= 100 ? Math.round(tripStats.dist) : tripStats.dist.toFixed(1)} km</Text>
+                  <Text style={{ color: GRAY1, fontSize: 10, fontWeight: '700', letterSpacing: 0.5, marginTop: 3 }}>{t('stats_dist')}</Text>
+                </View>
+              </View>
+            ) : null}
             ListEmptyComponent={
               <View style={s.emptyState}>
                 <Text style={{ fontSize: 48 }}>🚕</Text>
@@ -3602,9 +3699,12 @@ function AppInner() {
               const timeStr = tr.created_at ? new Date(tr.created_at).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }) : '';
               return (
                 <TouchableOpacity style={s.tripCard} activeOpacity={0.85}
-                  onLongPress={() => pickDest({ lat: Number(tr.to_lat), lng: Number(tr.to_lng), address: tr.to_address })}>
+                  onLongPress={() => { setTab('order'); pickDest({ lat: Number(tr.to_lat), lng: Number(tr.to_lng), address: tr.to_address }); }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                    <Text style={{ color: GRAY1, fontSize: 13 }}>{timeStr}</Text>
+                    {/* Y1: vaqt yonida tarif nomi ham (tr.car_class bo'lsa) */}
+                    <Text style={{ color: GRAY1, fontSize: 13 }}>
+                      {timeStr}{tr.car_class ? ` · ${CAR_CLASSES.find((c) => c.id === tr.car_class)?.label || tr.car_class}` : ''}
+                    </Text>
                     <View style={[s.statusBadge, isCompleted && s.statusBadgeGreen, isCancelled && s.statusBadgeGray]}>
                       <Text style={[s.statusBadgeTxt, isCompleted && { color: '#000' }, isCancelled && { color: GRAY1 }]}>
                         {isCompleted ? t('completed_lbl') : isCancelled ? t('cancelled_lbl') : statusText(tr.status)}
@@ -3630,8 +3730,11 @@ function AppInner() {
                       {tr.distance_km && <Text style={{ color: GRAY1, fontSize: 13 }}>{tr.distance_km} km</Text>}
                     </View>
                     {tr.to_lat && tr.to_lng && (
-                      <TouchableOpacity onPress={() => pickDest({ lat: Number(tr.to_lat), lng: Number(tr.to_lng), address: tr.to_address })}>
-                        <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '600' }}>{t('repeat')}</Text>
+                      /* Y1: oddiy havola o'rniga sariq to'ldirilgan kichik tugma */
+                      <TouchableOpacity activeOpacity={0.85}
+                        style={{ backgroundColor: YELLOW, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 }}
+                        onPress={() => { setTab('order'); pickDest({ lat: Number(tr.to_lat), lng: Number(tr.to_lng), address: tr.to_address }); }}>
+                        <Text style={{ color: '#000', fontSize: 12, fontWeight: '800' }}>🔁 {t('repeat')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -3797,8 +3900,10 @@ function AppInner() {
 
             <View style={[s.menuCard, { marginTop: 16 }]}>
               {[
-                { icon: 'heart', label: t('fav_places'), value: favorites.length > 0 ? `${favorites.length}` : null, onPress: () => Alert.alert(t('fav_places'), favorites.length > 0 ? favorites.map(f => f.name).join('\n') : t('none_yet')) },
-                { icon: 'card', label: t('pay_methods_lbl'), value: null, onPress: () => Alert.alert(t('pay_methods_lbl'), t('pay_methods_info')) },
+                // Y1: avval Alert.alert (o'lik ro'yxat) edi — endi haqiqiy bottom-sheet ochiladi
+                { icon: 'heart', label: t('fav_places'), value: favorites.length > 0 ? `${favorites.length}` : null, onPress: () => { setFavAddMode(false); setFavPickPlace(null); setFavNewName(''); setFavSheet(true); } },
+                // Y1: joriy tanlov qator o'zida ko'rinadi (masalan "Naqd") — sheet'da almashtiriladi
+                { icon: 'card', label: t('pay_methods_lbl'), value: payMethod === 'cash' ? t('pay_cash') : (payMethods.find((m) => m.id === payMethod)?.name || payMethod), onPress: () => setPaySheet(true) },
                 { icon: 'time', label: t('trips_history'), value: null, onPress: () => { setTab('trips'); loadTrips(); } },
                 { icon: 'shield-checkmark', label: t('safety_sos'), value: null, onPress: () => setSosModal(true) },
                 { icon: 'headset', label: t('help_center'), value: null, onPress: () => setTab('help') },
@@ -3851,7 +3956,10 @@ function AppInner() {
             <TouchableOpacity key={tb.id} style={s.tabItem} activeOpacity={0.7}
               onPress={() => { setTab(tb.id); tb.onLoad?.(); }}>
               <Ionicons name={active ? tb.icon : tb.icon + '-outline'} size={24} color={active ? YELLOW : GRAY2} />
-              <Text style={{ fontSize: 10, color: active ? YELLOW : GRAY2, marginTop: 3, fontWeight: active ? '600' : '400' }}>{tb.label}</Text>
+              {/* Y1: faol label sariq va qalinroq */}
+              <Text style={{ fontSize: 10, color: active ? YELLOW : GRAY2, marginTop: 3, fontWeight: active ? '700' : '400' }}>{tb.label}</Text>
+              {/* Y1: faol tab ostida kichik sariq indikator chiziq (nofaolda joy saqlanadi — sakramaydi) */}
+              <View style={{ width: 18, height: 3, borderRadius: 2, marginTop: 3, backgroundColor: active ? YELLOW : 'transparent' }} />
             </TouchableOpacity>
           );
         })}
@@ -4168,6 +4276,150 @@ function AppInner() {
             <TouchableOpacity onPress={() => setCancelModal(false)} style={{ marginTop: 12, alignItems: 'center' }}>
               <Text style={{ color: GRAY1 }}>{t('back')}</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Y1: SEVIMLI MANZILLAR bottom-sheet — profil menyusidan ochiladi
+          (avval Alert.alert bilan o'lik ro'yxat edi). "Ketdik" bosilsa sheet yopilib,
+          buyurtma tabida pickDest orqali oqim darrov boshlanadi. */}
+      <Modal visible={favSheet} transparent animationType="slide" onRequestClose={() => setFavSheet(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: CARD, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: insets.bottom + 18, maxHeight: '80%' }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: GRAY2, alignSelf: 'center', marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <Text style={{ color: WHITE, fontSize: 17, fontWeight: '800', flex: 1 }}>{t('fav_places')}</Text>
+              <TouchableOpacity onPress={() => setFavSheet(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={GRAY1} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {!favAddMode ? (
+                <>
+                  {favorites.length === 0 && (
+                    <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginVertical: 20 }}>{t('none_yet')}</Text>
+                  )}
+                  {favorites.map((f, i) => (
+                    <View key={f.id ?? i}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12 }}>
+                        <Text style={{ fontSize: 20, marginRight: 12 }}>{f.name === 'Uy' ? '🏠' : f.name === 'Ish' ? '💼' : '📍'}</Text>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <Text style={{ color: WHITE, fontSize: 15, fontWeight: '600' }} numberOfLines={1}>{f.name}</Text>
+                          {!!f.address && f.address !== f.name && (
+                            <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }} numberOfLines={1}>{f.address}</Text>
+                          )}
+                        </View>
+                        {f.lat != null && f.lng != null && (
+                          <TouchableOpacity activeOpacity={0.85}
+                            style={{ backgroundColor: YELLOW, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}
+                            onPress={() => { setFavSheet(false); setTab('order'); pickDest({ lat: Number(f.lat), lng: Number(f.lng), address: f.address || f.name }); }}>
+                            <Text style={{ color: '#000', fontSize: 13, fontWeight: '800' }}>{t('fav_go')} →</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity onPress={() => removeFavorite(f.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 10 }}>
+                          <Ionicons name="close-circle" size={20} color={GRAY2} />
+                        </TouchableOpacity>
+                      </View>
+                      {i < favorites.length - 1 && <View style={{ height: 0.5, backgroundColor: BORDER }} />}
+                    </View>
+                  ))}
+                  <TouchableOpacity activeOpacity={0.8}
+                    style={{ borderWidth: 1.5, borderColor: BORDER, borderStyle: 'dashed', borderRadius: 12, paddingVertical: 13, alignItems: 'center', marginTop: 14 }}
+                    onPress={() => { setFavPickPlace(null); setFavNewName(''); setFavAddMode(true); loadRecentPlaces(); }}>
+                    <Text style={{ color: YELLOW, fontSize: 14, fontWeight: '700' }}>{t('fav_add_new')}</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 10 }}>{t('fav_pick_recent')}</Text>
+                  {recentPlaces.length === 0 && (
+                    <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginVertical: 16 }}>{t('no_recent')}</Text>
+                  )}
+                  {recentPlaces.map((p, i) => {
+                    const sel = favPickPlace && favPickPlace.address === p.address;
+                    return (
+                      <TouchableOpacity key={i} activeOpacity={0.8}
+                        style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: sel ? YELLOW : BORDER, backgroundColor: sel ? '#1a1707' : CARD2, borderRadius: 12, padding: 12, marginBottom: 8 }}
+                        onPress={() => setFavPickPlace(p)}>
+                        <Ionicons name="location" size={16} color={sel ? YELLOW : GRAY1} style={{ marginRight: 10 }} />
+                        <Text style={{ color: sel ? YELLOW : WHITE, fontSize: 14, flex: 1 }} numberOfLines={1}>{p.address}</Text>
+                        {sel && <Ionicons name="checkmark-circle" size={18} color={YELLOW} />}
+                      </TouchableOpacity>
+                    );
+                  })}
+                  {favPickPlace && (
+                    <>
+                      <TextInput
+                        style={[s.chatInput, { marginTop: 8 }]}
+                        placeholder={t('fav_name_ph')} placeholderTextColor={GRAY2}
+                        value={favNewName} onChangeText={setFavNewName}
+                      />
+                      <TouchableOpacity
+                        style={[s.ctaBtn, { height: 48, marginTop: 12 }, !favNewName.trim() && { opacity: 0.5 }]}
+                        disabled={!favNewName.trim()} onPress={saveFavoriteNamed}>
+                        <Text style={[s.ctaBtnTxt, { fontSize: 15 }]}>{t('fav_save')}</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                  <TouchableOpacity onPress={() => setFavAddMode(false)} style={{ marginTop: 14, alignItems: 'center' }}>
+                    <Text style={{ color: GRAY1 }}>{t('back')}</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Y1: TO'LOV USULI sheet — profil menyusidan ochiladi (avval Alert.alert edi).
+          Tanlov mavjud payMethod state'iga bog'lanadi (createOrder shu state'ni yuboradi),
+          bonus balans esa use_bonus flag'i bilan keyingi buyurtmaga ulanadi. */}
+      <Modal visible={paySheet} transparent animationType="slide" onRequestClose={() => setPaySheet(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: CARD, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: insets.bottom + 18 }}>
+            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: GRAY2, alignSelf: 'center', marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ color: WHITE, fontSize: 17, fontWeight: '800', flex: 1 }}>{t('pay_choose_t')}</Text>
+              <TouchableOpacity onPress={() => setPaySheet(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={GRAY1} />
+              </TouchableOpacity>
+            </View>
+            {payMethods.map((m) => {
+              const selected = payMethod === m.id;
+              const disabled = m.active === false;
+              return (
+                <TouchableOpacity key={m.id} activeOpacity={0.8} disabled={disabled}
+                  style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: selected ? YELLOW : BORDER, backgroundColor: selected ? '#1a1707' : CARD2, borderRadius: 12, padding: 14, marginBottom: 8, opacity: disabled ? 0.45 : 1 }}
+                  onPress={() => setPayMethod(m.id)}>
+                  <Text style={{ fontSize: 20, marginRight: 12 }}>{PAY_ICONS[m.id] || '💳'}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: selected ? YELLOW : WHITE, fontSize: 15, fontWeight: '700' }}>
+                      {m.id === 'cash' ? t('pay_cash') : m.name}{disabled ? ` (${t('soon')})` : ''}
+                    </Text>
+                    <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>
+                      {m.id === 'cash' ? t('pay_cash_sub') : t('pay_card_sub')}
+                    </Text>
+                  </View>
+                  {selected && <Ionicons name="checkmark-circle" size={20} color={YELLOW} />}
+                </TouchableOpacity>
+              );
+            })}
+            {/* Bonus balans — keyingi safarga ishlatish (createOrder → use_bonus, narxning 50% gacha) */}
+            <View style={{ borderWidth: 1.5, borderColor: useBonus ? YELLOW : BORDER, backgroundColor: useBonus ? '#1a1707' : CARD2, borderRadius: 12, padding: 14, marginTop: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ fontSize: 20, marginRight: 12 }}>🎁</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: WHITE, fontSize: 15, fontWeight: '700' }}>{t('pay_bonus')}</Text>
+                  <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700', marginTop: 2 }}>{fmt(balance?.balance || 0)} {t('som')}</Text>
+                </View>
+              </View>
+              <TouchableOpacity activeOpacity={0.8} disabled={!(Number(balance?.balance) > 0)}
+                style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, opacity: Number(balance?.balance) > 0 ? 1 : 0.45 }}
+                onPress={() => setUseBonus((v) => !v)}>
+                <Ionicons name={useBonus ? 'checkbox' : 'square-outline'} size={22} color={useBonus ? YELLOW : GRAY1} style={{ marginRight: 10 }} />
+                <Text style={{ color: useBonus ? YELLOW : GRAY1, fontSize: 14, fontWeight: '600', flex: 1 }}>{t('use_next_trip')}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
