@@ -7,6 +7,7 @@
     ['Asosiy', [
       ['grid','Boshqaruv','grid',null],
       ['radio','Dispetcher','radio',{t:'gold',n:7}],
+      ['board','Doska','layers',null],
       ['bag','Buyurtmalar','bag',null],
       ['map','Jonli xarita','map',null]
     ]],
@@ -61,7 +62,7 @@
      SIP integratsiyasi (Uztelecom · qisqa 1226) keyin qo'shilganda dispetcher
      aynan shu ko'rinishdan kiruvchi qo'ng'iroqlarni buyurtmaga aylantiradi. */
   var ROLE_ROUTES = {
-    dispatcher: ['grid','radio','bag','map','car','users','warn']
+    dispatcher: ['grid','radio','board','bag','map','car','users','warn']
   };
   function allowedRoutes(){ return ROLE_ROUTES[ME.role] || null; } // null = barcha bo'limlar
   function isAllowed(route){ var a=allowedRoutes(); return !a || a.indexOf(route)>=0; }
@@ -470,7 +471,7 @@
   /* ---------------- GLOBAL AMAL DELEGATSIYASI ---------------- */
   document.addEventListener('click',function(e){
     var t;
-    if(t=e.target.closest('[data-assign]')){ var o=window.DB.orders.find(function(x){return x.id===t.getAttribute('data-assign');}); window.assignDriver(o); }
+    if(t=e.target.closest('[data-assign]')){ var o=window.DB.orders.find(function(x){return String(x.id)===t.getAttribute('data-assign');}); window.assignDriver(o); }
     else if(t=e.target.closest('[data-wd]')){ window.confirmWithdrawal(t.getAttribute('data-wd')); }
     else if(t=e.target.closest('[data-wr]')){ window.rejectWithdrawal(t.getAttribute('data-wr')); }
     else if(t=e.target.closest('[data-block]')){

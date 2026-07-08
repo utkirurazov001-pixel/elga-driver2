@@ -281,4 +281,125 @@
     };
     return root;
   };
+
+  /* ---------------- B4: DISPETCHER DOSKASI (kanban + jonli xarita) ----------------
+     Barcha FAOL buyurtmalar holat bo'yicha 5 ustunda, pastda haydovchilar va
+     buyurtma olib ketish nuqtalari jonli xaritada. Ma'lumot mavjud polling'dan
+     (window.DB.orders/drivers + Bus order:new/order:updated/driver:location). */
+  window.PAGES.board = function(ctx){
+    var root = document.createElement('div');
+    var COLS = [
+      {key:'searching',   label:'Qidirilmoqda',  color:'var(--warning)'},
+      {key:'assigned',    label:'Tayinlangan',   color:'#84a9f5'},
+      {key:'accepted',    label:'Qabul qilindi', color:'var(--success)'},
+      {key:'arrived',     label:'Yetib keldi',   color:'var(--gold)'},
+      {key:'in_progress', label:'Yo\'lda',       color:'#a78bfa'}
+    ];
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+    function colOrders(key){
+      return (window.DB.orders||[]).filter(function(o){
+        // demo ma'lumotdagi 'new' ham qidiruv ustuniga tushadi
+        return o.status===key || (key==='searching' && o.status==='new');
+      });
+    }
+    // created_at: SQLite "YYYY-MM-DD HH:MM:SS" (UTC) yoki PG ISO — ikkisini ham o'qiymiz
+    function tsOf(v){
+      if(!v) return NaN;
+      var t = Date.parse(String(v).replace(' ','T')+'Z');
+      if(isNaN(t)) t = Date.parse(String(v));
+      return t;
+    }
+    function ageTxt(o){
+      var t = tsOf(o.created_at); if(isNaN(t)) return '';
+      var m = Math.max(0, Math.round((Date.now()-t)/60000));
+      return m<1 ? 'hozir' : (m<60 ? m+' daq' : Math.floor(m/60)+' soat');
+    }
+    function schedTxt(o){
+      var t = tsOf(o.scheduled_at); if(isNaN(t)) return '';
+      var d = new Date(t);
+      return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+    }
+    function cardHtml(o){
+      var sched = o.scheduled_at ? '<span class="kb-sched">⏰ '+esc(schedTxt(o))+'</span>' : '';
+      var phone = o.client_phone ? '<a class="kb-tel" href="tel:'+esc(o.client_phone)+'" title="Mijozga qo\'ng\'iroq">'+window.icon('phone',12)+'</a>' : '';
+      var drv = o.driver ? '<span class="kb-drv">'+window.icon('car',12)+esc(o.driver)+'</span>' : '';
+      var act = (o.status==='searching'||o.status==='new')
+        ? '<div class="kb-act"><button class="btn btn-success btn-sm" data-auto="'+esc(o.id)+'">Avto</button>'+
+          '<button class="btn btn-primary btn-sm" data-assign="'+esc(o.id)+'">Tayinlash</button></div>' : '';
+      return '<div class="kb-card" data-board-order="'+esc(o.id)+'">'+
+        '<div class="kb-top"><span class="mono">#'+esc(String(o.id).replace(/^#/,''))+'</span>'+sched+'<span class="kb-age">'+ageTxt(o)+'</span>'+phone+'</div>'+
+        '<div class="kb-client">'+esc(o.client||'—')+'</div>'+
+        '<div class="kb-route">'+esc(o.from||'')+' → '+esc(o.to||'')+'</div>'+
+        '<div class="kb-foot"><b>'+window.money(o.price||0)+' so\'m</b>'+drv+'</div>'+act+'</div>';
+    }
+    function stripHtml(){
+      var searching = colOrders('searching').length;
+      var onTrip = colOrders('assigned').length + colOrders('accepted').length + colOrders('arrived').length + colOrders('in_progress').length;
+      var free = (window.DB.drivers||[]).filter(function(d){return d.status==='free';}).length;
+      var sched = (window.DB.orders||[]).filter(function(o){ var t=tsOf(o.scheduled_at); return !isNaN(t) && t>Date.now() && (o.status==='searching'||o.status==='new'); }).length;
+      return U.mini({icon:'inbox',bg:'var(--warning-soft)',color:'var(--warning)',label:'Navbatda',val:searching,unit:'buyurtma'})+
+        U.mini({icon:'route',bg:'var(--info-soft)',color:'#84a9f5',label:'Faol safar',val:onTrip})+
+        U.mini({icon:'car',bg:'var(--success-soft)',color:'var(--success)',label:'Bo\'sh haydovchi',val:free})+
+        U.mini({icon:'clock',bg:'rgba(255,204,0,.12)',color:'var(--gold)',label:'Rejalashtirilgan',val:sched});
+    }
+    function renderBoard(){
+      var strip = root.querySelector('#kbStrip');
+      if(strip) strip.innerHTML = stripHtml();
+      var wrap = root.querySelector('#kbCols'); if(!wrap) return;
+      wrap.innerHTML = COLS.map(function(c){
+        var list = colOrders(c.key);
+        return '<div class="kb-col"><div class="kb-col-head" style="--kb-col:'+c.color+'"><i></i>'+c.label+
+          '<span class="kb-count">'+list.length+'</span></div><div class="kb-cards">'+
+          (list.length ? list.map(cardHtml).join('') : '<div class="kb-empty">Bo\'sh</div>')+
+          '</div></div>';
+      }).join('');
+    }
+
+    root.innerHTML = window.pageHead({title:'Dispetcher doskasi', sub:'Faol buyurtmalar holat bo\'yicha · haydovchilar xaritada', live:true})+
+      '<div class="strip" id="kbStrip"></div>'+
+      '<div class="kb-cols" id="kbCols"></div>'+
+      '<div class="card" style="margin-top:16px"><div class="card-head"><div><h3>Jonli xarita</h3>'+
+      '<p>Haydovchilar (holat rangi) va buyurtma olib ketish nuqtalari (sariq halqa)</p></div></div>'+
+      '<div class="card-body"><div id="boardMap" style="height:380px;border-radius:12px;overflow:hidden;border:1px solid var(--border)"></div></div></div>';
+
+    root._onMount = function(){
+      renderBoard();
+      var handle = window.GeoMap.create(root.querySelector('#boardMap'), {zoom:9, scroll:true,
+        drivers: (window.DB.drivers||[]).filter(function(d){return d.status!=='offline'&&d.status!=='blocked';})});
+      // Buyurtma pinlari — GeoMap ustiga alohida qatlam (haydovchi markerlariga tegmaydi)
+      var pinLayer = (handle && handle.map && window.L) ? window.L.layerGroup().addTo(handle.map) : null;
+      function renderPins(){
+        if(!pinLayer) return;
+        pinLayer.clearLayers();
+        (window.DB.orders||[]).forEach(function(o){
+          var active = o.status==='searching'||o.status==='new'||o.status==='assigned'||o.status==='accepted'||o.status==='arrived'||o.status==='in_progress';
+          if(!active || o.from_lat==null || o.from_lng==null) return;
+          window.L.circleMarker([o.from_lat, o.from_lng], {radius:7, color:'#FFCC00', weight:2, fillColor:'#15171C', fillOpacity:.85})
+            .bindPopup('<div style="font-family:Manrope,sans-serif"><b style="color:#15171C">#'+esc(String(o.id).replace(/^#/,''))+' · '+esc(o.client||'')+'</b><br>'+
+              '<span style="color:#555;font-size:12px">'+esc(o.from||'')+' → '+esc(o.to||'')+'</span></div>')
+            .addTo(pinLayer);
+        });
+      }
+      renderPins();
+      if(window.Bus){
+        window.addPageSub(window.Bus.on('order:new', function(){ renderBoard(); renderPins(); }));
+        window.addPageSub(window.Bus.on('order:updated', function(){ renderBoard(); renderPins(); }));
+        window.addPageSub(window.Bus.on('driver:location', function(list){
+          handle.setDrivers((list||[]).filter(function(d){return d.status!=='offline'&&d.status!=='blocked';}));
+          renderBoard(); // bo'sh haydovchi soni ham yangilansin
+        }));
+      }
+      // Kutish vaqtlari ("X daq") jonli qolsin — 30s da qayta chizamiz
+      var ageTimer = setInterval(renderBoard, 30000);
+      window.addPageSub(function(){ clearInterval(ageTimer); });
+      // Karta bosilganda buyurtma tafsiloti (tugma/tel havolasi bundan mustasno)
+      root.addEventListener('click', function(e){
+        if(e.target.closest('[data-auto],[data-assign],a.kb-tel')) return;
+        var c = e.target.closest('[data-board-order]'); if(!c) return;
+        var o = (window.DB.orders||[]).find(function(x){ return String(x.id)===c.getAttribute('data-board-order'); });
+        if(o) window.orderDetail(o);
+      });
+    };
+    return root;
+  };
 })();

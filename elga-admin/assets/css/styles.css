@@ -470,3 +470,32 @@ textarea.input{resize:vertical;min-height:88px;line-height:1.5}
 .gs-call{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:15px;
   background:var(--success-soft,rgba(34,197,94,.15));color:var(--success,#22C55E)}
 .gs-empty{padding:14px;font-size:13px;color:var(--text-dim,#8E8E93)}
+
+/* ---- B4: Dispetcher doskasi (kanban) ---- */
+.kb-cols{display:grid;grid-template-columns:repeat(5,minmax(215px,1fr));gap:12px;overflow-x:auto;
+  padding-bottom:4px;align-items:start}
+.kb-col{background:var(--surface);border:1px solid var(--border);border-radius:14px;min-width:215px;
+  display:flex;flex-direction:column;max-height:520px}
+.kb-col-head{display:flex;align-items:center;gap:8px;padding:11px 13px;font-size:13px;font-weight:700;
+  color:var(--text);border-bottom:1px solid var(--border)}
+.kb-col-head i{width:8px;height:8px;border-radius:50%;background:var(--kb-col,var(--gold));flex:0 0 8px}
+.kb-count{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--text-dim);
+  background:var(--surface-2);border-radius:8px;padding:2px 8px}
+.kb-cards{padding:10px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.kb-card{background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:10px 11px;
+  cursor:pointer;transition:border-color .12s}
+.kb-card:hover{border-color:var(--gold)}
+.kb-top{display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text-dim)}
+.kb-age{margin-left:auto;white-space:nowrap}
+.kb-sched{color:var(--gold);font-weight:600;white-space:nowrap}
+.kb-tel{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:12px;
+  background:var(--success-soft);color:var(--success);flex:0 0 24px}
+.kb-client{font-size:13.5px;font-weight:600;color:var(--text);margin-top:5px}
+.kb-route{font-size:12px;color:var(--text-dim);margin-top:3px;overflow:hidden;text-overflow:ellipsis;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.kb-foot{display:flex;align-items:center;gap:8px;margin-top:7px;font-size:12.5px;color:var(--gold)}
+.kb-drv{display:flex;align-items:center;gap:4px;margin-left:auto;font-size:11.5px;color:var(--text-dim)}
+.kb-act{display:flex;gap:7px;margin-top:9px}
+.kb-act .btn{flex:1;justify-content:center}
+.kb-empty{padding:16px 8px;text-align:center;font-size:12px;color:var(--text-faint)}
+@media (max-width:1100px){.kb-cols{grid-template-columns:repeat(5,240px)}}

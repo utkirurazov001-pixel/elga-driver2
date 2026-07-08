@@ -180,13 +180,19 @@
         }).catch(function(){});
         self.get('/api/admin/orders?limit=50').then(function(r){
           var list = arr(r.body,'orders').map(mapOrder);
+          if(!list.length) return;
           var fresh = list.filter(function(o){ return !known[o.id]; });
           fresh.forEach(function(o){ known[o.id]=1; });
-          if(fresh.length){
-            var olds = (window.DB.orders||[]).filter(function(o){ return list.every(function(n){return n.id!==o.id;}); });
-            window.DB.orders = list.concat(olds).slice(0,240);
-            fresh.forEach(function(o){ window.Bus && window.Bus.emit('order:new', o); });
-          }
+          // B4: HOLATI o'zgargan buyurtmalar ham yangilanadi — ilgari ro'yxat
+          // faqat YANGI buyurtma kelgandagina almashardi, doska/dispetcher
+          // sahifalarida holat (searching→accepted→...) eskirib qolardi.
+          var prevById = {};
+          (window.DB.orders||[]).forEach(function(o){ prevById[o.id]=o; });
+          var changed = list.filter(function(o){ var p=prevById[o.id]; return p && p.status!==o.status; });
+          var olds = (window.DB.orders||[]).filter(function(o){ return list.every(function(n){return n.id!==o.id;}); });
+          window.DB.orders = list.concat(olds).slice(0,240);
+          fresh.forEach(function(o){ window.Bus && window.Bus.emit('order:new', o); });
+          changed.forEach(function(o){ window.Bus && window.Bus.emit('order:updated', o); });
         }).catch(function(){});
       }
       self._poll = setInterval(tick, 6000);
@@ -248,7 +254,12 @@
       id:o.id, status:o.status, price:o.price, distance_km:o.distance_km,
       from:o.from_address||o.from||'', to:o.to_address||o.to||'',
       client:name, client_ini:ini(name), driver:o.driver_name||'',
-      created_at:o.created_at
+      created_at:o.created_at,
+      // B4 (doska): telefon, koordinata, haydovchi ID, rejalashtirilgan vaqt —
+      // backend PR #131 dan keladi; eski backendda undefined bo'lib qolaveradi.
+      client_phone:(o.customer_phone||o.client_phone||''), driver_id:(o.driver_id!=null?o.driver_id:null),
+      from_lat:(o.from_lat!=null?o.from_lat:null), from_lng:(o.from_lng!=null?o.from_lng:null),
+      scheduled_at:(o.scheduled_at||null)
     };
   }
   function mapWithdrawal(w){ var name=w.driver||w.name||''; return { id:w.id, driver:name, driver_ini:ini(name), amount:w.amount, provider:cap(w.provider||w.method), status:w.status, created_at:w.created_at }; }
