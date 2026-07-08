@@ -54,6 +54,22 @@ const EAS_PROJECT_ID = 'e5561b58-380f-45f6-9cc4-c6af58eaec84';
 // Faol buyurtma lokal saqlanadigan kalit (crash/kill/OS-restart'da yo'qolmaydi).
 const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
 
+// G2: oxirgi ma'lum joylashuv keshi — sovuq startda yangi GPS fix kelguncha
+// xarita bo'sh ("GPS aniqlanmoqda...") qotib turmasin, kesh darrov ko'rsatiladi.
+const LAST_LOC_KEY = 'last_loc';
+
+// G2: osilib qoladigan chaqiruvlar (GPS fix, geokod) UI oqimini bloklamasin —
+// muddat o'tsa reject bo'ladi, chaqiruvchi .catch bilan davom etadi.
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms);
+    promise.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); }
+    );
+  });
+}
+
 // T-19: Admin panelda yuklangan holat ovozlari MIJOZ ilovasida ham chalinsin
 // (driver_arrived, trip_started, trip_completed, order_cancelled). Ilgari mijoz
 // ilovasida bu ovozlar UMUMAN ijro etilmasdi. Bir martalik (loop emas), telefon
@@ -348,10 +364,14 @@ const CANCEL_REASONS = [
 
 async function reverseGeocode(lat, lng) {
   try {
+    // G2: sekin tarmoqda nominatim osilib qolmasin — 6s timeout (pickup manzili
+    // shu chaqiruvni kutadi, timeout'da koordinata matni bilan davom etiladi)
+    const ctrl = new AbortController();
+    const tmr = setTimeout(() => ctrl.abort(), 6000);
     const r = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=uz`,
-      { headers: { 'User-Agent': 'KetdikGo-Taxi/1.0' } }
-    );
+      { headers: { 'User-Agent': 'KetdikGo-Taxi/1.0' }, signal: ctrl.signal }
+    ).finally(() => clearTimeout(tmr));
     const d = await r.json();
     if (d.display_name) {
       // Qisqa format: ko'cha + shahar
@@ -833,6 +853,12 @@ function AppInner() {
         }
         if (hp) setHomePlace(JSON.parse(hp));
         if (wp) setWorkPlace(JSON.parse(wp));
+        // G2: keshdagi oxirgi joylashuv — xarita GPS fix kutmasdan darrov ochiladi
+        // (haydovchi ilovasida bu allaqachon bor edi, mijozda yo'q edi)
+        try {
+          const ll = await AsyncStorage.getItem(LAST_LOC_KEY);
+          if (ll) { const p = JSON.parse(ll); if (p && p.lat && p.lng) setMyLoc((cur) => cur || p); }
+        } catch (e) {}
       } catch (e) {}
       setBooting(false);
     })();
@@ -842,17 +868,10 @@ function AppInner() {
   useEffect(() => {
     if (!token || pinStep) return;
     (async () => {
-      try { await Notifications.requestPermissionsAsync(); } catch (e) {}
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const pos = await Location.getCurrentPositionAsync({});
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setMyLoc({ lat, lng });
-        // Pickup auto — GPS + reverse geocode
-        const addr = await reverseGeocode(lat, lng);
-        setPickup({ lat, lng, address: addr });
-      }
+      // G1: AVVAL server sinxron — socket va faol buyurtma GPS'ni KUTMAYDI.
+      // Ilgari connectSocket/resumeActiveOrder quyida, getCurrentPositionAsync'dan
+      // KEYIN turardi: sovuq GPS (bino ichi, zaif signal) daqiqalab osilganda
+      // ilova qayta ochilgan mijoz faol buyurtmasini ko'rmay qolardi (#order-invisible).
       connectSocket();
       resumeActiveOrder();
       loadPayMethods();
@@ -866,6 +885,33 @@ function AppInner() {
       // tarmoq xatosi) foreground'da QAYTA uriniladi (quyidagi onAppState'da).
       if (!pushRegisteredRef.current) {
         registerPushToken(token).then((t) => { pushRegisteredRef.current = !!t; });
+      }
+      try { await Notifications.requestPermissionsAsync(); } catch (e) {}
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        // G2: tez joylashuv — Yandex/Uber qolipida ikki bosqich:
+        //   1) keshdagi oxirgi ma'lum joylashuv (bir zumda, xarita darrov ochiladi)
+        //   2) yangi aniq fix — timeout bilan (GPS osilsa ham ilova qotmaydi)
+        try {
+          const last = await Location.getLastKnownPositionAsync({ maxAge: 5 * 60 * 1000 });
+          if (last) setMyLoc((cur) => cur || { lat: last.coords.latitude, lng: last.coords.longitude });
+        } catch (e) {}
+        const pos = await withTimeout(
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          10000
+        ).catch(() => null);
+        if (pos) {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setMyLoc({ lat, lng });
+          AsyncStorage.setItem(LAST_LOC_KEY, JSON.stringify({ lat, lng })).catch(() => {});
+          // Pickup DARHOL o'rnatiladi (koordinata matni bilan) — manzil nomi
+          // reverse geocode'dan kelganda jimgina almashtiriladi, oqim bloklanmaydi.
+          setPickup({ lat, lng, address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
+          reverseGeocode(lat, lng).then((addr) => {
+            setPickup((p) => (p && p.lat === lat && p.lng === lng) ? { ...p, address: addr } : p);
+          });
+        }
       }
     })();
     // Push bosilib ilova ochilganda holatni serverdan tiklaymiz.
@@ -2446,11 +2492,23 @@ function AppInner() {
             <TouchableOpacity
               style={[s.recenterBtn, { bottom: TABBAR_H + insets.bottom + 180 }]}
               onPress={async () => {
-                const pos = await Location.getCurrentPositionAsync({});
+                // G2: kesh darrov (xarita sakraydi), aniq fix timeout bilan — tugma qotmaydi
+                try {
+                  const last = await Location.getLastKnownPositionAsync({ maxAge: 60 * 1000 });
+                  if (last) setMyLoc({ lat: last.coords.latitude, lng: last.coords.longitude });
+                } catch (e) {}
+                const pos = await withTimeout(
+                  Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+                  8000
+                ).catch(() => null);
+                if (!pos) return;
                 const lat = pos.coords.latitude, lng = pos.coords.longitude;
                 setMyLoc({ lat, lng });
-                const addr = await reverseGeocode(lat, lng);
-                setPickup({ lat, lng, address: addr });
+                AsyncStorage.setItem(LAST_LOC_KEY, JSON.stringify({ lat, lng })).catch(() => {});
+                setPickup({ lat, lng, address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
+                reverseGeocode(lat, lng).then((addr) => {
+                  setPickup((p) => (p && p.lat === lat && p.lng === lng) ? { ...p, address: addr } : p);
+                });
               }}>
               <Ionicons name="locate" size={20} color={WHITE} />
             </TouchableOpacity>

@@ -74,6 +74,18 @@ function isForwardUpdate(cur, next) {
 // Faol buyurtma lokal saqlanadigan kalit (crash/kill/OS-restart'da yo'qolmaydi).
 const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
 
+// G2: osilib qoladigan chaqiruvlar (GPS fix) UI oqimini bloklamasin —
+// muddat o'tsa reject bo'ladi, chaqiruvchi .catch bilan davom etadi.
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('timeout')), ms);
+    promise.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); }
+    );
+  });
+}
+
 // Ixtiyoriy NetInfo — internet qaytishini tez aniqlash uchun. Standalone (EAS) buildda
 // to'liq ishlaydi; Expo Go yoki modul o'rnatilmagan bo'lsa xavfsiz o'tkazib yuboriladi
 // (ilova qulamaydi — AppState + socket reconnect baribir holatni tiklaydi).
@@ -958,18 +970,36 @@ function AppInner() {
   useEffect(() => {
     if (!token || pinStep) return;
     (async () => {
-      try { await Notifications.requestPermissionsAsync(); } catch (e) {}
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const pos = await Location.getCurrentPositionAsync({});
-        setMyLoc({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      }
+      // G1: AVVAL server sinxron — socket va faol buyurtma GPS'ni KUTMAYDI.
+      // Ilgari connectSocket/resumeActiveOrder getCurrentPositionAsync'dan KEYIN
+      // turardi: sovuq GPS daqiqalab osilganda ilova qayta ochilgan haydovchi
+      // faol buyurtmasini/offer'ni kech ko'rardi (#order-invisible).
       connectSocket();
       loadEarnings();
       resumeActiveOrder();
       loadOrderSound(); // T-07: admin yuklagan buyurtma ovozini oldindan yuklab/keshlab qo'yamiz
       // Push token — ilova yopiq/fon holatida ham yangi buyurtma push kelishi uchun (#push-missing).
       if (!pushRegisteredRef.current) { pushRegisteredRef.current = true; registerPushToken(token); }
+      try { await Notifications.requestPermissionsAsync(); } catch (e) {}
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        // G2: tez joylashuv — avval kesh (bir zumda, last_loc boot'da ham tiklanadi),
+        // keyin yangi fix timeout bilan (GPS osilsa ham ilova qotmaydi).
+        try {
+          const last = await Location.getLastKnownPositionAsync({ maxAge: 5 * 60 * 1000 });
+          if (last) setMyLoc((cur) => cur || { lat: last.coords.latitude, lng: last.coords.longitude });
+        } catch (e) {}
+        const pos = await withTimeout(
+          Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+          10000
+        ).catch(() => null);
+        if (pos) {
+          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          lastLocRef.current = loc;
+          setMyLoc(loc);
+          AsyncStorage.setItem('last_loc', JSON.stringify(loc)).catch(() => {});
+        }
+      }
     })();
     // Push xabar bosilganda (fon/yopiq holatdan ochilganda) holatni serverdan tiklaymiz —
     // socket hali ulanmagan bo'lsa ham buyurtma darrov ko'rinadi.
@@ -1767,10 +1797,20 @@ function AppInner() {
       if (next) {
         // GPS AVVAL olinadi, keyin online+GPS birga yuboriladi.
         // Aks holda matchPendingOrders lat=NULL da ishlab, buyurtmani o'tkazib yuboradi.
+        // G2: aniq fix 8s timeout bilan — GPS osilsa "Online" tugmasi qotib qolmasin;
+        // fix kelmasa keshdagi oxirgi joylashuv yuboriladi (dispatch lat=NULL bo'lmasin).
         let loc = null;
         try {
-          const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-          loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          const pos = await withTimeout(
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+            8000
+          ).catch(() => null);
+          if (pos) loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          if (!loc) {
+            const last = await Location.getLastKnownPositionAsync({ maxAge: 2 * 60 * 1000 }).catch(() => null);
+            if (last) loc = { lat: last.coords.latitude, lng: last.coords.longitude };
+          }
+          if (!loc && lastLocRef.current) loc = lastLocRef.current;
         } catch (e) {}
         // online va GPS bitta so'rovda — atomic
         await api('/api/drivers/status', 'POST', { online: true, ...(loc || {}) }, token);
