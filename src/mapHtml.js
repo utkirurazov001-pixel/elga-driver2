@@ -36,13 +36,28 @@ var greenIcon=ic('green'),redIcon=ic('red');
 var map=L.map('map').setView([37.48,67.16],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
 var myMarker=null,pickMarker=null,dropMarker=null,centeredOnce=false;
+// ── W2: NAVIGATOR (follow) rejimi — kamera haydovchini yaqin zoomda kuzatadi.
+// Ilgari xarita BIR marta markazlashib qotib qolardi: haydovchi uzoqlashgani sari
+// marshrut "uzoqda" ko'rinardi. Qo'lda surilsa follow pauza (RN'ga followOff).
+var _follow=false;
+function _followOffMsg(){try{window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'followOff'}));}catch(e){}}
+map.on('dragstart',function(){ if(_follow){_follow=false;_followOffMsg();} });
+function centerNow(){
+  try{
+    if(!_last||_last.myLat==null)return;
+    if(_eng==='google'){ if(gReady&&gmap){ gmap.setCenter({lat:_last.myLat,lng:_last.myLng}); if(gmap.getZoom()<16)gmap.setZoom(16); } }
+    else { map.setView([_last.myLat,_last.myLng],Math.max(map.getZoom(),16)); }
+  }catch(e){}
+}
+window.setFollow=function(on){ _follow=!!on; if(_follow)centerNow(); };
 function leafletUpdate(d){
   try{
     if(d.myLat!=null){ if(myMarker){myMarker.setLatLng([d.myLat,d.myLng]);} else {myMarker=L.marker([d.myLat,d.myLng]).addTo(map).bindPopup('Siz');} }
     if(d.pickLat!=null){ if(pickMarker){pickMarker.setLatLng([d.pickLat,d.pickLng]);} else {pickMarker=L.marker([d.pickLat,d.pickLng],{icon:greenIcon}).addTo(map).bindPopup('Mijoz');} } else if(pickMarker){map.removeLayer(pickMarker);pickMarker=null;}
     if(d.dropLat!=null){ if(dropMarker){dropMarker.setLatLng([d.dropLat,d.dropLng]);} else {dropMarker=L.marker([d.dropLat,d.dropLng],{icon:redIcon}).addTo(map).bindPopup('Manzil');} } else if(dropMarker){map.removeLayer(dropMarker);dropMarker=null;}
     var c=d.myLat!=null?[d.myLat,d.myLng]:(d.pickLat!=null?[d.pickLat,d.pickLng]:null);
-    if(c&&!centeredOnce){ map.setView(c,14); centeredOnce=true; }
+    if(_follow&&d.myLat!=null){ map.setView([d.myLat,d.myLng],Math.max(map.getZoom(),16),{animate:true}); centeredOnce=true; }
+    else if(c&&!centeredOnce){ map.setView(c,14); centeredOnce=true; }
   }catch(e){}
 }
 // ── Asosiy: Google Maps JS API (kalit kelsa) ──
@@ -55,13 +70,15 @@ function googleUpdate(d){
     if(d.pickLat!=null){ if(gPick){gPick.setPosition({lat:d.pickLat,lng:d.pickLng});} else {gPick=new google.maps.Marker({position:{lat:d.pickLat,lng:d.pickLng},map:gmap,title:'Mijoz',icon:gIcon('green')});} } else if(gPick){gPick.setMap(null);gPick=null;}
     if(d.dropLat!=null){ if(gDrop){gDrop.setPosition({lat:d.dropLat,lng:d.dropLng});} else {gDrop=new google.maps.Marker({position:{lat:d.dropLat,lng:d.dropLng},map:gmap,title:'Manzil',icon:gIcon('red')});} } else if(gDrop){gDrop.setMap(null);gDrop=null;}
     var c=d.myLat!=null?{lat:d.myLat,lng:d.myLng}:(d.pickLat!=null?{lat:d.pickLat,lng:d.pickLng}:null);
-    if(c&&!gCentered){ gmap.setCenter(c); gmap.setZoom(14); gCentered=true; }
+    if(_follow&&d.myLat!=null){ gmap.setCenter({lat:d.myLat,lng:d.myLng}); if(gmap.getZoom()<16)gmap.setZoom(16); gCentered=true; }
+    else if(c&&!gCentered){ gmap.setCenter(c); gmap.setZoom(14); gCentered=true; }
   }catch(e){}
 }
 window.__gmInit=function(){
   try{
     gmap=new google.maps.Map(document.getElementById('gmap'),{center:{lat:37.48,lng:67.16},zoom:13,disableDefaultUI:true,zoomControl:true,clickableIcons:false});
     gReady=true; _eng='google';
+    try{gmap.addListener('dragstart',function(){ if(_follow){_follow=false;_followOffMsg();} });}catch(e){}
     document.getElementById('map').style.display='none';
     document.getElementById('gmap').style.display='block';
     _dbg('Google OK');

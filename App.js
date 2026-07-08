@@ -177,6 +177,7 @@ const L = {
     reject: 'Rad etish',
     accept: 'Qabul qilish',
     to_customer_btn: "MIJOZGA YO'L",
+    external_nav: 'Tashqi navigator (xarita ilovasi)',
     arrived_btn: 'YETIB KELDIM',
     cancel_trip: 'Safarni bekor qilish',
     cancel_trip_msg: 'Rostdan bekor qilasizmi? Buyurtma sizdan olinadi va mijozga xabar beriladi.',
@@ -391,6 +392,7 @@ const L = {
     reject: 'Отклонить',
     accept: 'Принять',
     to_customer_btn: 'МАРШРУТ К КЛИЕНТУ',
+    external_nav: 'Внешний навигатор (приложение карт)',
     arrived_btn: 'Я ПРИЕХАЛ',
     cancel_trip: 'Отменить поездку',
     cancel_trip_msg: 'Действительно отменить? Заказ будет снят с вас, клиент получит уведомление.',
@@ -1244,7 +1246,7 @@ function BootLogo() {
 // WebView'ni React.memo bilan o'rab, faqat barqaror proplar (source/style/onReady)
 // berib, xarita ostki daraxti shu yangilanishlarda QAYTA RENDER BO'LMAYDI.
 // Xarita o'zi imperativ `injectJavaScript` orqali yangilanishda davom etadi.
-const MapPanel = React.memo(React.forwardRef(function MapPanel({ source, style, onReady }, ref) {
+const MapPanel = React.memo(React.forwardRef(function MapPanel({ source, style, onReady, onFollowOff }, ref) {
   return (
     <WebView
       ref={ref}
@@ -1255,6 +1257,8 @@ const MapPanel = React.memo(React.forwardRef(function MapPanel({ source, style, 
         try {
           const m = JSON.parse(e.nativeEvent.data);
           if (m.type === 'mapReady') onReady && onReady();
+          // W2: haydovchi xaritani qo'lda surdi — navigator (follow) pauza bo'ldi
+          else if (m.type === 'followOff') onFollowOff && onFollowOff();
           // Google xaritasi nega OSM'ga qaytdi — aniq sababni log qilamiz (referer/billing/API)
           else if (m.type === 'gmapError') { console.warn('[GoogleMaps]', m.msg); try { captureException(new Error('GoogleMaps: ' + m.msg), { kind: 'gmap' }); } catch (_) {} }
         } catch (err) {}
@@ -1630,6 +1634,22 @@ function AppInner() {
   // tugmasi (navigateTo) o'z joyida qo'shimcha tanlov sifatida qoladi.
   const [routeInfo, setRouteInfo] = useState(null); // { km, min } — chip uchun
   const routeFetchRef = useRef({ ts: 0, key: '' });
+  // W2: NAVIGATOR (follow) — kamera haydovchini 16-zoomda kuzatadi (Yandex kabi).
+  // Faol bosqich boshlanganda avto-yoqiladi; xarita qo'lda surilsa pauza,
+  // tugma bilan qayta yoqiladi. Tashqi navigator (geo:) ixtiyoriy qoldi.
+  const [follow, setFollow] = useState(false);
+  function setFollowMode(on) {
+    setFollow(on);
+    try { mapRef.current?.injectJavaScript(`window.setFollow&&window.setFollow(${on ? 'true' : 'false'});true;`); } catch (e) {}
+  }
+  const onFollowOff = useCallback(() => setFollow(false), []);
+  useEffect(() => {
+    if (!mapReady) return;
+    // accepted -> mijozga, in_progress -> manzilga: bosqich almashganda avto-yoqish
+    if (order && ['accepted', 'in_progress'].includes(order.status)) setFollowMode(true);
+    else if (!order) setFollowMode(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapReady, order?.id, order?.status]);
   useEffect(() => {
     // Nishon: accepted/arrived -> pickup, in_progress -> destination
     let target = null;
@@ -2643,7 +2663,7 @@ function AppInner() {
           {/* Xarita — memoizatsiya qilingan (GPS/meter yangilanishlarida qayta render bo'lmaydi).
               `mapReady` true bo'lgach, quyidagi useEffect (mapReady deps) joriy
               joylashuv/buyurtma markerlarini imperativ ravishda yuboradi. */}
-          <MapPanel ref={mapRef} style={s.map} source={mapSource} onReady={onMapReady} />
+          <MapPanel ref={mapRef} style={s.map} source={mapSource} onReady={onMapReady} onFollowOff={onFollowOff} />
 
           {/* ── Yuqori panel: avatar + ism/reyting + online tugmasi ── */}
           <View style={[s.topBar, { top: insets.top + 6 }]}>
@@ -2678,6 +2698,22 @@ function AppInner() {
               </Text>
             </TouchableOpacity>
           </View>
+
+          {/* W2: NAVIGATOR tugmasi — follow yoqish/o'chirish (faol buyurtmada) */}
+          {order && ['accepted', 'arrived', 'in_progress'].includes(order.status) && (
+            <TouchableOpacity
+              onPress={() => setFollowMode(!follow)}
+              activeOpacity={0.8}
+              style={{
+                position: 'absolute', top: insets.top + 62, right: 12,
+                width: 44, height: 44, borderRadius: 22,
+                alignItems: 'center', justifyContent: 'center',
+                backgroundColor: follow ? YELLOW : 'rgba(10,10,10,0.82)',
+                borderWidth: 1, borderColor: follow ? YELLOW : YELLOW + '55',
+              }}>
+              <Ionicons name="navigate" size={20} color={follow ? '#15171c' : YELLOW} />
+            </TouchableOpacity>
+          )}
 
           {/* ── M-07: yo'nalish chipi — mijozgacha/manzilgacha km + ETA (ilova ichida) ── */}
           {order && routeInfo && (
@@ -2807,7 +2843,7 @@ function AppInner() {
               contentContainerStyle={{ paddingBottom: 8 }}>
               <OrderPanel
                 order={order} loading={loading} meter={meter} liveMeter={liveMeter} tripWait={tripWait}
-                onAction={orderAction} onNavigate={navigateTo}
+                onAction={orderAction} onNavigate={navigateTo} onFollow={() => setFollowMode(true)}
                 onCall={callCustomer} onChat={() => { loadChatHistory(order.id); setChatUnread(0); setChatModal(true); }}
                 chatUnread={chatUnread}
                 onPlayVoice={playVoiceOrder} voiceBusy={voiceStatus === 'loading'}
@@ -3010,7 +3046,7 @@ function CountdownBar() {
 }
 
 // ---- Buyurtma paneli (holat tugmalari) ----
-function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNavigate, onCall, onChat, chatUnread, onPlayVoice, voiceBusy }) {
+function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNavigate, onFollow, onCall, onChat, chatUnread, onPlayVoice, voiceBusy }) {
   // F-04: faol safarni (accepted/arrived) bekor qilish — tasdiq bilan.
   // accepted'da backend buyurtmani boshqa haydovchiga qaytaradi (requeue),
   // arrived'da bekor qilinadi; ikkala holatda ham mijozga xabar boradi.
@@ -3152,9 +3188,14 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
           {/* Qabul qilingan — navigatsiya + yetib keldim */}
           {st === 'accepted' && (
             <View style={{ gap: 8, marginTop: 8 }}>
-              <TouchableOpacity style={s.btnNav} onPress={() => onNavigate(order.from_lat, order.from_lng)} activeOpacity={0.8}>
+              {/* W2: asosiy tugma ILOVA ICHIDA navigator (follow) — begona ilovaga chiqarmaydi */}
+              <TouchableOpacity style={s.btnNav} onPress={() => onFollow && onFollow()} activeOpacity={0.8}>
                 <Ionicons name="navigate" size={18} color="#15171c" style={{ marginRight: 8 }} />
                 <Text style={[s.btnTxtW, { color: '#15171c' }]}>{t('to_customer_btn')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onNavigate(order.from_lat, order.from_lng)} activeOpacity={0.7}
+                style={{ alignItems: 'center', paddingVertical: 6 }}>
+                <Text style={{ color: GRAY1, fontSize: 12, textDecorationLine: 'underline' }}>{t('external_nav')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.btn} onPress={() => onAction('arrived')} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>{t('arrived_btn')}</Text>}
@@ -3216,9 +3257,14 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
                   </Text>
                 </View>
               )}
-              <TouchableOpacity style={s.btnNav} onPress={() => onNavigate(order.to_lat, order.to_lng)} activeOpacity={0.8}>
+              {/* W2: asosiy tugma ILOVA ICHIDA navigator (follow) — begona ilovaga chiqarmaydi */}
+              <TouchableOpacity style={s.btnNav} onPress={() => onFollow && onFollow()} activeOpacity={0.8}>
                 <Ionicons name="navigate" size={18} color="#15171c" style={{ marginRight: 8 }} />
                 <Text style={[s.btnTxtW, { color: '#15171c' }]}>{t('to_dest_btn')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => onNavigate(order.to_lat, order.to_lng)} activeOpacity={0.7}
+                style={{ alignItems: 'center', paddingVertical: 6 }}>
+                <Text style={{ color: GRAY1, fontSize: 12, textDecorationLine: 'underline' }}>{t('external_nav')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.btn} onPress={() => onAction('complete')} disabled={loading} activeOpacity={0.85}>
                 {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>{t('complete_trip')}</Text>}
