@@ -26,6 +26,7 @@ import { WebView } from 'react-native-webview';
 import { io } from 'socket.io-client';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Font from 'expo-font';
 
 // ─── Ajratilgan modullar (modularizatsiya — App.js'ni yengillashtirish) ───
 import { uuid, sleep, fmt, safeStr, haversineKm, fmtPhone } from './src/utils';
@@ -34,6 +35,21 @@ import { speak, announce, playOrderAlert, stopOrderAlert, playStatusSound } from
 import { captureException } from './src/crash';
 
 const BASE = 'https://api.elga.uz';
+
+// C2: Manrope brend shrifti — yuklansa asosiy elementlarga qo'llanadi,
+// yuklanmasa tizim shrifti qoladi (ilova hech qachon bloklanmaydi/buzilmaydi).
+let FONTS_OK = false;
+Font.loadAsync({
+  'Manrope-SemiBold': require('./assets/fonts/Manrope_600SemiBold.ttf'),
+  'Manrope-Bold': require('./assets/fonts/Manrope_700Bold.ttf'),
+  'Manrope-ExtraBold': require('./assets/fonts/Manrope_800ExtraBold.ttf'),
+}).then(() => { FONTS_OK = true; }).catch(() => {});
+// Style yordamchisi: Manrope + fontWeight TO'QNASHMASIN — family qo'llanganda weight olib tashlanadi
+function mfont(weight) { // '600' | '700' | '800'
+  if (!FONTS_OK) return null;
+  const fam = weight === '800' ? 'Manrope-ExtraBold' : weight === '700' ? 'Manrope-Bold' : 'Manrope-SemiBold';
+  return { fontFamily: fam, fontWeight: undefined };
+}
 
 // T-07: ilova ichidagi ZAXIRA buyurtma ovozi — admin ovoz yuklamagan yoki oflayn
 // bo'lsa ham DOIM ishlaydi. Admin ovoz bergan bo'lsa (/api/config/sounds) o'sha
@@ -1297,7 +1313,7 @@ function BrandSplash({ onDone }) {
     <Animated.View pointerEvents="none"
       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', zIndex: 9999, elevation: 24, opacity: op }}>
       <Animated.View style={{ alignItems: 'center', transform: [{ scale: sc }] }}>
-        <Text style={{ fontSize: 40, fontWeight: '800', letterSpacing: 0.5 }}>
+        <Text style={[{ fontSize: 40, fontWeight: '800', letterSpacing: 0.5 }, mfont('800')]}>
           <Text style={{ color: WHITE }}>Ketdik</Text>
           <Text style={{ color: YELLOW }}>Go</Text>
         </Text>
@@ -2952,7 +2968,7 @@ function AppInner({ onBootDone }) {
                       ? <ActivityIndicator color="#000" />
                       : <>
                           <Ionicons name="power" size={20} color="#1A1500" style={{ marginRight: 8 }} />
-                          <Text style={s.btnTxt}>{t('go_online')}</Text>
+                          <Text style={[s.btnTxt, mfont('800')]}>{t('go_online')}</Text>
                         </>}
                   </TouchableOpacity>
                 </>
@@ -3427,7 +3443,7 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
           {st === 'arrived' && (
             <View style={{ gap: 8, marginTop: 12 }}>
               <TouchableOpacity style={s.btn} onPress={() => onAction('start')} disabled={loading} activeOpacity={0.85}>
-                {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>{t('start_trip')}</Text>}
+                {loading ? <ActivityIndicator color="#000" /> : <Text style={[s.btnTxt, mfont('800')]}>{t('start_trip')}</Text>}
               </TouchableOpacity>
               {/* F-04: mijoz chiqmadi va h.k. — haydovchi bekor qila oladi, mijoz xabar oladi */}
               <TouchableOpacity style={{ alignItems: 'center', paddingVertical: 8 }} onPress={confirmCancelTrip} disabled={loading}>
@@ -3463,7 +3479,7 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
                 <MeterPulseBar />
                 <View style={{ alignItems: 'center', paddingVertical: 18, paddingHorizontal: 16 }}>
                   <Text style={{ color: GRAY1, fontSize: 11, fontWeight: '700', letterSpacing: 2 }}>{t('current_fare_lbl')}</Text>
-                  <Text style={{ color: WHITE, fontSize: 42, fontWeight: '800', lineHeight: 48, marginTop: 6 }}>
+                  <Text style={[{ color: WHITE, fontSize: 42, fontWeight: '800', lineHeight: 48, marginTop: 6 }, mfont('800')]}>
                     {fmt(dispFare)} <Text style={{ color: GRAY1, fontSize: 16, fontWeight: '600' }}>{t('som')}</Text>
                   </Text>
                   <Text style={{ color: GREEN, fontSize: 12, fontWeight: '600', marginTop: 4 }}>{t('live_meter_sub')}</Text>
@@ -3564,7 +3580,7 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
               {/* Katta yakunlash tugmasi (mavjud onAction('complete')) */}
               <TouchableOpacity style={{ backgroundColor: YELLOW, borderRadius: 14, paddingVertical: 15, alignItems: 'center' }}
                 onPress={() => onAction('complete')} disabled={loading} activeOpacity={0.85}>
-                {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>{t('complete_trip')}</Text>}
+                {loading ? <ActivityIndicator color="#000" /> : <Text style={[s.btnTxt, mfont('800')]}>{t('complete_trip')}</Text>}
               </TouchableOpacity>
             </View>
             );
@@ -3642,7 +3658,7 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
   return (
     <ScrollView style={s.earnWrap} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: top, paddingBottom: bottom }}>
       <Text style={s.screenSub}>{t('finance')}</Text>
-      <Text style={s.screenTitle}>{t('tab_earnings')}</Text>
+      <Text style={[s.screenTitle, mfont('800')]}>{t('tab_earnings')}</Text>
 
       {!earnings ? (
         <ActivityIndicator color={YELLOW} style={{ marginTop: 40 }} />
@@ -3800,7 +3816,7 @@ function TripComplete({ trip, insets, onRate, onDone }) {
         <View style={s.completeCheck}>
           <Ionicons name="checkmark" size={34} color={GREEN} />
         </View>
-        <Text style={{ color: WHITE, fontSize: 21, fontWeight: '700' }}>{t('trip_done')}</Text>
+        <Text style={[{ color: WHITE, fontSize: 21, fontWeight: '700' }, mfont('800')]}>{t('trip_done')}</Text>
       </View>
 
       {/* Hisob-kitob */}
@@ -3815,7 +3831,7 @@ function TripComplete({ trip, insets, onRate, onDone }) {
         </View>
         <View style={[s.completeRow, { borderTopWidth: 1, borderTopColor: BORDER, paddingTop: 14, marginTop: 4, marginBottom: 0 }]}>
           <Text style={{ color: WHITE, fontSize: 15, fontWeight: '600' }}>{t('your_income')}</Text>
-          <Text style={{ color: YELLOW, fontSize: 22, fontWeight: '800' }}>
+          <Text style={[{ color: YELLOW, fontSize: 22, fontWeight: '800' }, mfont('800')]}>
             {fmt(net)} <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '500' }}>{t('som')}</Text>
           </Text>
         </View>
@@ -4025,7 +4041,7 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
 
   return (
     <ScrollView style={s.screenWrap} contentContainerStyle={{ paddingTop: top, paddingBottom: bottom, paddingHorizontal: 20 }}>
-      <Text style={s.screenTitle}>{t('tab_profile')}</Text>
+      <Text style={[s.screenTitle, mfont('800')]}>{t('tab_profile')}</Text>
       {/* Avatar + reyting */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 16, marginBottom: 20 }}>
         <View style={s.profAvatar}>
