@@ -481,7 +481,8 @@
 
   /* ---- AVTOMATIK TAYINLASH (eng yaqin bo'sh haydovchi) ---- */
   window.autoAssign = function(orderId){
-    var o = window.DB.orders.find(function(x){return x.id===orderId;});
+    // B4: jonli rejimda id raqam, data-atributdan esa matn keladi — String orqali taqqoslaymiz
+    var o = window.DB.orders.find(function(x){return String(x.id)===String(orderId);});
     if(!o) return;
     if(window.GeoMap && window.GeoMap.seedDriverCoords) window.GeoMap.seedDriverCoords();
     var coords = (window.GeoMap && window.GeoMap.CITY_COORDS && window.GeoMap.CITY_COORDS[o.from_city]) || [37.55,67.3];
