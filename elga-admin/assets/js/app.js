@@ -211,7 +211,7 @@
         if(t) clearTimeout(t);
         if(q.length < 2){ close(); return; }
         t = setTimeout(function(){
-          window.API.get('/api/admin/drivers?q='+encodeURIComponent(q)).then(function(res){
+          window.ELGA.get('/api/admin/drivers?q='+encodeURIComponent(q)).then(function(res){
             if(inp.value.trim() !== q) return; // eskirgan javob
             render((res.body && res.body.drivers) || [], q);
           }).catch(function(){ close(); });
