@@ -18,6 +18,7 @@ import { WebView } from 'react-native-webview';
 import { io } from 'socket.io-client';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Font from 'expo-font';
 import { useAudioRecorder, AudioModule, RecordingPresets, setAudioModeAsync, createAudioPlayer } from 'expo-audio';
 
 // ─── Ajratilgan modullar ───
@@ -26,6 +27,21 @@ import { mapHTML } from './src/mapHtml';
 import { captureException } from './src/crash';
 
 const BASE = 'https://api.elga.uz';
+
+// C2: Manrope brend shrifti — yuklansa asosiy elementlarga qo'llanadi,
+// yuklanmasa tizim shrifti qoladi (ilova hech qachon bloklanmaydi/buzilmaydi).
+let FONTS_OK = false;
+Font.loadAsync({
+  'Manrope-SemiBold': require('./assets/fonts/Manrope_600SemiBold.ttf'),
+  'Manrope-Bold': require('./assets/fonts/Manrope_700Bold.ttf'),
+  'Manrope-ExtraBold': require('./assets/fonts/Manrope_800ExtraBold.ttf'),
+}).then(() => { FONTS_OK = true; }).catch(() => {});
+// Style yordamchisi: Manrope + fontWeight TO'QNASHMASIN — family qo'llanganda weight olib tashlanadi
+function mfont(weight) { // '600' | '700' | '800'
+  if (!FONTS_OK) return null;
+  const fam = weight === '800' ? 'Manrope-ExtraBold' : weight === '700' ? 'Manrope-Bold' : 'Manrope-SemiBold';
+  return { fontFamily: fam, fontWeight: undefined };
+}
 
 // Faol (tugamagan) buyurtma holatlari — bularda buyurtma "tirik" hisoblanadi.
 // completed/cancelled/paid — yakuniy holatlar (faol emas).
@@ -1132,7 +1148,7 @@ function BrandSplash({ onDone }) {
     <Animated.View pointerEvents="none"
       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', zIndex: 9999, elevation: 24, opacity: op }}>
       <Animated.View style={{ alignItems: 'center', transform: [{ scale: sc }] }}>
-        <Text style={{ fontSize: 40, fontWeight: '800', letterSpacing: 0.5 }}>
+        <Text style={[{ fontSize: 40, fontWeight: '800', letterSpacing: 0.5 }, mfont('800')]}>
           <Text style={{ color: WHITE }}>Ketdik</Text>
           <Text style={{ color: YELLOW }}>Go</Text>
         </Text>
@@ -3131,7 +3147,7 @@ function AppInner({ onBootDone }) {
                     <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 1 }}>
                       {order.metered ? t('meter_lbl') : t('trip_price_lbl')}
                     </Text>
-                    <Text style={{ color: YELLOW, fontSize: 44, fontWeight: '800', lineHeight: 52, marginTop: 4 }}>
+                    <Text style={[{ color: YELLOW, fontSize: 44, fontWeight: '800', lineHeight: 52, marginTop: 4 }, mfont('800')]}>
                       {fmt(order.metered ? (liveFare || order.price || 0) : (order.price || 0))}
                     </Text>
                     <Text style={{ color: GRAY1, fontSize: 14 }}>{t('som')}</Text>
@@ -3273,7 +3289,7 @@ function AppInner({ onBootDone }) {
                     <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500', letterSpacing: 0.3 }}>
                       {t('hello')}, {user?.name?.split(' ')[0] || t('user_def')} 👋
                     </Text>
-                    <Text style={{ color: WHITE, fontSize: 24, fontWeight: '800', marginTop: 1, letterSpacing: -0.5 }}>
+                    <Text style={[{ color: WHITE, fontSize: 24, fontWeight: '800', marginTop: 1, letterSpacing: -0.5 }, mfont('800')]}>
                       {t('where_to_title')}
                     </Text>
                   </View>
@@ -3679,7 +3695,7 @@ function AppInner({ onBootDone }) {
                 disabled={loading || !estimates[carClass]}>
                 {loading
                   ? <ActivityIndicator color="#000" />
-                  : <Text style={s.orderCtaTxt}>{t('lets_go')}{estimates[carClass] ? ` · ${fmt(estimates[carClass].price)} ${t('som')}` : ''}</Text>}
+                  : <Text style={[s.orderCtaTxt, mfont('800')]}>{t('lets_go')}{estimates[carClass] ? ` · ${fmt(estimates[carClass].price)} ${t('som')}` : ''}</Text>}
               </TouchableOpacity>
             </View>
             </AnimatedSheet>
@@ -3692,7 +3708,7 @@ function AppInner({ onBootDone }) {
         <View style={[s.tabBody, { paddingTop: insets.top }]}>
           <View style={s.tabHeaderArea}>
             <Text style={s.tabHeaderSub}>{t('your_trips')}</Text>
-            <Text style={s.tabHeaderTitle}>{t('history')}</Text>
+            <Text style={[s.tabHeaderTitle, mfont('800')]}>{t('history')}</Text>
           </View>
 
           <FlatList
@@ -3788,7 +3804,7 @@ function AppInner({ onBootDone }) {
         <View style={[s.tabBody, { paddingTop: insets.top }]}>
           <View style={s.tabHeaderArea}>
             <Text style={s.tabHeaderSub}>{t('help_sub')}</Text>
-            <Text style={s.tabHeaderTitle}>{t('help_center')}</Text>
+            <Text style={[s.tabHeaderTitle, mfont('800')]}>{t('help_center')}</Text>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: TABBAR_H + insets.bottom + 16 }}>
@@ -3870,7 +3886,7 @@ function AppInner({ onBootDone }) {
       {tab === 'profile' && (
         <ScrollView style={[s.tabBody, { paddingTop: insets.top }]} contentContainerStyle={{ paddingBottom: TABBAR_H + insets.bottom + 24 }}>
           <View style={s.tabHeaderArea}>
-            <Text style={s.tabHeaderTitle}>{t('profile')}</Text>
+            <Text style={[s.tabHeaderTitle, mfont('800')]}>{t('profile')}</Text>
           </View>
 
           <View style={{ paddingHorizontal: 16 }}>
@@ -4507,7 +4523,7 @@ function AppInner({ onBootDone }) {
               <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: GREEN + '22', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
                 <Ionicons name="checkmark-circle" size={30} color={GREEN} />
               </View>
-              <Text style={s.modalTitle}>{t('trip_finished')}</Text>
+              <Text style={[s.modalTitle, mfont('800')]}>{t('trip_finished')}</Text>
             </View>
 
             {/* Hisob-kitob (wait_fee bo'lsa qatorlar bilan) */}
