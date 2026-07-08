@@ -204,6 +204,12 @@ const L = {
     driver_msg_t: '💬 Haydovchi xabar yubordi',
     chat_with_driver: 'Haydovchi bilan chat',
     message_ph: 'Xabar...',
+    chat_empty: 'Suhbatni boshlang',
+    chat_sub: 'Safar chati',
+    qr_coming: 'Chiqyapman',
+    qr_2min: '2 daqiqa kuting',
+    qr_where: 'Qayerdasiz?',
+    qr_thanks: 'Rahmat!',
     voice_order_title: '🎙 Ovozli buyurtma',
     voice_instr: 'Tugmani bosib ushlab turing va qayerga borishingizni tabiiy gapiring. Masalan: «Meni Muzrabot bozoriga olib boring».',
     analyzing: 'Tahlil qilinmoqda…',
@@ -453,6 +459,12 @@ const L = {
     driver_msg_t: '💬 Сообщение от водителя',
     chat_with_driver: 'Чат с водителем',
     message_ph: 'Сообщение...',
+    chat_empty: 'Начните разговор',
+    chat_sub: 'Чат поездки',
+    qr_coming: 'Выхожу',
+    qr_2min: 'Подождите 2 минуты',
+    qr_where: 'Вы где?',
+    qr_thanks: 'Спасибо!',
     voice_order_title: '🎙 Голосовой заказ',
     voice_instr: 'Нажмите и удерживайте кнопку и скажите, куда вам нужно. Например: «Отвезите меня на базар Музрабада».',
     analyzing: 'Анализируем…',
@@ -1220,6 +1232,8 @@ function AppInner() {
   const tripChatModalRef = useRef(false);
   tripChatModalRef.current = tripChatModal;
   const tripChatScrollRef = useRef(null); // A2: chat ro'yxati — oxirgi xabarga avto-scroll
+  // X4: har xabarga birinchi render paytida vaqt tamg'asi (lokal, ko'rinish uchun)
+  const tripChatTsRef = useRef({});
 
   // SOS modal
   const [sosModal, setSosModal] = useState(false);
@@ -1864,8 +1878,11 @@ function AppInner() {
 
   // Haydovchiga socket orqali chat xabari yuborish. Socket uzilgan bo'lsa xabar
   // yo'qolmasin — outbox'ga saqlaymiz va qayta ulanganda yuboramiz (#chat-loss).
-  function sendTripChat() {
-    const text = tripChatInput.trim();
+  // X4: preset — tez javob chipidan kelgan matn (string). onPress event obyekti
+  // yuboradi — u string emas, shuning uchun tripChatInput ishlatiladi.
+  // Emit/outbox/pending mantig'i o'zgarmagan.
+  function sendTripChat(preset) {
+    const text = ((typeof preset === 'string' ? preset : tripChatInput) || '').trim();
     if (!text || !order) return;
     const payload = { orderId: order.id, text };
     // A2: holat belgisi — darhol ketdi (✓) yoki outbox'da kutyapti (⏳)
@@ -1876,7 +1893,8 @@ function AppInner() {
       chatOutboxRef.current.push(payload);
     }
     setTripChat((prev) => [...prev, { role: 'customer', text, pending: !sentNow }]);
-    setTripChatInput('');
+    // Chip yuborilganda foydalanuvchi yozayotgan matnni o'chirmaymiz.
+    if (typeof preset !== 'string') setTripChatInput('');
   }
 
   // A2: buyurtma chat tarixi (GET /api/orders/:id/messages) — chat ochilganda
@@ -3844,39 +3862,89 @@ function AppInner() {
       {/* Trip Chat Modal */}
       <Modal visible={tripChatModal} transparent animationType="slide" onRequestClose={() => setTripChatModal(false)}>
         <View style={s.modalOverlay}>
-          <View style={[s.modalSheet, { height: '70%', paddingBottom: insets.bottom + 8 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={s.modalTitle}>{t('chat_with_driver')}</Text>
-              <TouchableOpacity onPress={() => setTripChatModal(false)} style={{ marginLeft: 'auto' }}>
+          <View style={[s.modalSheet, { height: '72%', paddingBottom: insets.bottom + 8 }]}>
+            {/* X4: sarlavha — avatar (bosh harf) + haydovchi ismi + mashina */}
+            <View style={s.tcHeader}>
+              <View style={s.tcAvatar}>
+                <Text style={s.tcAvatarTxt}>{(order?.driver_name?.[0] || 'H').toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={s.tcTitle} numberOfLines={1}>{order?.driver_name || t('driver_def')}</Text>
+                <Text style={s.tcSub} numberOfLines={1}>
+                  {[order?.driver_car, order?.driver_plate].filter(Boolean).join(' ') || t('chat_sub')}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setTripChatModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="close" size={24} color={GRAY1} />
               </TouchableOpacity>
             </View>
             <ScrollView
               style={{ flex: 1 }}
               ref={tripChatScrollRef}
+              contentContainerStyle={{ flexGrow: 1, paddingVertical: 8 }}
+              keyboardShouldPersistTaps="handled"
               // A2: ochilganda va yangi xabar kelganda oxirgi xabarga avto-scroll
               onContentSizeChange={() => { try { tripChatScrollRef.current?.scrollToEnd({ animated: true }); } catch (e) {} }}>
-              {tripChat.map((m, i) => (
-                <View key={i} style={[s.bubble, m.role === 'customer' ? s.bubbleUser : s.bubbleAI]}>
-                  <Text style={m.role === 'customer' ? s.bubbleUserTxt : s.bubbleAITxt}>{m.text}</Text>
-                  {/* A2: yuborilgan xabar holati — ⏳ outbox'da (socket uzik), ✓ yuborildi */}
-                  {m.role === 'customer' ? (
-                    <Text style={{ color: 'rgba(0,0,0,0.55)', fontSize: 10, alignSelf: 'flex-end', marginTop: 2 }}>
-                      {m.pending ? '⏳' : '✓'}
-                    </Text>
-                  ) : null}
+              {tripChat.length === 0 ? (
+                // X4: bo'sh holat — markazda kulrang ishora
+                <View style={s.tcEmpty}>
+                  <Ionicons name="chatbubbles-outline" size={54} color={GRAY2} />
+                  <Text style={s.tcEmptyTxt}>{t('chat_empty')}</Text>
                 </View>
+              ) : tripChat.map((m, i) => {
+                const mine = m.role === 'customer';
+                // X4: ketma-ket bir kishidan kelgan xabarlar zich
+                const prev = tripChat[i - 1];
+                const grouped = prev && prev.role === m.role;
+                // X4: vaqt tamg'asi — birinchi render'da lokal belgilanadi (ts ixtiyoriy)
+                const key = i + '|' + m.role + '|' + m.text;
+                if (tripChatTsRef.current[key] == null) tripChatTsRef.current[key] = m.ts || Date.now();
+                const clock = fmtClock(tripChatTsRef.current[key]);
+                return (
+                  <View key={i} style={[s.tcRow, mine ? s.tcRowMine : s.tcRowTheirs, { marginTop: grouped ? 2 : 10 }]}>
+                    <View style={[s.tcBubble, mine ? s.tcMine : s.tcTheirs]}>
+                      <Text style={[s.tcBubbleTxt, { color: mine ? '#000' : WHITE }]}>{m.text}</Text>
+                      <View style={s.tcMetaRow}>
+                        <Text style={[s.tcTime, { color: mine ? 'rgba(0,0,0,0.5)' : GRAY1 }]}>{clock}</Text>
+                        {/* A2: yuborilgan xabar holati — ⏳ outbox'da (socket uzik), ✓ yuborildi */}
+                        {mine ? (
+                          <Text style={[s.tcTime, { color: 'rgba(0,0,0,0.5)', marginLeft: 4 }]}>
+                            {m.pending ? '⏳' : '✓'}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+            {/* X4: tez javoblar — gorizontal chiplar, bosilsa darrov yuboriladi */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={s.tcQrRow}
+              contentContainerStyle={s.tcQrContent}
+              keyboardShouldPersistTaps="handled">
+              {CUSTOMER_QUICK.map((k) => (
+                <TouchableOpacity key={k} style={s.tcChip} activeOpacity={0.7} onPress={() => sendTripChat(t(k))}>
+                  <Text style={s.tcChipTxt}>{t(k)}</Text>
+                </TouchableOpacity>
               ))}
             </ScrollView>
-            <View style={s.chatRow}>
+            <View style={s.tcInputRow}>
               <TextInput
-                style={s.chatInput}
+                style={s.tcInput}
                 placeholder={t('message_ph')}
                 placeholderTextColor={GRAY2}
                 value={tripChatInput}
                 onChangeText={setTripChatInput}
+                onSubmitEditing={sendTripChat}
+                returnKeyType="send"
               />
-              <TouchableOpacity style={s.chatSendBtn} onPress={sendTripChat}>
+              <TouchableOpacity
+                style={[s.tcSendBtn, !tripChatInput.trim() && { opacity: 0.4 }]}
+                onPress={sendTripChat}
+                disabled={!tripChatInput.trim()}>
                 <Ionicons name="send" size={18} color="#000" />
               </TouchableOpacity>
             </View>
@@ -4426,6 +4494,16 @@ const WHITE = '#FFFFFF';
 const GRAY1 = '#8E8E93';
 const GRAY2 = '#48484A';
 
+// X4: safar chati — soat (HH:MM) formatlash. ts ixtiyoriy; bo'lmasa kelgan vaqt.
+function fmtClock(ms) {
+  const d = new Date(ms || Date.now());
+  const h = String(d.getHours()).padStart(2, '0');
+  const m = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${m}`;
+}
+// X4: mijoz tez javob chiplari (i18n kalitlar — sendTripChat orqali darrov yuboriladi)
+const CUSTOMER_QUICK = ['qr_coming', 'qr_2min', 'qr_where', 'qr_thanks'];
+
 const s = StyleSheet.create({
   fill: { flex: 1, backgroundColor: BG },
   bootScreen: { flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center' },
@@ -4959,4 +5037,30 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  // X4: safar chati (trip chat) — professional ko'rinish. AI chat stillari (bubble*,
+  // chatRow, chatInput) o'zgarmagan; bular alohida tc* kalitlar.
+  tcHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 12, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: BORDER },
+  tcAvatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: CARD2, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: BORDER },
+  tcAvatarTxt: { color: YELLOW, fontSize: 18, fontWeight: '800' },
+  tcTitle: { color: WHITE, fontSize: 17, fontWeight: '700' },
+  tcSub: { color: GRAY1, fontSize: 12, marginTop: 2 },
+  tcRow: { width: '100%' },
+  tcRowMine: { alignItems: 'flex-end' },
+  tcRowTheirs: { alignItems: 'flex-start' },
+  tcBubble: { maxWidth: '78%', paddingVertical: 9, paddingHorizontal: 13, borderRadius: 18 },
+  tcMine: { backgroundColor: YELLOW, borderBottomRightRadius: 4 },
+  tcTheirs: { backgroundColor: CARD2, borderBottomLeftRadius: 4 },
+  tcBubbleTxt: { fontSize: 15, lineHeight: 20 },
+  tcMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 3 },
+  tcTime: { fontSize: 10 },
+  tcEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingBottom: 40 },
+  tcEmptyTxt: { color: GRAY1, fontSize: 14, marginTop: 10 },
+  tcQrRow: { maxHeight: 46, borderTopWidth: 1, borderTopColor: BORDER },
+  tcQrContent: { paddingVertical: 8, gap: 8, alignItems: 'center' },
+  tcChip: { backgroundColor: CARD2, borderWidth: 1, borderColor: BORDER, borderRadius: 18, paddingHorizontal: 14, paddingVertical: 8 },
+  tcChipTxt: { color: WHITE, fontSize: 13, fontWeight: '600' },
+  tcInputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 10 },
+  tcInput: { flex: 1, backgroundColor: CARD2, borderRadius: 22, paddingHorizontal: 16, paddingVertical: 11, color: WHITE, fontSize: 15, borderWidth: 1, borderColor: BORDER },
+  tcSendBtn: { width: 46, height: 46, borderRadius: 23, backgroundColor: YELLOW, alignItems: 'center', justifyContent: 'center' },
 });
