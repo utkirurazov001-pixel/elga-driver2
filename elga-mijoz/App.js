@@ -1814,6 +1814,24 @@ function AppInner() {
         await api(`/api/orders/${rateOrderId}/tip`, 'POST', { amount: tipAmount }, token).catch(() => {});
     } catch (e) {}
     setRateModal(false); setCompletedOrder(null); setLoading(false);
+    // D3: mamnun mijoz (5 yulduz) — Play Market bahosini so'raymiz, BIR MARTA
+    // (asos: har 5-yulduzda so'rayverish bezovta qiladi va Play qoidalariga zid).
+    if (stars === 5) {
+      try {
+        const asked = await AsyncStorage.getItem('rate_nudge_done');
+        if (!asked) {
+          await AsyncStorage.setItem('rate_nudge_done', '1');
+          Alert.alert(
+            'Rahmat! 😊',
+            "KetdikGo yoqdimi? Play Market'da baholab, boshqalarga ham yordam bering!",
+            [
+              { text: 'Keyinroq', style: 'cancel' },
+              { text: 'Baholash ⭐', onPress: () => Linking.openURL('market://details?id=uz.ketdik.mijoz').catch(() => Linking.openURL('https://play.google.com/store/apps/details?id=uz.ketdik.mijoz')) },
+            ]
+          );
+        }
+      } catch (_) {}
+    }
   }
 
   function callDriver() {
