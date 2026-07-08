@@ -1155,16 +1155,23 @@ function AppInner() {
   const sheetOpenRef = useRef(true);        // pan handler stale closure'siz o'qishi uchun
   const [sheetOpen, setSheetOpen] = useState(true); // yig'ilganda kompakt narx qatorini chizish uchun
   const sheetDyRef = useRef(300);           // onLayout'da aniq: karta balandligi - 84
+  const sheetScrollRef = useRef(0);         // X2: ichki ScrollView vertikal offset
   function snapSheet(open) {
     sheetOpenRef.current = open;
     setSheetOpen(open);
     Animated.spring(sheetY, { toValue: open ? 0 : sheetDyRef.current, useNativeDriver: true, bounciness: 4 }).start();
   }
+  // X2: pan endi BUTUN kartada (ushlagich emas). Ichki ScrollView bilan muvofiqlashtirish:
+  //   • yig'iq — istalgan vertikal surish ko'taradi/tushiradi;
+  //   • ochiq — faqat ScrollView tepada (offset<=0) turib pastga tortilsa yig'iladi;
+  //   • gorizontal yoki kichik tebranish — pan olinmaydi (scroll/tugma saqlanadi).
   const sheetPan = useRef(PanResponder.create({
-    // Pan FAQAT ushlagich zonasida (panHandlers o'sha View'da) — kartaning ichki
-    // ScrollView aylanishi va tugmalar bosilishi buzilmaydi.
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, g) => {
+      if (Math.abs(g.dy) < 8 || Math.abs(g.dy) <= Math.abs(g.dx)) return false;
+      if (!sheetOpenRef.current) return true;
+      return g.dy > 0 && sheetScrollRef.current <= 0;
+    },
     onPanResponderMove: (_, g) => {
       const dyMax = sheetDyRef.current;
       const base = sheetOpenRef.current ? 0 : dyMax;
@@ -1172,6 +1179,7 @@ function AppInner() {
     },
     onPanResponderRelease: (_, g) => {
       if (Math.abs(g.dy) < 6 && Math.abs(g.dx) < 6) { snapSheet(!sheetOpenRef.current); return; } // tegish — ochish/yig'ish
+      if (Math.abs(g.vy) > 0.5) { snapSheet(g.vy < 0); return; } // flick — yo'nalish bo'yicha
       const base = sheetOpenRef.current ? 0 : sheetDyRef.current;
       snapSheet(base + g.dy < sheetDyRef.current / 2); // yarmidan yuqorida qolsa — ochiq
     },
@@ -2829,6 +2837,7 @@ function AppInner() {
             )}
 
             <Animated.View
+              {...sheetPan.panHandlers}
               style={[s.activeSheet, { bottom: TABBAR_H + insets.bottom, transform: [{ translateY: sheetY }] }]}
               onLayout={(e) => {
                 // W3: yig'ilganda ushlagich + holat + narx (~84px) ko'rinib qoladi
@@ -2836,10 +2845,8 @@ function AppInner() {
                 sheetDyRef.current = dy;
                 if (!sheetOpenRef.current) sheetY.setValue(dy); // yig'iq holatda balandlik o'zgarsa moslash
               }}>
-            {/* W3: ushlagich (drag handle) zonasi — pan FAQAT shu yerda. Holat
-                sarlavhasi ScrollView'dan shu zonaga ko'chirildi: yig'ilganda ham
-                ko'rinib turadi, ichki ScrollView bemalol aylanaveradi. */}
-            <View {...sheetPan.panHandlers} style={{ alignItems: 'center', paddingTop: 8 }}>
+            {/* X2: ushlagich — pan endi butun kartada (Animated.View'da), bu vizual belgi */}
+            <View style={{ alignItems: 'center', paddingTop: 8 }}>
               <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: BORDER }} />
               {/* P2 (T-1): sarlavha — accepted'da umumiy holat o'rniga ANIQ javob:
                   "Yetib keladi: ~X daqiqa" (Yandex qolipi). Boshqa holatlarda statusText. */}
@@ -2861,7 +2868,9 @@ function AppInner() {
                 </Text>
               )}
             </View>
-            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 8 }}>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 8 }}
+              scrollEnabled={sheetOpen} scrollEventThrottle={16}
+              onScroll={(e) => { sheetScrollRef.current = e.nativeEvent.contentOffset.y; }}>
 
               {order.driver_name && !['searching', 'assigned'].includes(order.status) && (
                 <View style={s.driverCard}>

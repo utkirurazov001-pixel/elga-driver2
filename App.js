@@ -1317,16 +1317,25 @@ function AppInner() {
   const sheetOpenRef = useRef(true);        // pan handler stale closure'siz o'qishi uchun
   const [sheetOpen, setSheetOpen] = useState(true); // yig'ilganda kompakt qatorni chizish uchun
   const sheetDyRef = useRef(300);           // onLayout'da aniq: karta balandligi - 84
+  const sheetScrollRef = useRef(0);         // X2: ichki ScrollView vertikal offset (gesture qarori uchun)
   function snapSheet(open) {
     sheetOpenRef.current = open;
     setSheetOpen(open);
     Animated.spring(sheetY, { toValue: open ? 0 : sheetDyRef.current, useNativeDriver: true, bounciness: 4 }).start();
   }
+  // X2: pan endi BUTUN kartada (ushlagich emas, istalgan joyidan). Ichki ScrollView
+  // bilan to'qnashmaslik uchun gesture QAROR qoidasi (Yandex/Uber bottom-sheet qolipi):
+  //   • Yig'iq holatda — istalgan vertikal surish kartani ko'taradi/tushiradi.
+  //   • Ochiq holatda — faqat ScrollView ENG TEPADA (offset<=0) turib PASTGA tortilsa
+  //     karta yig'iladi; aks holda gesture ScrollView'ga tegib, kontent aylanadi.
+  //   • Gorizontal (dx>dy) yoki kichik tebranish — pan olinmaydi (tugma bosish/scroll saqlanadi).
   const sheetPan = useRef(PanResponder.create({
-    // Pan FAQAT ushlagich zonasida (panHandlers o'sha View'da) — kartaning ichki
-    // ScrollView aylanishi va tugmalar bosilishi buzilmaydi.
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, g) => {
+      if (Math.abs(g.dy) < 8 || Math.abs(g.dy) <= Math.abs(g.dx)) return false; // vertikal, sezilarli
+      if (!sheetOpenRef.current) return true;                 // yig'iq — istalgan surish
+      return g.dy > 0 && sheetScrollRef.current <= 0;         // ochiq — faqat tepadan pastga tortish
+    },
     onPanResponderMove: (_, g) => {
       const dyMax = sheetDyRef.current;
       const base = sheetOpenRef.current ? 0 : dyMax;
@@ -1334,6 +1343,7 @@ function AppInner() {
     },
     onPanResponderRelease: (_, g) => {
       if (Math.abs(g.dy) < 6 && Math.abs(g.dx) < 6) { snapSheet(!sheetOpenRef.current); return; } // tegish — ochish/yig'ish
+      if (Math.abs(g.vy) > 0.5) { snapSheet(g.vy < 0); return; } // tez surish (flick) — yo'nalish bo'yicha
       const base = sheetOpenRef.current ? 0 : sheetDyRef.current;
       snapSheet(base + g.dy < sheetDyRef.current / 2); // yarmidan yuqorida qolsa — ochiq
     },
@@ -1794,6 +1804,11 @@ function AppInner() {
       // buyurtma kelsa ham ilova qulamaydi.
       try {
         setOrder(o || null);
+        // X1: haydovchi Kabinet/Profil/Daromad tabida bo'lsa ham offer DARROV ko'rinsin —
+        // buyurtma ekrani faqat 'home' tabda render bo'ladi, shuning uchun tabni majburan
+        // 'home'ga o'tkazamiz (ilgari boshqa tabda buyurtma umuman ko'rinmasdi, nazad
+        // tugmasi ham yo'q edi). Faqat OFFER (searching/assigned) kelganda.
+        if (o && OFFER_STATUSES.includes(o.status)) setTab('home');
         setChatMessages([]); setChatUnread(0); // A2: yangi buyurtma — eski chat/badge tozalanadi
         // Offer TTL: qabul qilinmasa o'zi yo'qoladi (fantom bo'lib qolmasin).
         // Server bergan ttl bo'lsa (ms) shuni, aks holda 30s. Faqat OFFER uchun.
@@ -2880,6 +2895,7 @@ function AppInner() {
           {/* ── Buyurtma BILAN: OrderPanel (scroll) ── */}
           {order && (
             <Animated.View
+              {...sheetPan.panHandlers}
               style={[s.bottom, { bottom: insets.bottom, maxHeight: '80%', transform: [{ translateY: sheetY }] }]}
               onLayout={(e) => {
                 // W3: yig'ilganda ushlagich + kompakt qator (~84px) ko'rinib qoladi
@@ -2887,8 +2903,8 @@ function AppInner() {
                 sheetDyRef.current = dy;
                 if (!sheetOpenRef.current) sheetY.setValue(dy); // yig'iq holatda balandlik o'zgarsa moslash
               }}>
-              {/* W3: ushlagich (drag handle) zonasi — pan FAQAT shu yerda */}
-              <View {...sheetPan.panHandlers} style={{ alignItems: 'center', paddingBottom: 10 }}>
+              {/* X2: ushlagich — pan endi butun kartada (Animated.View'da), bu faqat vizual belgi */}
+              <View style={{ alignItems: 'center', paddingBottom: 10 }}>
                 <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: BORDER }} />
                 {!sheetOpen && (
                   <Text numberOfLines={1} style={{ color: WHITE, fontSize: 15, fontWeight: '700', marginTop: 10 }}>
@@ -2902,7 +2918,10 @@ function AppInner() {
               </View>
               <ScrollView
                 style={{ flexShrink: 1 }}
-                contentContainerStyle={{ paddingBottom: 8 }}>
+                contentContainerStyle={{ paddingBottom: 8 }}
+                scrollEnabled={sheetOpen}
+                scrollEventThrottle={16}
+                onScroll={(e) => { sheetScrollRef.current = e.nativeEvent.contentOffset.y; }}>
                 <OrderPanel
                   order={order} loading={loading} meter={meter} liveMeter={liveMeter} tripWait={tripWait}
                   onAction={orderAction} onNavigate={navigateTo} onFollow={() => setFollowMode(true)}
