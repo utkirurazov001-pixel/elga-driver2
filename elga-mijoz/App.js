@@ -58,6 +58,512 @@ const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
 // xarita bo'sh ("GPS aniqlanmoqda...") qotib turmasin, kesh darrov ko'rsatiladi.
 const LAST_LOC_KEY = 'last_loc';
 
+// ============================================================
+//  R1B: UZ/RU KO'P TILLILIK (haydovchi ilovasidagi qolip bilan bir xil)
+//  LANG — modul o'zgaruvchisi; t() render ichida chaqiriladi. Til almashganda
+//  setLang (AppInner) state'ni yangilab re-render qiladi (LANG sinxron yangi).
+//  FAQAT ko'rinadigan UI matnlari tarjima qilinadi; server bilan almashinadigan
+//  qiymatlar (statuslar, API pathlar, storage kalitlari) TEGILMAGAN.
+// ============================================================
+const L = {
+  uz: {
+    error: 'Xato',
+    saved_ok: 'Saqlandi ✓',
+    close: 'Yopish',
+    cancel_btn: 'Bekor qilish',
+    cancel_short: 'Bekor',
+    back: 'Ortga',
+    yes: 'Ha',
+    no: "Yo'q",
+    som: "so'm",
+    min_short: 'daq',
+    min_full: 'daqiqa',
+    driver_def: 'Haydovchi',
+    client_def: 'Mijoz',
+    cash_lbl: 'Naqd',
+    card_lbl: 'Karta',
+    not_found: 'Topilmadi',
+    unexpected_error: 'Kutilmagan xatolik',
+    unexpected_error_sub: 'Ilova qayta ishga tushirilmoqda. Buyurtmalaringiz saqlanib qoladi.',
+    retry: 'Qayta urinish',
+    net_slow: 'Internet sekin — qayta urinilmoqda',
+    net_none: "Ulanish yo'q — internetni tekshiring",
+    net_error: 'Tarmoq xatosi',
+    no_internet_banner: "Internet yo'q. Qayta ulanish kutilmoqda…",
+    client_app: 'Mijoz ilovasi',
+    get_sms_code: 'SMS KOD OLISH',
+    sms_code_ph: 'SMS kod',
+    confirm_up: 'TASDIQLASH',
+    change_number: "← Raqamni o'zgartirish",
+    your_name_ph: 'Ismingiz',
+    ref_code_ph: 'Taklif kodi (ixtiyoriy)',
+    continue_up: 'DAVOM ETISH',
+    enter_valid_phone: "To'g'ri telefon raqam kiriting",
+    sent: 'Yuborildi',
+    sms_sent: 'SMS kod yuborildi',
+    enter_code: 'Kodni kiriting',
+    enter_name: 'Ismingizni kiriting',
+    pin_set: "PIN o'rnating",
+    pin_enter: 'PIN kiriting',
+    pin_hint: "Keyingi kirishlarda SMS shart bo'lmaydi",
+    pin_4digits: '4 ta raqam kiriting',
+    pin_wrong: "PIN noto'g'ri",
+    skip: "O'tkazib yuborish",
+    login_sms: 'SMS orqali kirish',
+    gps_detecting: 'GPS aniqlanmoqda...',
+    hello: 'Salom',
+    user_def: 'Foydalanuvchi',
+    where_to_title: 'Qayerga boramiz?',
+    where_to_q: 'Qayerga borasiz?',
+    enter_or_pick: 'Manzilni kiriting yoki tanlang',
+    home: 'Uy',
+    work: 'Ish',
+    voice_order: 'Ovozli buyurtma',
+    speak_address: 'Manzilni gapiring 🎙',
+    cars_available: 'ta mashina mavjud',
+    approx_wait: 'Taxminiy kutish:',
+    search_ph: "Maktab, bozor, ko'cha...",
+    saved_sec: 'SAQLANGAN',
+    search_results_sec: 'QIDIRUV NATIJALARI',
+    recent_sec: "SO'NGGI MANZILLAR",
+    popular_sec: 'MASHHUR JOYLAR',
+    long_press_save: 'Uzun bosib saqlang',
+    home_addr: 'Uy manzili',
+    work_addr: 'Ish manzili',
+    add_favorite_q: "Sevimliga qo'shish?",
+    home_saved: 'Uy manzili saqlandi',
+    work_saved: 'Ish manzili saqlandi',
+    adjust_pickup: "Olib ketish nuqtasini xaritada to'g'rilang yoki tasdiqlang",
+    confirm_arrow: 'TASDIQLASH →',
+    seats: "o'rin",
+    soon: 'tez kunda',
+    now: 'Hozir',
+    later: 'Keyinroq',
+    promo_ph: 'Promo-kod (ixtiyoriy)',
+    apply: "Qo'llash",
+    promo_applied: "✓ Promo-kod qo'llandi — chegirma narxga kiritildi",
+    promo_invalid: 'Promo-kod yaroqsiz yoki muddati tugagan',
+    lets_go: 'Ketdik',
+    sched_when: '⏰ Qachonga?',
+    today_cap: 'Bugun',
+    tomorrow: 'Ertaga',
+    after_tomorrow: 'Indin',
+    hour_lbl: 'Soat',
+    minute_lbl: 'Daqiqa',
+    confirm_btn: 'Tasdiqlash',
+    time_too_close: 'Vaqt juda yaqin',
+    time_too_close_msg: "Kamida 15 daqiqa keyinga tanlang. Undan yaqin bo'lsa — 'Hozir' bilan chaqiring.",
+    status_searching: '🔍 Haydovchi qidirilmoqda...',
+    status_accepted: "🚗 Haydovchi yo'lda",
+    status_arrived: '✅ Haydovchi yetib keldi!',
+    status_in_progress: '🛣️ Safar davom etmoqda',
+    status_completed: '🏁 Safar yakunlandi',
+    status_cancelled: '❌ Bekor qilindi',
+    status_paid: "✅ To'landi",
+    arrives_in: 'Yetib keladi:',
+    to_dest_lbl: 'manzilgacha',
+    driver_arrival: 'haydovchi yetib kelishi',
+    scheduled_lbl: '⏰ Rejalashtirilgan',
+    sched_auto_msg: 'Vaqti kelganda haydovchi qidiruvi avtomatik boshlanadi va sizga xabar keladi',
+    away_lbl: 'uzoqlikda',
+    to_dest_left: 'Manzilgacha',
+    change_dest: "Manzilni o'zgartirish",
+    meter_lbl: 'HISOBLAGICH',
+    trip_price_lbl: 'SAFAR NARXI',
+    wait_lbl: 'kutish',
+    pay_lbl: "to'lov",
+    share: 'Ulashish',
+    cancel_order_btn: 'Buyurtmani bekor qilish',
+    searching_title: 'Haydovchi qidirilmoqda',
+    srch_msg1: 'Yaqin haydovchilar qidirilmoqda…',
+    srch_msg2: 'Eng mos haydovchi tanlanmoqda…',
+    srch_msg3: 'Deyarli tayyor…',
+    driver_waiting: '⏱ Haydovchi kutmoqda',
+    free_wait: 'Bepul kutish',
+    left_lbl: 'qoldi',
+    paid_wait: 'Pullik kutish',
+    will_add: "qo'shiladi",
+    driver_found: 'Haydovchi topildi! 🚗',
+    on_way_sfx: "yo'lda",
+    driver_arrived_t: 'Haydovchi yetib keldi ✅',
+    car_waiting: 'Mashina sizni kutmoqda',
+    trip_done_t: 'Safar yakunlandi 🏁',
+    rate_driver_sub: 'Rahmat! Haydovchini baholang',
+    order_cancelled_t: 'Buyurtma bekor qilindi',
+    driver_near: 'Haydovchi yaqinlashmoqda 🚗',
+    driver_near_sub: '~1 daqiqada yetib keladi',
+    order_placed: 'Buyurtma berildi 🚖',
+    searching_sub: 'Haydovchi qidirilmoqda...',
+    active_order_t: 'Faol buyurtma',
+    active_order_opened: 'Sizda faol buyurtma bor — ochildi',
+    active_order_exists: 'Sizda faol buyurtma bor',
+    voice_order_placed: 'Ovozli buyurtma berildi 🎙',
+    finish_current_first: 'Avval joriy buyurtmani yakunlang yoki bekor qiling',
+    driver_msg_t: '💬 Haydovchi xabar yubordi',
+    chat_with_driver: 'Haydovchi bilan chat',
+    message_ph: 'Xabar...',
+    voice_order_title: '🎙 Ovozli buyurtma',
+    voice_instr: 'Tugmani bosib ushlab turing va qayerga borishingizni tabiiy gapiring. Masalan: «Meni Muzrabot bozoriga olib boring».',
+    analyzing: 'Tahlil qilinmoqda…',
+    recording_lbl: '● Yozilmoqda…',
+    hold_to_speak: 'Bosib ushlab turing',
+    voice_retry_hint: "Tugmani bosib qayta gapiring yoki qo'lda qidiring.",
+    manual_search: "🔍 Qo'lda qidirish",
+    which_dest_q: 'Qaysi manzilga bormoqchisiz?',
+    mic_lbl: 'Mikrofon',
+    mic_perm: 'Ovozli buyurtma uchun mikrofon ruxsati kerak',
+    too_short: 'Qisqa',
+    speak_longer: 'Manzilni biroz uzunroq gapiring',
+    rec_fail: "Ovoz yozib bo'lmadi: ",
+    loc_lbl: 'Joylashuv',
+    pickup_not_found: 'Olib ketish joyi aniqlanmadi',
+    sos_title: '🆘 Favqulodda yordam',
+    fire_lbl: "Yong'in",
+    police_lbl: 'Militsiya',
+    ambulance_lbl: 'Tez yordam',
+    share_location: '📍 Joylashuvni ulashish',
+    new_dest: 'Yangi manzil',
+    new_dest_sub: "Manzil o'zgarsa, narx yangi masofa bo'yicha qayta hisoblanadi.",
+    search_addr_ph: 'Manzilni qidiring...',
+    dest_changed: "✅ Manzil o'zgartirildi",
+    new_price: 'Yangi narx:',
+    dest_updated: 'Manzil yangilandi',
+    cancel_reason_title: 'Bekor qilish sababi',
+    cancel_r1: 'Haydovchi uzoq kutdirdi',
+    cancel_r2: 'Boshqa transport topdim',
+    cancel_r3: 'Manzilni xato belgiladim',
+    cancel_r4: "Rejam o'zgardi",
+    cancel_r5: 'Haydovchi javob bermayapti',
+    other_reason_ph: 'Boshqa sabab...',
+    cancel_up: 'BEKOR QILISH',
+    cancelled_t: 'Bekor qilindi',
+    fine_lbl: 'Jarima:',
+    driver_had_arrived: '(haydovchi yetib kelgan edi)',
+    trip_finished: 'Safar yakunlandi',
+    trip_fare_lbl: 'Safar narxi',
+    wait_fee_lbl: 'Kutish haqi',
+    total_pay: "Jami to'lov",
+    cash_pay: "💵 Naqd to'lov",
+    card_pay: '💳 Karta orqali',
+    rate_driver: 'Haydovchini baholang',
+    tip_lbl: 'Choychaqa (ixtiyoriy)',
+    rate_up: 'BAHOLASH',
+    rate_first_t: 'Baholang',
+    rate_first_msg: 'Iltimos, avval yulduzlardan birini tanlang (1-5).',
+    thanks_t: 'Rahmat! 😊',
+    play_nudge: "KetdikGo yoqdimi? Play Market'da baholab, boshqalarga ham yordam bering!",
+    later_btn: 'Keyinroq',
+    rate_star_btn: 'Baholash ⭐',
+    your_trips: 'Sayohatlaringiz',
+    history: 'Tarix',
+    no_trips_yet: "Hali safar yo'q",
+    completed_lbl: 'Yakunlangan',
+    cancelled_lbl: 'Bekor qilingan',
+    repeat: '↻ Takrorlash',
+    today_up: 'BUGUN',
+    yesterday_up: 'KECHA',
+    help_sub: 'Sizga qanday yordam bera olamiz?',
+    help_center: 'Yordam markazi',
+    call_operator: "Operator bilan bog'lanish",
+    support_247: "24/7 jonli qo'llab-quvvatlash",
+    online_lbl: 'Onlayn',
+    topics: 'MAVZULAR',
+    faq_lbl: 'Tez-tez beriladigan savollar',
+    faq_sub: "FAQ — eng ko'p so'raladi",
+    pay_issues: "To'lov muammolari",
+    pay_issues_sub: 'Karta, balans, cashback',
+    trip_issues: 'Safar muammolari',
+    trip_issues_sub: 'Buyurtma, kutish, manzil',
+    driver_complaint: 'Haydovchi shikoyati',
+    driver_complaint_sub: 'Xizmat sifati, xulq',
+    ai_name: 'KetdikGo AI yordamchi',
+    ai_empty: 'Savolingizni yozing — KetdikGo AI darrov javob beradi.\n(narx, bonus, buyurtma, haydovchi...)',
+    your_question_ph: 'Savolingiz...',
+    ai_fail: "Kechirasiz, javob berib bo'lmadi. Qayta urinib ko'ring 🙏",
+    ticket_no: '📋 Murojaat raqami:',
+    profile: 'Profil',
+    balance_lbl: 'Balans',
+    cashback_lbl: 'Cashback',
+    claim_up: 'OLISH',
+    invite_friend: "Do'stingni taklif qil — 10 000 so'm bonus",
+    your_code: 'Kodingiz:',
+    friend_discount: "do'stga birinchi safar -50%",
+    fav_places: 'Sevimli joylar',
+    pay_methods_lbl: "To'lov usullari",
+    trips_history: 'Safarlar tarixi',
+    safety_sos: 'Xavfsizlik va SOS',
+    logout: 'Chiqish',
+    logout_confirm: 'Hisobdan chiqishni tasdiqlaysizmi?',
+    none_yet: "Hali yo'q",
+    pay_methods_info: "💵 Naqd — haydovchiga to'laysiz\n\n💰 Bonus balans — har safardan keshbek, keyingi safarda ishlatiladi\n\n💳 Karta — tez kunda. Payme, Click, Uzcard qo'shiladi",
+    language: 'TIL',
+    cashback_t: 'Keshbek',
+    added_to_balance: "balansga qo'shildi",
+    ref_share_pre: "KetdikGo'da birinchi safaringga -50% chegirma! Ro'yxatdan o'tishda mening taklif kodimni kirit: ",
+    ref_share_dl: 'Yuklab olish: https://ketdikgo.uz',
+    share_fail_t: "Ulashib bo'lmadi",
+    share_fail_sub: 'Token mavjud emas',
+    share_trip_pre: 'Men KetdikGo taxi bilan sayohatdaman!\nKuzatish: ',
+    link_lbl: 'Havola',
+    copy_lbl: 'Nusxalash',
+    payment_lbl: "To'lov",
+    pay_link_fail: "To'lov havolasini ochib bo'lmadi, naqd to'lashingiz mumkin",
+    tab_order: 'Buyurtma',
+    tab_trips: 'Tarix',
+    tab_help: 'Yordam',
+    tab_profile: 'Profil',
+  },
+  ru: {
+    error: 'Ошибка',
+    saved_ok: 'Сохранено ✓',
+    close: 'Закрыть',
+    cancel_btn: 'Отмена',
+    cancel_short: 'Отмена',
+    back: 'Назад',
+    yes: 'Да',
+    no: 'Нет',
+    som: 'сум',
+    min_short: 'мин',
+    min_full: 'мин',
+    driver_def: 'Водитель',
+    client_def: 'Клиент',
+    cash_lbl: 'Наличные',
+    card_lbl: 'Карта',
+    not_found: 'Не найдено',
+    unexpected_error: 'Непредвиденная ошибка',
+    unexpected_error_sub: 'Приложение перезапускается. Ваши заказы сохранятся.',
+    retry: 'Повторить',
+    net_slow: 'Медленный интернет — повторяем попытку',
+    net_none: 'Нет соединения — проверьте интернет',
+    net_error: 'Ошибка сети',
+    no_internet_banner: 'Нет интернета. Ожидание переподключения…',
+    client_app: 'Приложение клиента',
+    get_sms_code: 'ПОЛУЧИТЬ SMS-КОД',
+    sms_code_ph: 'SMS-код',
+    confirm_up: 'ПОДТВЕРДИТЬ',
+    change_number: '← Изменить номер',
+    your_name_ph: 'Ваше имя',
+    ref_code_ph: 'Пригласительный код (необязательно)',
+    continue_up: 'ПРОДОЛЖИТЬ',
+    enter_valid_phone: 'Введите корректный номер телефона',
+    sent: 'Отправлено',
+    sms_sent: 'SMS-код отправлен',
+    enter_code: 'Введите код',
+    enter_name: 'Введите ваше имя',
+    pin_set: 'Установите PIN',
+    pin_enter: 'Введите PIN',
+    pin_hint: 'При следующем входе SMS не понадобится',
+    pin_4digits: 'Введите 4 цифры',
+    pin_wrong: 'Неверный PIN',
+    skip: 'Пропустить',
+    login_sms: 'Войти через SMS',
+    gps_detecting: 'Определение GPS...',
+    hello: 'Привет',
+    user_def: 'Пользователь',
+    where_to_title: 'Куда едем?',
+    where_to_q: 'Куда поедете?',
+    enter_or_pick: 'Введите или выберите адрес',
+    home: 'Дом',
+    work: 'Работа',
+    voice_order: 'Голосовой заказ',
+    speak_address: 'Скажите адрес 🎙',
+    cars_available: 'машин рядом',
+    approx_wait: 'Ожидание:',
+    search_ph: 'Школа, базар, улица...',
+    saved_sec: 'СОХРАНЁННЫЕ',
+    search_results_sec: 'РЕЗУЛЬТАТЫ ПОИСКА',
+    recent_sec: 'НЕДАВНИЕ АДРЕСА',
+    popular_sec: 'ПОПУЛЯРНЫЕ МЕСТА',
+    long_press_save: 'Удерживайте, чтобы сохранить',
+    home_addr: 'Адрес дома',
+    work_addr: 'Адрес работы',
+    add_favorite_q: 'Добавить в избранное?',
+    home_saved: 'Адрес дома сохранён',
+    work_saved: 'Адрес работы сохранён',
+    adjust_pickup: 'Уточните точку подачи на карте или подтвердите',
+    confirm_arrow: 'ПОДТВЕРДИТЬ →',
+    seats: 'мест',
+    soon: 'скоро',
+    now: 'Сейчас',
+    later: 'Позже',
+    promo_ph: 'Промокод (необязательно)',
+    apply: 'Применить',
+    promo_applied: '✓ Промокод применён — скидка учтена в цене',
+    promo_invalid: 'Промокод недействителен или истёк',
+    lets_go: 'Поехали',
+    sched_when: '⏰ На когда?',
+    today_cap: 'Сегодня',
+    tomorrow: 'Завтра',
+    after_tomorrow: 'Послезавтра',
+    hour_lbl: 'Час',
+    minute_lbl: 'Минуты',
+    confirm_btn: 'Подтвердить',
+    time_too_close: 'Слишком близкое время',
+    time_too_close_msg: 'Выберите время минимум на 15 минут позже. Если нужно раньше — закажите через «Сейчас».',
+    status_searching: '🔍 Поиск водителя...',
+    status_accepted: '🚗 Водитель в пути',
+    status_arrived: '✅ Водитель приехал!',
+    status_in_progress: '🛣️ Поездка продолжается',
+    status_completed: '🏁 Поездка завершена',
+    status_cancelled: '❌ Отменён',
+    status_paid: '✅ Оплачено',
+    arrives_in: 'Прибудет через:',
+    to_dest_lbl: 'до места назначения',
+    driver_arrival: 'прибытие водителя',
+    scheduled_lbl: '⏰ Запланировано',
+    sched_auto_msg: 'Когда придёт время, поиск водителя начнётся автоматически, и вы получите уведомление',
+    away_lbl: 'от вас',
+    to_dest_left: 'До места',
+    change_dest: 'Изменить адрес',
+    meter_lbl: 'СЧЁТЧИК',
+    trip_price_lbl: 'ЦЕНА ПОЕЗДКИ',
+    wait_lbl: 'ожидание',
+    pay_lbl: 'оплата',
+    share: 'Поделиться',
+    cancel_order_btn: 'Отменить заказ',
+    searching_title: 'Поиск водителя',
+    srch_msg1: 'Ищем ближайших водителей…',
+    srch_msg2: 'Подбираем подходящего водителя…',
+    srch_msg3: 'Почти готово…',
+    driver_waiting: '⏱ Водитель ждёт',
+    free_wait: 'Бесплатное ожидание',
+    left_lbl: 'осталось',
+    paid_wait: 'Платное ожидание',
+    will_add: 'будет добавлено',
+    driver_found: 'Водитель найден! 🚗',
+    on_way_sfx: 'в пути',
+    driver_arrived_t: 'Водитель приехал ✅',
+    car_waiting: 'Машина ждёт вас',
+    trip_done_t: 'Поездка завершена 🏁',
+    rate_driver_sub: 'Спасибо! Оцените водителя',
+    order_cancelled_t: 'Заказ отменён',
+    driver_near: 'Водитель подъезжает 🚗',
+    driver_near_sub: 'Прибудет примерно через 1 минуту',
+    order_placed: 'Заказ создан 🚖',
+    searching_sub: 'Идёт поиск водителя...',
+    active_order_t: 'Активный заказ',
+    active_order_opened: 'У вас есть активный заказ — открыт',
+    active_order_exists: 'У вас есть активный заказ',
+    voice_order_placed: 'Голосовой заказ создан 🎙',
+    finish_current_first: 'Сначала завершите или отмените текущий заказ',
+    driver_msg_t: '💬 Сообщение от водителя',
+    chat_with_driver: 'Чат с водителем',
+    message_ph: 'Сообщение...',
+    voice_order_title: '🎙 Голосовой заказ',
+    voice_instr: 'Нажмите и удерживайте кнопку и скажите, куда вам нужно. Например: «Отвезите меня на базар Музрабада».',
+    analyzing: 'Анализируем…',
+    recording_lbl: '● Запись…',
+    hold_to_speak: 'Нажмите и удерживайте',
+    voice_retry_hint: 'Нажмите кнопку и повторите или найдите адрес вручную.',
+    manual_search: '🔍 Найти вручную',
+    which_dest_q: 'Куда вы хотите поехать?',
+    mic_lbl: 'Микрофон',
+    mic_perm: 'Для голосового заказа нужен доступ к микрофону',
+    too_short: 'Слишком коротко',
+    speak_longer: 'Назовите адрес чуть подробнее',
+    rec_fail: 'Не удалось записать: ',
+    loc_lbl: 'Геолокация',
+    pickup_not_found: 'Не удалось определить точку подачи',
+    sos_title: '🆘 Экстренная помощь',
+    fire_lbl: 'Пожарная служба',
+    police_lbl: 'Полиция',
+    ambulance_lbl: 'Скорая помощь',
+    share_location: '📍 Поделиться геолокацией',
+    new_dest: 'Новый адрес',
+    new_dest_sub: 'При смене адреса цена пересчитывается по новому расстоянию.',
+    search_addr_ph: 'Поиск адреса...',
+    dest_changed: '✅ Адрес изменён',
+    new_price: 'Новая цена:',
+    dest_updated: 'Адрес обновлён',
+    cancel_reason_title: 'Причина отмены',
+    cancel_r1: 'Водитель заставил долго ждать',
+    cancel_r2: 'Нашёл другой транспорт',
+    cancel_r3: 'Неверно указал адрес',
+    cancel_r4: 'Планы изменились',
+    cancel_r5: 'Водитель не отвечает',
+    other_reason_ph: 'Другая причина...',
+    cancel_up: 'ОТМЕНИТЬ',
+    cancelled_t: 'Отменено',
+    fine_lbl: 'Штраф:',
+    driver_had_arrived: '(водитель уже приехал)',
+    trip_finished: 'Поездка завершена',
+    trip_fare_lbl: 'Стоимость поездки',
+    wait_fee_lbl: 'Плата за ожидание',
+    total_pay: 'Итого к оплате',
+    cash_pay: '💵 Наличными',
+    card_pay: '💳 Картой',
+    rate_driver: 'Оцените водителя',
+    tip_lbl: 'Чаевые (по желанию)',
+    rate_up: 'ОЦЕНИТЬ',
+    rate_first_t: 'Оцените',
+    rate_first_msg: 'Пожалуйста, сначала выберите одну из звёзд (1-5).',
+    thanks_t: 'Спасибо! 😊',
+    play_nudge: 'Понравился KetdikGo? Оцените нас в Play Market — это поможет другим!',
+    later_btn: 'Позже',
+    rate_star_btn: 'Оценить ⭐',
+    your_trips: 'Ваши поездки',
+    history: 'История',
+    no_trips_yet: 'Поездок пока нет',
+    completed_lbl: 'Завершена',
+    cancelled_lbl: 'Отменена',
+    repeat: '↻ Повторить',
+    today_up: 'СЕГОДНЯ',
+    yesterday_up: 'ВЧЕРА',
+    help_sub: 'Чем мы можем помочь?',
+    help_center: 'Центр помощи',
+    call_operator: 'Связаться с оператором',
+    support_247: 'Живая поддержка 24/7',
+    online_lbl: 'Онлайн',
+    topics: 'ТЕМЫ',
+    faq_lbl: 'Частые вопросы',
+    faq_sub: 'FAQ — самое частое',
+    pay_issues: 'Проблемы с оплатой',
+    pay_issues_sub: 'Карта, баланс, кэшбек',
+    trip_issues: 'Проблемы с поездкой',
+    trip_issues_sub: 'Заказ, ожидание, адрес',
+    driver_complaint: 'Жалоба на водителя',
+    driver_complaint_sub: 'Качество сервиса, поведение',
+    ai_name: 'KetdikGo AI помощник',
+    ai_empty: 'Напишите вопрос — KetdikGo AI сразу ответит.\n(цена, бонус, заказ, водитель...)',
+    your_question_ph: 'Ваш вопрос...',
+    ai_fail: 'Извините, не удалось ответить. Попробуйте ещё раз 🙏',
+    ticket_no: '📋 Номер обращения:',
+    profile: 'Профиль',
+    balance_lbl: 'Баланс',
+    cashback_lbl: 'Кэшбек',
+    claim_up: 'ЗАБРАТЬ',
+    invite_friend: 'Пригласи друга — бонус 10 000 сум',
+    your_code: 'Ваш код:',
+    friend_discount: 'другу -50% на первую поездку',
+    fav_places: 'Избранные места',
+    pay_methods_lbl: 'Способы оплаты',
+    trips_history: 'История поездок',
+    safety_sos: 'Безопасность и SOS',
+    logout: 'Выйти',
+    logout_confirm: 'Вы действительно хотите выйти из аккаунта?',
+    none_yet: 'Пока нет',
+    pay_methods_info: '💵 Наличные — платите водителю\n\n💰 Бонусный баланс — кэшбек с каждой поездки, используется в следующей\n\n💳 Карта — скоро. Добавим Payme, Click, Uzcard',
+    language: 'ЯЗЫК',
+    cashback_t: 'Кэшбек',
+    added_to_balance: 'добавлено на баланс',
+    ref_share_pre: 'Скидка -50% на первую поездку в KetdikGo! При регистрации введи мой пригласительный код: ',
+    ref_share_dl: 'Скачать: https://ketdikgo.uz',
+    share_fail_t: 'Не удалось поделиться',
+    share_fail_sub: 'Токен недоступен',
+    share_trip_pre: 'Я еду с такси KetdikGo!\nСледить: ',
+    link_lbl: 'Ссылка',
+    copy_lbl: 'Скопировать',
+    payment_lbl: 'Оплата',
+    pay_link_fail: 'Не удалось открыть ссылку на оплату, можно оплатить наличными',
+    tab_order: 'Заказ',
+    tab_trips: 'История',
+    tab_help: 'Помощь',
+    tab_profile: 'Профиль',
+  },
+};
+let LANG = 'uz';
+function t(k) { return (L[LANG] && L[LANG][k]) || L.uz[k] || k; }
+
 // G2: osilib qoladigan chaqiruvlar (GPS fix, geokod) UI oqimini bloklamasin —
 // muddat o'tsa reject bo'ladi, chaqiruvchi .catch bilan davom etadi.
 function withTimeout(promise, ms) {
@@ -286,7 +792,7 @@ async function api(path, method = 'GET', body = null, token = null, timeoutMs = 
       });
     } catch (e) {
       clearTimeout(timer);
-      lastErr = new Error(e.name === 'AbortError' ? "Internet sekin — qayta urinilmoqda" : "Ulanish yo'q — internetni tekshiring");
+      lastErr = new Error(e.name === 'AbortError' ? t('net_slow') : t('net_none'));
       lastErr.network = true;
       if (attempt < maxRetries) { await sleep(Math.min(8000, 1000 * Math.pow(2, attempt))); continue; }
       NetMonitor.set(false);
@@ -302,7 +808,7 @@ async function api(path, method = 'GET', body = null, token = null, timeoutMs = 
     }
     return data;
   }
-  throw lastErr || new Error('Tarmoq xatosi');
+  throw lastErr || new Error(t('net_error'));
 }
 
 // fmt, fmtPhone — ./src/utils dan import qilinadi
@@ -353,14 +859,8 @@ const CAR_CLASSES = [
   },
 ];
 
-// Bekor qilish sabablari
-const CANCEL_REASONS = [
-  'Haydovchi uzoq kutdirdi',
-  'Boshqa transport topdim',
-  'Manzilni xato belgiladim',
-  'Rejam o\'zgardi',
-  'Haydovchi javob bermayapti',
-];
+// Bekor qilish sabablari — R1B: t() kalitlari (matnlar L lug'atida uz/ru)
+const CANCEL_REASONS = ['cancel_r1', 'cancel_r2', 'cancel_r3', 'cancel_r4', 'cancel_r5'];
 
 async function reverseGeocode(lat, lng) {
   try {
@@ -442,16 +942,16 @@ class ErrorBoundary extends React.Component {
         <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
           <Text style={{ fontSize: 40, marginBottom: 16 }}>⚠️</Text>
           <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 8 }}>
-            Kutilmagan xatolik
+            {t('unexpected_error')}
           </Text>
           <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginBottom: 24 }}>
-            Ilova qayta ishga tushirilmoqda. Buyurtmalaringiz saqlanib qoladi.
+            {t('unexpected_error_sub')}
           </Text>
           <TouchableOpacity
             onPress={this.reset}
             style={{ backgroundColor: YELLOW, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40 }}
             activeOpacity={0.85}>
-            <Text style={{ color: '#000', fontSize: 16, fontWeight: '700' }}>Qayta urinish</Text>
+            <Text style={{ color: '#000', fontSize: 16, fontWeight: '700' }}>{t('retry')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -589,6 +1089,14 @@ function AppInner() {
   const [tab, setTab] = useState('order');
   const [myLoc, setMyLoc] = useState(null);
 
+  // R1B: UI tili (uz/ru). LANG — modul o'zgaruvchisi (t() uchun), state — re-render uchun.
+  const [lang, setLangState] = useState('uz');
+  function setLang(l) {
+    LANG = l;
+    setLangState(l);
+    AsyncStorage.setItem('app_lang', l).catch(() => {});
+  }
+
   // Yangi buyurtma oqimi: 'dest' → 'confirm' → 'tariff' → null (buyurtma ketdi)
   const [orderStep, setOrderStep] = useState('dest');
   const [pickup, setPickup] = useState(null);   // { lat, lng, address }
@@ -705,19 +1213,19 @@ function AppInner() {
     const yesterday = new Date(Date.now() - 86400000).toDateString();
     let lastDay = null;
     const result = [];
-    trips.forEach(t => {
-      const d = new Date(t.created_at).toDateString();
+    trips.forEach(tp => {
+      const d = new Date(tp.created_at).toDateString();
       if (d !== lastDay) {
         lastDay = d;
         result.push({
           type: 'header',
-          label: d === today ? 'BUGUN' : d === yesterday ? 'KECHA' : new Date(t.created_at).toLocaleDateString('uz-UZ', { day: 'numeric', month: 'long' })
+          label: d === today ? t('today_up') : d === yesterday ? t('yesterday_up') : new Date(tp.created_at).toLocaleDateString(LANG === 'ru' ? 'ru-RU' : 'uz-UZ', { day: 'numeric', month: 'long' })
         });
       }
-      result.push({ type: 'trip', item: t });
+      result.push({ type: 'trip', item: tp });
     });
     return result;
-  }, [trips]);
+  }, [trips, lang]);
   const [balance, setBalance] = useState(null);
   const [chat, setChat] = useState([]);
   const [aiModal, setAiModal] = useState(false); // AI chat modali (suzuvchi tugmadan 1 tegishда)
@@ -832,6 +1340,11 @@ function AppInner() {
     (async () => {
       // OTA yangilanish: faqat standalone APK da ishlaydi, Expo Go da o'tkazib yuboriladi
 
+      // R1B: saqlangan UI tilini tiklaymiz — birinchi renderdan to'g'ri til ko'rinadi
+      try {
+        const lg = await AsyncStorage.getItem('app_lang');
+        if (lg === 'ru' || lg === 'uz') { LANG = lg; setLangState(lg); }
+      } catch (e) {}
       try {
         const t = await AsyncStorage.getItem('token');
         const u = await AsyncStorage.getItem('user');
@@ -1034,9 +1547,9 @@ function AppInner() {
         // Endigina qabul qilindi -> bildirishnoma (faqat o'tish payti)
         if ((st === 'searching' || st === 'assigned') && fresh.status === 'accepted') {
           arrivedNotified.current = false;
-          const nm = fresh.driver_name || 'Haydovchi';
+          const nm = fresh.driver_name || t('driver_def');
           const car = fresh.driver_car ? ` · ${fresh.driver_car}${fresh.driver_plate ? ' ' + fresh.driver_plate : ''}` : '';
-          notify('Haydovchi topildi! 🚗', `${nm}${car} yo'lda`);
+          notify(t('driver_found'), `${nm}${car} ${t('on_way_sfx')}`);
         }
         // T-16: markaziy mashina orqali — eskirgan poll javobi holatni ORQAGA qaytarmasin
         applyServerOrder(fresh);
@@ -1151,8 +1664,8 @@ function AppInner() {
     const e = placeEst[estKey(p)];
     if (e) return (
       <View style={{ alignItems: 'flex-end' }}>
-        <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '600' }}>~{fmt(e.price)} so'm</Text>
-        <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>{e.duration_min} daq</Text>
+        <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '600' }}>~{fmt(e.price)} {t('som')}</Text>
+        <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>{e.duration_min} {t('min_short')}</Text>
       </View>
     );
     return (
@@ -1164,7 +1677,7 @@ function AppInner() {
   }
 
   async function addFavorite(place) {
-    try { await api('/api/me/favorites', 'POST', { name: place.address, address: place.address, lat: place.lat, lng: place.lng }, token); loadFavorites(); Alert.alert('Saqlandi ✓', place.address); } catch (e) { Alert.alert('Xato', e.message); }
+    try { await api('/api/me/favorites', 'POST', { name: place.address, address: place.address, lat: place.lat, lng: place.lng }, token); loadFavorites(); Alert.alert(t('saved_ok'), place.address); } catch (e) { Alert.alert(t('error'), e.message); }
   }
 
   async function removeFavorite(id) {
@@ -1208,13 +1721,13 @@ function AppInner() {
       seedDriverLocFromOrder(o); // M-05: haydovchi markeri/ETA payload'dan ham tiklanadi
       if (o.status === 'accepted') {
         arrivedNotified.current = false;
-        const nm = o.driver_name || 'Haydovchi';
+        const nm = o.driver_name || t('driver_def');
         const car = o.driver_car ? ` · ${o.driver_car}${o.driver_plate ? ' ' + o.driver_plate : ''}` : '';
-        notify('Haydovchi topildi! 🚗', `${nm}${car} yo'lda`);
+        notify(t('driver_found'), `${nm}${car} ${t('on_way_sfx')}`);
       }
       if (o.status === 'arrived' && !arrivedNotified.current) {
         arrivedNotified.current = true;
-        notify('Haydovchi yetib keldi ✅', 'Mashina sizni kutmoqda');
+        notify(t('driver_arrived_t'), t('car_waiting'));
         playAdminSoundUrl(adminSoundUrl('driver_arrived')); // T-19: admin ovozi (mijoz)
       }
       // T-19: safar boshlandi — admin ovozi (bir buyurtma uchun bir marta)
@@ -1224,7 +1737,7 @@ function AppInner() {
       }
       if (o.status === 'completed') {
         finishedOrderIdRef.current = o.id; // kechikkan event uni tiriltirmasin (#order-resurrect)
-        notify('Safar yakunlandi 🏁', 'Rahmat! Haydovchini baholang');
+        notify(t('trip_done_t'), t('rate_driver_sub'));
         playAdminSoundUrl(adminSoundUrl('trip_completed')); // T-19: admin ovozi (mijoz)
         setCompletedOrder(o);          // hisob-kitob ko'rsatish uchun saqlayмиз
         setRateOrderId(o.id); setStars(0); setTipAmount(0); setRateModal(true); // D4: tanlanmagan holatdan
@@ -1232,7 +1745,7 @@ function AppInner() {
       }
       if (o.status === 'cancelled') {
         finishedOrderIdRef.current = o.id; // kechikkan event uni tiriltirmasin (#order-resurrect)
-        notify('Buyurtma bekor qilindi', '');
+        notify(t('order_cancelled_t'), '');
         playAdminSoundUrl(adminSoundUrl('order_cancelled')); // T-19: admin ovozi (mijoz)
         resetOrder();
       }
@@ -1246,7 +1759,7 @@ function AppInner() {
           const d = distKm(loc.lat, loc.lng, prev.from_lat, prev.from_lng);
           if (d < 0.15) {
             arrivedNotified.current = true;
-            notify('Haydovchi yaqinlashmoqda 🚗', '~1 daqiqada yetib keladi');
+            notify(t('driver_near'), t('driver_near_sub'));
           }
         }
         return prev;
@@ -1262,7 +1775,7 @@ function AppInner() {
       // tripChatModal doim false edi (modal ochiq bo'lsa ham notify chiqardi)
       if (!tripChatModalRef.current) {
         setTripChatUnread((c) => c + 1); // badge: sariq doira ichida son
-        notify('💬 Haydovchi xabar yubordi', msg.text || '');
+        notify(t('driver_msg_t'), msg.text || '');
       }
     });
     // Jonli kutish haqi (arrived) — backend har 5 sekunda yuboradi.
@@ -1325,15 +1838,15 @@ function AppInner() {
 
   // Sayohatni ulashish
   async function shareTrip() {
-    if (!order?.share_token) { Alert.alert('Ulashib bo\'lmadi', 'Token mavjud emas'); return; }
+    if (!order?.share_token) { Alert.alert(t('share_fail_t'), t('share_fail_sub')); return; }
     // D2: endi inson o'qiydigan jonli sahifa (backend /share/:token, PR #130) —
     // avval xom JSON API havolasi ketardi, qabul qiluvchi matn ko'rardi.
     const url = `${BASE}/share/${order.share_token}`;
-    const msg = `Men KetdikGo taxi bilan sayohatdaman!\nKuzatish: ${url}`;
+    const msg = `${t('share_trip_pre')}${url}`;
     try {
       await Linking.openURL(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(msg)}`);
     } catch (_) {
-      Alert.alert('Havola', url, [{ text: 'Nusxalash', onPress: () => Linking.openURL(`https://t.me/share/url?url=${encodeURIComponent(url)}`) }]);
+      Alert.alert(t('link_lbl'), url, [{ text: t('copy_lbl'), onPress: () => Linking.openURL(`https://t.me/share/url?url=${encodeURIComponent(url)}`) }]);
     }
   }
 
@@ -1537,10 +2050,10 @@ function AppInner() {
         setDest({ lat: place.lat, lng: place.lng, address: place.address || place.name });
       }
       setChangeDestModal(false); setCdQ(''); setCdResults([]);
-      Alert.alert('✅ Manzil o\'zgartirildi', r.recalculated
-        ? `Yangi narx: ${fmt(r.order?.price || 0)} so'm`
-        : 'Manzil yangilandi');
-    } catch (e) { Alert.alert('Xato', e.message); }
+      Alert.alert(t('dest_changed'), r.recalculated
+        ? `${t('new_price')} ${fmt(r.order?.price || 0)} ${t('som')}`
+        : t('dest_updated'));
+    } catch (e) { Alert.alert(t('error'), e.message); }
     setLoading(false);
   }
 
@@ -1560,7 +2073,7 @@ function AppInner() {
       await api('/api/me/favorites', 'POST', { name: nm, address: place.address || nm, lat: place.lat, lng: place.lng }, token);
       loadFavorites();
     } catch (_) {}
-    Alert.alert(type === 'home' ? 'Uy manzili saqlandi' : 'Ish manzili saqlandi', place.address);
+    Alert.alert(type === 'home' ? t('home_saved') : t('work_saved'), place.address);
   }
 
   // ---- P1 (A-1): HAQIQIY YO'L masofasi — narx to'g'ri chiziq bo'yicha emas ----
@@ -1660,16 +2173,16 @@ function AppInner() {
       finishedOrderIdRef.current = null; // yangi buyurtma — eski yakun belgisi tozalanadi
       setOrder(o);
       setOrderStep(null);
-      notify('Buyurtma berildi 🚖', 'Haydovchi qidirilmoqda...');
+      notify(t('order_placed'), t('searching_sub'));
       if (payMethod !== 'cash') openPayment(o.id, payMethod);
     } catch (e) {
       // "Sizda faol buyurtma bor" (409) -> yangi buyurtma o'rniga faolini ochamiz
       if (e?.status === 409) {
         const opened = await openActiveOrder(e);
-        if (opened) notify('Faol buyurtma', 'Sizda faol buyurtma bor — ochildi');
-        else Alert.alert('Faol buyurtma', e.message || 'Sizda faol buyurtma bor');
+        if (opened) notify(t('active_order_t'), t('active_order_opened'));
+        else Alert.alert(t('active_order_t'), e.message || t('active_order_exists'));
       } else {
-        Alert.alert('Xato', e.message);
+        Alert.alert(t('error'), e.message);
       }
     }
     creatingOrderRef.current = false;
@@ -1680,7 +2193,7 @@ function AppInner() {
   // Mijoz manzilni ovozda aytadi → hisoblagich (manzilsiz) buyurtma yaratiladi,
   // haydovchi ovozni eshitadi. Narx safar oxirida km+vaqt bo'yicha.
   function openVoiceOrder() {
-    if (order) { Alert.alert('Faol buyurtma', 'Avval joriy buyurtmani yakunlang yoki bekor qiling'); return; }
+    if (order) { Alert.alert(t('active_order_t'), t('finish_current_first')); return; }
     setVoiceSec(0); setRecording(false); setVoiceParsing(false); setVoiceClarify(''); setVoiceHeard(''); setVoiceModal(true);
   }
   function closeVoiceOrder() {
@@ -1693,7 +2206,7 @@ function AppInner() {
     if (recordingRef.current) return;
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
-      if (!perm.granted) { Alert.alert('Mikrofon', 'Ovozli buyurtma uchun mikrofon ruxsati kerak'); return; }
+      if (!perm.granted) { Alert.alert(t('mic_lbl'), t('mic_perm')); return; }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
@@ -1703,7 +2216,7 @@ function AppInner() {
         if (v >= 60) { stopVoiceRecording(); return v; } // 60s cheklov
         return v + 1;
       }), 1000);
-    } catch (e) { Alert.alert('Xato', "Ovoz yozib bo'lmadi: " + e.message); }
+    } catch (e) { Alert.alert(t('error'), t('rec_fail') + e.message); }
   }
   async function stopVoiceRecording() {
     if (voiceTimer.current) { clearInterval(voiceTimer.current); voiceTimer.current = null; }
@@ -1713,12 +2226,12 @@ function AppInner() {
     try {
       await audioRecorder.stop();
       const uri = audioRecorder.uri;
-      if (!uri || voiceSec < 1) { Alert.alert('Qisqa', 'Manzilni biroz uzunroq gapiring'); return; }
+      if (!uri || voiceSec < 1) { Alert.alert(t('too_short'), t('speak_longer')); return; }
       // Avval AI tahlil (nutq -> manzil avto-to'ldirish). Endpoint yo'q/xato bo'lsa
       // eski oqimga qaytamiz (haydovchi ovozni eshitadi) — nol regressiya.
       const handled = await parseVoiceAndFill(uri);
       if (!handled) await sendVoiceOrder(uri);
-    } catch (e) { Alert.alert('Xato', e.message); }
+    } catch (e) { Alert.alert(t('error'), e.message); }
   }
   // Lokal audio faylni base64 data-URL ga aylantiradi (backend order_voice formati)
   async function fileToDataUrl(uri) {
@@ -1733,7 +2246,7 @@ function AppInner() {
   }
   async function sendVoiceOrder(uri) {
     const from = pickup || myLoc;
-    if (!from) { Alert.alert('Joylashuv', 'Olib ketish joyi aniqlanmadi'); return; }
+    if (!from) { Alert.alert(t('loc_lbl'), t('pickup_not_found')); return; }
     if (creatingOrderRef.current) return; // ikki marta yuborilmasin
     creatingOrderRef.current = true;
     setLoading(true);
@@ -1747,15 +2260,15 @@ function AppInner() {
       orderTouchedAtRef.current = Date.now(); // T-16: race guard (#order-disappear)
       finishedOrderIdRef.current = null;
       setOrder(o); setOrderStep(null); setVoiceModal(false); setVoiceSec(0);
-      notify('Ovozli buyurtma berildi 🎙', 'Haydovchi qidirilmoqda...');
+      notify(t('voice_order_placed'), t('searching_sub'));
     } catch (e) {
       if (e?.status === 409) {
         setVoiceModal(false);
         const opened = await openActiveOrder(e);
-        if (opened) notify('Faol buyurtma', 'Sizda faol buyurtma bor — ochildi');
-        else Alert.alert('Faol buyurtma', e.message || 'Sizda faol buyurtma bor');
+        if (opened) notify(t('active_order_t'), t('active_order_opened'));
+        else Alert.alert(t('active_order_t'), e.message || t('active_order_exists'));
       } else {
-        Alert.alert('Xato', e.message);
+        Alert.alert(t('error'), e.message);
       }
     }
     creatingOrderRef.current = false;
@@ -1817,7 +2330,7 @@ function AppInner() {
       else if (typeof r?.transcript === 'string') setVoiceHeard(r.transcript);
       // Noaniq manzil yoki destination yo'q -> aniqlashtirish so'raymiz (modalda qoldik)
       if (p.needs_clarification || !p.destination_text || p.destination_known === false) {
-        setVoiceClarify(p.clarification_question || 'Qaysi manzilga bormoqchisiz?');
+        setVoiceClarify(p.clarification_question || t('which_dest_q'));
         setVoiceParsing(false);
         return true;
       }
@@ -1835,7 +2348,7 @@ function AppInner() {
     try {
       const r = await api('/api/pay/create', 'POST', { order_id: orderId, provider }, token);
       if (r.url) Linking.openURL(r.url);
-    } catch (e) { Alert.alert("To'lov", "To'lov havolasini ochib bo'lmadi, naqd to'lashingiz mumkin"); }
+    } catch (e) { Alert.alert(t('payment_lbl'), t('pay_link_fail')); }
   }
 
   // ---- Bekor qilish ----
@@ -1844,9 +2357,9 @@ function AppInner() {
     setLoading(true);
     try {
       const r = await api(`/api/orders/${order.id}/cancel`, 'POST', { reason }, token);
-      if (r.cancel_fee > 0) Alert.alert('Bekor qilindi', `Jarima: ${fmt(r.cancel_fee)} so'm (haydovchi yetib kelgan edi)`);
+      if (r.cancel_fee > 0) Alert.alert(t('cancelled_t'), `${t('fine_lbl')} ${fmt(r.cancel_fee)} ${t('som')} ${t('driver_had_arrived')}`);
       resetOrder();
-    } catch (e) { Alert.alert('Xato', e.message); }
+    } catch (e) { Alert.alert(t('error'), e.message); }
     setCustomReason('');
     setLoading(false);
   }
@@ -1854,7 +2367,7 @@ function AppInner() {
   // ---- Baholash + tip ----
   async function submitRating() {
     // D4: baho ONGLI tanlangan bo'lsin — yulduz bosilmagan bo'lsa yubormaymiz
-    if (!stars) { Alert.alert('Baholang', "Iltimos, avval yulduzlardan birini tanlang (1-5)."); return; }
+    if (!stars) { Alert.alert(t('rate_first_t'), t('rate_first_msg')); return; }
     setLoading(true);
     try {
       await api(`/api/me/rate/${rateOrderId}`, 'POST', { stars }, token);
@@ -1870,11 +2383,11 @@ function AppInner() {
         if (!asked) {
           await AsyncStorage.setItem('rate_nudge_done', '1');
           Alert.alert(
-            'Rahmat! 😊',
-            "KetdikGo yoqdimi? Play Market'da baholab, boshqalarga ham yordam bering!",
+            t('thanks_t'),
+            t('play_nudge'),
             [
-              { text: 'Keyinroq', style: 'cancel' },
-              { text: 'Baholash ⭐', onPress: () => Linking.openURL('market://details?id=uz.ketdik.mijoz').catch(() => Linking.openURL('https://play.google.com/store/apps/details?id=uz.ketdik.mijoz')) },
+              { text: t('later_btn'), style: 'cancel' },
+              { text: t('rate_star_btn'), onPress: () => Linking.openURL('market://details?id=uz.ketdik.mijoz').catch(() => Linking.openURL('https://play.google.com/store/apps/details?id=uz.ketdik.mijoz')) },
             ]
           );
         }
@@ -1896,9 +2409,9 @@ function AppInner() {
     resetOrder(); setTab('order');
   }
   function confirmLogout() {
-    Alert.alert('Chiqish', 'Hisobdan chiqishni tasdiqlaysizmi?', [
-      { text: 'Bekor qilish', style: 'cancel' },
-      { text: 'Chiqish', style: 'destructive', onPress: doLogout },
+    Alert.alert(t('logout'), t('logout_confirm'), [
+      { text: t('cancel_btn'), style: 'cancel' },
+      { text: t('logout'), style: 'destructive', onPress: doLogout },
     ]);
   }
 
@@ -1928,9 +2441,9 @@ function AppInner() {
   async function claimCashback() {
     try {
       const r = await api('/api/me/claim-cashback', 'POST', {}, token);
-      Alert.alert('Keshbek', `${fmt(r.claimed)} so'm balansga qo'shildi`);
+      Alert.alert(t('cashback_t'), `${fmt(r.claimed)} ${t('som')} ${t('added_to_balance')}`);
       loadBalance();
-    } catch (e) { Alert.alert('Xato', e.message); }
+    } catch (e) { Alert.alert(t('error'), e.message); }
   }
   async function sendChat() {
     const text = chatInput.trim();
@@ -1940,11 +2453,11 @@ function AppInner() {
     try {
       // Tejamkorlik: faqat OXIRGI 4 xabar yuboriladi (server ham 6 bilan cheklaydi)
       const r = await api('/api/ai/chat', 'POST', { messages: next.slice(-4), order_id: order?.id, context_role: 'customer' }, token, 25000, { retries: 1 });
-      const reply = r.reply + (r.ticket ? `\n\n📋 Murojaat raqami: ${r.ticket}` : '');
+      const reply = r.reply + (r.ticket ? `\n\n${t('ticket_no')} ${r.ticket}` : '');
       setChat([...next, { role: 'assistant', text: reply }]);
     } catch (e) {
       // T-20: jim to'xtamaydi — xato chatda aniq ko'rinadi, qayta yuborsa bo'ladi
-      setChat([...next, { role: 'assistant', text: 'Kechirasiz, javob berib bo\'lmadi. Qayta urinib ko\'ring 🙏' }]);
+      setChat([...next, { role: 'assistant', text: t('ai_fail') }]);
     } finally {
       setChatLoading(false); // har qanday holatda tugma qayta ochiladi
     }
@@ -1975,11 +2488,11 @@ function AppInner() {
         <FadeInView delay={0} from={20}>
         <View style={{ alignItems: 'center' }}><ElgaLogo size={56} /></View>
         <Text style={{ color: WHITE, fontSize: 24, fontWeight: '600', textAlign: 'center', marginTop: 8 }}>
-          {isSetup ? "PIN o'rnating" : 'PIN kiriting'}
+          {isSetup ? t('pin_set') : t('pin_enter')}
         </Text>
         {isSetup && (
           <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginTop: 6 }}>
-            Keyingi kirishlarda SMS shart bo'lmaydi
+            {t('pin_hint')}
           </Text>
         )}
         <TextInput
@@ -1997,28 +2510,28 @@ function AppInner() {
           style={s.ctaBtn}
           onPress={isSetup
             ? async () => {
-                if (pinInput.length !== 4) { Alert.alert('Xato', '4 ta raqam kiriting'); return; }
+                if (pinInput.length !== 4) { Alert.alert(t('error'), t('pin_4digits')); return; }
                 await AsyncStorage.setItem('pin', pinInput);
                 setStoredPin(pinInput); setPinInput(''); setPinStep(null);
               }
             : () => {
                 if (pinInput === storedPin) { setPinStep(null); setPinInput(''); }
-                else { Alert.alert('Xato', "PIN noto'g'ri"); setPinInput(''); }
+                else { Alert.alert(t('error'), t('pin_wrong')); setPinInput(''); }
               }
           }
         >
-          <Text style={s.ctaBtnTxt}>DAVOM ETISH</Text>
+          <Text style={s.ctaBtnTxt}>{t('continue_up')}</Text>
         </PressableScale>
         {isSetup
           ? <TouchableOpacity onPress={() => setPinStep(null)} activeOpacity={0.7}>
-              <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 16 }}>O'tkazib yuborish</Text>
+              <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 16 }}>{t('skip')}</Text>
             </TouchableOpacity>
           : <TouchableOpacity activeOpacity={0.7} onPress={async () => {
               await AsyncStorage.multiRemove(['token', 'user', 'pin', ACTIVE_ORDER_KEY]);
               setToken(null); setUser(null); setStoredPin(null);
               setPinStep(null); setPinInput(''); setStep('phone');
             }}>
-              <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 16 }}>SMS orqali kirish</Text>
+              <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 16 }}>{t('login_sms')}</Text>
             </TouchableOpacity>
         }
         </FadeInView>
@@ -2033,7 +2546,7 @@ function AppInner() {
         <StatusBar style="light" />
         <FadeInView delay={0} from={24} duration={500}>
           <View style={{ alignItems: 'center' }}><ElgaLogo size={56} /></View>
-          <Text style={{ color: GRAY1, fontSize: 15, textAlign: 'center', marginTop: 6 }}>Mijoz ilovasi</Text>
+          <Text style={{ color: GRAY1, fontSize: 15, textAlign: 'center', marginTop: 6 }}>{t('client_app')}</Text>
         </FadeInView>
 
         {step === 'phone' && (
@@ -2047,13 +2560,13 @@ function AppInner() {
               onChangeText={setPhone}
             />
             <PressableScale style={s.ctaBtn} onPress={async () => {
-              if (phone.replace(/\D/g, '').length < 9) { Alert.alert('Xato', "To'g'ri telefon raqam kiriting"); return; }
+              if (phone.replace(/\D/g, '').length < 9) { Alert.alert(t('error'), t('enter_valid_phone')); return; }
               setLoading(true);
-              try { await api('/api/auth/send-code', 'POST', { phone }); setStep('code'); Alert.alert('Yuborildi', 'SMS kod yuborildi'); }
-              catch (e) { Alert.alert('Xato', e.message); }
+              try { await api('/api/auth/send-code', 'POST', { phone }); setStep('code'); Alert.alert(t('sent'), t('sms_sent')); }
+              catch (e) { Alert.alert(t('error'), e.message); }
               setLoading(false);
             }} disabled={loading}>
-              {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>SMS KOD OLISH</Text>}
+              {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>{t('get_sms_code')}</Text>}
             </PressableScale>
           </FadeInView>
         )}
@@ -2062,14 +2575,14 @@ function AppInner() {
           <FadeInView key="code" delay={60} from={20}>
             <TextInput
               style={[s.input, { marginTop: 32 }]}
-              placeholder="SMS kod"
+              placeholder={t('sms_code_ph')}
               placeholderTextColor={GRAY2}
               keyboardType="number-pad"
               value={code}
               onChangeText={setCode}
             />
             <PressableScale style={s.ctaBtn} onPress={async () => {
-              if (code.length < 4) { Alert.alert('Xato', 'Kodni kiriting'); return; }
+              if (code.length < 4) { Alert.alert(t('error'), t('enter_code')); return; }
               setLoading(true);
               try {
                 const r = await api('/api/auth/verify', 'POST', { phone, code });
@@ -2080,14 +2593,14 @@ function AppInner() {
                 // Token saqlandi; keyingi ochilishlarda avtomatik kiriladi.
               } catch (e) {
                 if (e.data?.new_user && e.data?.reg_token) { setRegToken(e.data.reg_token); setStep('name'); }
-                else { Alert.alert('Xato', e.message); }
+                else { Alert.alert(t('error'), e.message); }
               }
               setLoading(false);
             }} disabled={loading}>
-              {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>TASDIQLASH</Text>}
+              {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>{t('confirm_up')}</Text>}
             </PressableScale>
             <TouchableOpacity onPress={() => setStep('phone')} activeOpacity={0.7}>
-              <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 12 }}>← Raqamni o'zgartirish</Text>
+              <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 12 }}>{t('change_number')}</Text>
             </TouchableOpacity>
           </FadeInView>
         )}
@@ -2096,7 +2609,7 @@ function AppInner() {
           <FadeInView key="name" delay={60} from={20}>
             <TextInput
               style={[s.input, { marginTop: 32 }]}
-              placeholder="Ismingiz"
+              placeholder={t('your_name_ph')}
               placeholderTextColor={GRAY2}
               value={name}
               onChangeText={setName}
@@ -2105,7 +2618,7 @@ function AppInner() {
                 safar -50% (backend auth.js referral_code ni qabul qiladi) */}
             <TextInput
               style={s.input}
-              placeholder="Taklif kodi (ixtiyoriy)"
+              placeholder={t('ref_code_ph')}
               placeholderTextColor={GRAY2}
               autoCapitalize="characters"
               autoCorrect={false}
@@ -2113,7 +2626,7 @@ function AppInner() {
               onChangeText={setRefCode}
             />
             <PressableScale style={s.ctaBtn} onPress={async () => {
-              if (name.trim().length < 2) { Alert.alert('Xato', 'Ismingizni kiriting'); return; }
+              if (name.trim().length < 2) { Alert.alert(t('error'), t('enter_name')); return; }
               setLoading(true);
               try {
                 const r = await api('/api/auth/verify', 'POST', { phone, code, name: name.trim(), role: 'customer', reg_token: regToken, ...(refCode.trim() ? { referral_code: refCode.trim().toUpperCase() } : {}) });
@@ -2122,10 +2635,10 @@ function AppInner() {
                 setToken(r.token); setUser(r.user);
                 // T-06: PIN/parol so'ralmaydi — bir marta SMS bilan kirish yetarli.
                 // Token saqlandi; keyingi ochilishlarda avtomatik kiriladi.
-              } catch (e) { Alert.alert('Xato', e.message); }
+              } catch (e) { Alert.alert(t('error'), e.message); }
               setLoading(false);
             }} disabled={loading}>
-              {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>DAVOM ETISH</Text>}
+              {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>{t('continue_up')}</Text>}
             </PressableScale>
           </FadeInView>
         )}
@@ -2178,7 +2691,7 @@ function AppInner() {
         }}>
           <Ionicons name="cloud-offline-outline" size={14} color="#FF6B6B" />
           <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>
-            Internet yo'q. Qayta ulanish kutilmoqda…
+            {t('no_internet_banner')}
           </Text>
         </View>
       )}
@@ -2212,10 +2725,10 @@ function AppInner() {
                 paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: '#333',
               }}>
                 <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700' }}>
-                  🧭 {routeInfo.km} km · ~{routeInfo.min} daq
+                  🧭 {routeInfo.km} km · ~{routeInfo.min} {t('min_short')}
                 </Text>
                 <Text style={{ color: '#ccc', fontSize: 11 }}>
-                  {order.status === 'in_progress' ? 'manzilgacha' : 'haydovchi yetib kelishi'}
+                  {order.status === 'in_progress' ? t('to_dest_lbl') : t('driver_arrival')}
                 </Text>
               </View>
             )}
@@ -2263,7 +2776,7 @@ function AppInner() {
                     const p = pickup || myLoc || (order.from_lat != null ? { lat: order.from_lat, lng: order.from_lng } : null);
                     if (p) {
                       const etaMin = Math.max(1, Math.round((distKm(driverLoc.lat, driverLoc.lng, p.lat, p.lng) / 25) * 60));
-                      return <>Yetib keladi: <Text style={{ color: YELLOW }}>~{etaMin} daq</Text></>;
+                      return <>{t('arrives_in')} <Text style={{ color: YELLOW }}>~{etaMin} {t('min_short')}</Text></>;
                     }
                   }
                   return statusText(order.status);
@@ -2313,7 +2826,7 @@ function AppInner() {
                       const dKm = distKm(driverLoc.lat, driverLoc.lng, p.lat, p.lng);
                       return (
                         <Text style={{ color: GREEN, fontSize: 12, marginTop: 2 }}>
-                          🚗 {dKm < 1 ? `${(dKm * 1000).toFixed(0)} m` : `${dKm.toFixed(1)} km`} uzoqlikda
+                          🚗 {dKm < 1 ? `${(dKm * 1000).toFixed(0)} m` : `${dKm.toFixed(1)} km`} {t('away_lbl')}
                         </Text>
                       );
                     })()}
@@ -2321,7 +2834,7 @@ function AppInner() {
                         OSRM natijasidan (routeInfo), yangi so'rovsiz. */}
                     {order.status === 'in_progress' && routeInfo && (
                       <Text style={{ color: GREEN, fontSize: 12, marginTop: 4 }}>
-                        🏁 Manzilgacha ~{routeInfo.min} daq · {routeInfo.km} km
+                        🏁 {t('to_dest_left')} ~{routeInfo.min} {t('min_short')} · {routeInfo.km} km
                       </Text>
                     )}
                   </View>
@@ -2349,10 +2862,10 @@ function AppInner() {
                   /* C1: vaqti hali kelmagan rejalashtirilgan buyurtma — radar emas,
                      tinch kutish kartasi (haydovchi qidiruvi vaqtida o'zi boshlanadi) */
                   <View style={{ backgroundColor: CARD2, borderRadius: 14, borderWidth: 1, borderColor: BORDER, padding: 16, marginHorizontal: 16, marginTop: 8, alignItems: 'center' }}>
-                    <Text style={{ color: YELLOW, fontSize: 17, fontWeight: '800' }}>⏰ Rejalashtirilgan</Text>
+                    <Text style={{ color: YELLOW, fontSize: 17, fontWeight: '800' }}>{t('scheduled_lbl')}</Text>
                     <Text style={{ color: WHITE, fontSize: 14, marginTop: 4 }}>{fmtSched(new Date(schedFutureMs(order)))}</Text>
                     <Text style={{ color: GRAY1, fontSize: 12, marginTop: 4, textAlign: 'center' }}>
-                      Vaqti kelganda haydovchi qidiruvi avtomatik boshlanadi va sizga xabar keladi
+                      {t('sched_auto_msg')}
                     </Text>
                   </View>
                 ) : <SearchingPulse />
@@ -2362,7 +2875,7 @@ function AppInner() {
 
               {order.price > 0 && (
                 <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginTop: 8 }}>
-                  {fmt(order.price)} so'm · {order.payment_method === 'cash' ? 'Naqd' : order.payment_method}
+                  {fmt(order.price)} {t('som')} · {order.payment_method === 'cash' ? t('cash_lbl') : order.payment_method}
                 </Text>
               )}
 
@@ -2371,7 +2884,7 @@ function AppInner() {
                   style={[s.outlineBtn, { marginTop: 12, marginHorizontal: 16, justifyContent: 'center' }]}
                   onPress={() => { setChangeDestModal(true); setCdQ(''); setCdResults([]); }}>
                   <Ionicons name="location" size={16} color={YELLOW} style={{ marginRight: 6 }} />
-                  <Text style={{ color: YELLOW, fontSize: 14, fontWeight: '600' }}>Manzilni o'zgartirish</Text>
+                  <Text style={{ color: YELLOW, fontSize: 14, fontWeight: '600' }}>{t('change_dest')}</Text>
                 </TouchableOpacity>
               )}
 
@@ -2381,12 +2894,12 @@ function AppInner() {
                   {/* Asosiy narx */}
                   <View style={{ alignItems: 'center', paddingBottom: 12, borderBottomWidth: 1, borderColor: BORDER }}>
                     <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 1 }}>
-                      {order.metered ? 'HISOBLAGICH' : 'SAFAR NARXI'}
+                      {order.metered ? t('meter_lbl') : t('trip_price_lbl')}
                     </Text>
                     <Text style={{ color: YELLOW, fontSize: 44, fontWeight: '800', lineHeight: 52, marginTop: 4 }}>
                       {fmt(order.metered ? (liveFare || order.price || 0) : (order.price || 0))}
                     </Text>
-                    <Text style={{ color: GRAY1, fontSize: 14 }}>so'm</Text>
+                    <Text style={{ color: GRAY1, fontSize: 14 }}>{t('som')}</Text>
                   </View>
                   {/* Km · Daqiqa · Kutish */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingTop: 10 }}>
@@ -2403,7 +2916,7 @@ function AppInner() {
                         <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700' }}>
                           {liveMin > 0 ? Math.round(liveMin) : '—'}
                         </Text>
-                        <Text style={{ color: GRAY1, fontSize: 11 }}>daqiqa</Text>
+                        <Text style={{ color: GRAY1, fontSize: 11 }}>{t('min_full')}</Text>
                       </View>
                     )}
                     {(order.wait_fee > 0 || liveWait.fee > 0) && (
@@ -2411,14 +2924,14 @@ function AppInner() {
                         <Text style={{ color: RED, fontSize: 18, fontWeight: '700' }}>
                           +{fmt(Math.max(order.wait_fee || 0, liveWait.fee))}
                         </Text>
-                        <Text style={{ color: GRAY1, fontSize: 11 }}>kutish</Text>
+                        <Text style={{ color: GRAY1, fontSize: 11 }}>{t('wait_lbl')}</Text>
                       </View>
                     )}
                     <View style={{ alignItems: 'center' }}>
                       <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '600' }}>
-                        {order.payment_method === 'cash' ? '💵 Naqd' : '💳 Karta'}
+                        {order.payment_method === 'cash' ? `💵 ${t('cash_lbl')}` : `💳 ${t('card_lbl')}`}
                       </Text>
-                      <Text style={{ color: GRAY2, fontSize: 11 }}>to'lov</Text>
+                      <Text style={{ color: GRAY2, fontSize: 11 }}>{t('pay_lbl')}</Text>
                     </View>
                   </View>
                 </View>
@@ -2428,7 +2941,7 @@ function AppInner() {
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 12, paddingHorizontal: 16 }}>
                   <TouchableOpacity style={s.outlineBtn} onPress={shareTrip}>
                     <Ionicons name="share-social" size={16} color={WHITE} style={{ marginRight: 6 }} />
-                    <Text style={{ color: WHITE, fontSize: 14 }}>Ulashish</Text>
+                    <Text style={{ color: WHITE, fontSize: 14 }}>{t('share')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={[s.outlineBtn, { borderColor: RED }]} onPress={() => setSosModal(true)}>
                     <Text style={{ color: RED, fontSize: 14, fontWeight: '700' }}>🆘 SOS</Text>
@@ -2441,7 +2954,7 @@ function AppInner() {
                   style={[s.outlineBtn, { borderColor: RED, marginTop: 12, marginHorizontal: 16, justifyContent: 'center' }]}
                   onPress={() => setCancelModal(true)}
                   disabled={loading}>
-                  <Text style={{ color: RED, fontSize: 14, fontWeight: '600' }}>Buyurtmani bekor qilish</Text>
+                  <Text style={{ color: RED, fontSize: 14, fontWeight: '600' }}>{t('cancel_order_btn')}</Text>
                 </TouchableOpacity>
               )}
             </ScrollView>
@@ -2461,13 +2974,13 @@ function AppInner() {
             ) : (
               <View style={[s.fill, s.center]}>
                 <ActivityIndicator color={YELLOW} size="large" />
-                <Text style={{ color: GRAY1, marginTop: 12 }}>GPS aniqlanmoqda...</Text>
+                <Text style={{ color: GRAY1, marginTop: 12 }}>{t('gps_detecting')}</Text>
               </View>
             )}
 
             {/* Greeting pill */}
             <View style={[s.greetPill, { top: insets.top + 12, left: 16 }]}>
-              <Text style={s.greetPillTxt}>👋 {user?.name?.split(' ')[0] || 'Salom'}</Text>
+              <Text style={s.greetPillTxt}>👋 {user?.name?.split(' ')[0] || t('hello')}</Text>
             </View>
 
             {/* Avatar circle */}
@@ -2523,10 +3036,10 @@ function AppInner() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <View>
                     <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500', letterSpacing: 0.3 }}>
-                      Salom, {user?.name?.split(' ')[0] || 'Foydalanuvchi'} 👋
+                      {t('hello')}, {user?.name?.split(' ')[0] || t('user_def')} 👋
                     </Text>
                     <Text style={{ color: WHITE, fontSize: 24, fontWeight: '800', marginTop: 1, letterSpacing: -0.5 }}>
-                      Qayerga boramiz?
+                      {t('where_to_title')}
                     </Text>
                   </View>
                   {balance != null && balance > 0 && (
@@ -2541,8 +3054,8 @@ function AppInner() {
                 <View style={s.nearbyCard}>
                   <View style={s.nearbyDot} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: WHITE, fontSize: 14, fontWeight: '600' }}>🚕 {nearby.length} ta mashina mavjud</Text>
-                    <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>⏱ Taxminiy kutish: ~{nearby.length > 3 ? 2 : 4} daqiqa</Text>
+                    <Text style={{ color: WHITE, fontSize: 14, fontWeight: '600' }}>🚕 {nearby.length} {t('cars_available')}</Text>
+                    <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>⏱ {t('approx_wait')} ~{nearby.length > 3 ? 2 : 4} {t('min_full')}</Text>
                   </View>
                 </View>
               )}
@@ -2552,8 +3065,8 @@ function AppInner() {
                   <Ionicons name="search" size={20} color="#1A1A1A" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>Qayerga borasiz?</Text>
-                  <Text style={{ color: GRAY1, fontSize: 12, marginTop: 1 }}>Manzilni kiriting yoki tanlang</Text>
+                  <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>{t('where_to_q')}</Text>
+                  <Text style={{ color: GRAY1, fontSize: 12, marginTop: 1 }}>{t('enter_or_pick')}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color={GRAY1} />
               </TouchableOpacity>
@@ -2565,21 +3078,21 @@ function AppInner() {
                     onPress={() => homePlace ? pickDest(homePlace) : setSearchOpen(true)}
                     onLongPress={() => pickup && saveHomeWork('home', pickup)}>
                     <View style={s.shortBtnIconWrap}><Ionicons name="home" size={18} color={YELLOW} /></View>
-                    <Text style={{ color: WHITE, fontSize: 13, fontWeight: '600', marginTop: 4 }}>Uy</Text>
+                    <Text style={{ color: WHITE, fontSize: 13, fontWeight: '600', marginTop: 4 }}>{t('home')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity style={s.shortBtnSm} activeOpacity={0.75}
                     onPress={() => workPlace ? pickDest(workPlace) : setSearchOpen(true)}
                     onLongPress={() => pickup && saveHomeWork('work', pickup)}>
                     <View style={s.shortBtnIconWrap}><Ionicons name="briefcase" size={18} color={YELLOW} /></View>
-                    <Text style={{ color: WHITE, fontSize: 13, fontWeight: '600', marginTop: 4 }}>Ish</Text>
+                    <Text style={{ color: WHITE, fontSize: 13, fontWeight: '600', marginTop: 4 }}>{t('work')}</Text>
                   </TouchableOpacity>
                 </View>
                 {/* O'ng tomon: 🎙 Ovozli buyurtma (eski "Ish" tugmasi o'rnida) */}
                 <TouchableOpacity style={s.voiceBtn} activeOpacity={0.85} onPress={openVoiceOrder}>
                   <View style={s.voiceBtnIconWrap}><Ionicons name="mic" size={20} color="#1A1A1A" /></View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: '#1A1A1A', fontSize: 14, fontWeight: '700' }}>Ovozli buyurtma</Text>
-                    <Text style={{ color: '#1A1A1A', fontSize: 11, marginTop: 1, opacity: 0.7 }}>Manzilni gapiring 🎙</Text>
+                    <Text style={{ color: '#1A1A1A', fontSize: 14, fontWeight: '700' }}>{t('voice_order')}</Text>
+                    <Text style={{ color: '#1A1A1A', fontSize: 11, marginTop: 1, opacity: 0.7 }}>{t('speak_address')}</Text>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -2594,7 +3107,7 @@ function AppInner() {
                   </TouchableOpacity>
                   <TextInput
                     style={s.searchBigInput}
-                    placeholder="Maktab, bozor, ko'cha..."
+                    placeholder={t('search_ph')}
                     placeholderTextColor={GRAY2}
                     value={searchQ}
                     onChangeText={searchPlaces}
@@ -2618,24 +3131,24 @@ function AppInner() {
                   showsVerticalScrollIndicator={false}>
                   {searchQ.length === 0 && (
                     <View style={s.listSection}>
-                      <Text style={s.listSectionTitle}>SAQLANGAN</Text>
+                      <Text style={s.listSectionTitle}>{t('saved_sec')}</Text>
                       <TouchableOpacity style={s.placeRow}
-                        onPress={() => homePlace ? pickDest(homePlace) : Alert.alert('Uy manzili', 'Uzun bosib saqlang')}
+                        onPress={() => homePlace ? pickDest(homePlace) : Alert.alert(t('home_addr'), t('long_press_save'))}
                         onLongPress={() => pickup ? saveHomeWork('home', pickup) : null}>
                         <View style={s.placeIconCircle}><Ionicons name="home" size={18} color={YELLOW} /></View>
                         <View style={{ flex: 1 }}>
-                          <Text style={s.placeName}>Uy</Text>
-                          <Text style={s.placeSub} numberOfLines={1}>{homePlace?.address || 'Uzun bosib saqlang'}</Text>
+                          <Text style={s.placeName}>{t('home')}</Text>
+                          <Text style={s.placeSub} numberOfLines={1}>{homePlace?.address || t('long_press_save')}</Text>
                         </View>
                       </TouchableOpacity>
                       <View style={s.placeSep} />
                       <TouchableOpacity style={s.placeRow}
-                        onPress={() => workPlace ? pickDest(workPlace) : Alert.alert('Ish manzili', 'Uzun bosib saqlang')}
+                        onPress={() => workPlace ? pickDest(workPlace) : Alert.alert(t('work_addr'), t('long_press_save'))}
                         onLongPress={() => pickup ? saveHomeWork('work', pickup) : null}>
                         <View style={s.placeIconCircle}><Ionicons name="briefcase" size={18} color={YELLOW} /></View>
                         <View style={{ flex: 1 }}>
-                          <Text style={s.placeName}>Ish</Text>
-                          <Text style={s.placeSub} numberOfLines={1}>{workPlace?.address || 'Uzun bosib saqlang'}</Text>
+                          <Text style={s.placeName}>{t('work')}</Text>
+                          <Text style={s.placeSub} numberOfLines={1}>{workPlace?.address || t('long_press_save')}</Text>
                         </View>
                       </TouchableOpacity>
                     </View>
@@ -2643,7 +3156,7 @@ function AppInner() {
 
                   {searchResults.length > 0 && (
                     <View style={s.listSection}>
-                      <Text style={s.listSectionTitle}>QIDIRUV NATIJALARI</Text>
+                      <Text style={s.listSectionTitle}>{t('search_results_sec')}</Text>
                       {searchResults.slice(0, 6).map((p, i) => (
                         <View key={p.id || i}>
                           <TouchableOpacity style={s.placeRow} activeOpacity={0.7} onPress={() => pickDest({ ...p, address: p.name })}>
@@ -2662,12 +3175,12 @@ function AppInner() {
 
                   {searchQ.length === 0 && recentPlaces.length > 0 && (
                     <View style={s.listSection}>
-                      <Text style={s.listSectionTitle}>SO'NGGI MANZILLAR</Text>
+                      <Text style={s.listSectionTitle}>{t('recent_sec')}</Text>
                       {recentPlaces.map((p, i) => (
                         <View key={i}>
                           <TouchableOpacity style={s.placeRow} activeOpacity={0.7}
                             onPress={() => pickDest(p)}
-                            onLongPress={() => Alert.alert('Sevimliga qo\'shish?', p.address, [{ text: 'Ha', onPress: () => addFavorite(p) }, { text: 'Yo\'q', style: 'cancel' }])}>
+                            onLongPress={() => Alert.alert(t('add_favorite_q'), p.address, [{ text: t('yes'), onPress: () => addFavorite(p) }, { text: t('no'), style: 'cancel' }])}>
                             <View style={s.placeIconCircle}><Ionicons name="time" size={18} color={GRAY1} /></View>
                             <View style={{ flex: 1 }}>
                               <Text style={s.placeName} numberOfLines={1}>{p.address}</Text>
@@ -2682,7 +3195,7 @@ function AppInner() {
 
                   {searchQ.length === 0 && popularPlaces.length > 0 && (
                     <View style={s.listSection}>
-                      <Text style={s.listSectionTitle}>MASHHUR JOYLAR</Text>
+                      <Text style={s.listSectionTitle}>{t('popular_sec')}</Text>
                       {popularPlaces.map((p, i) => (
                         <View key={p.id || i}>
                           <TouchableOpacity style={s.placeRow} activeOpacity={0.7} onPress={() => pickDest({ lat: p.lat, lng: p.lng, address: p.name })}>
@@ -2737,10 +3250,10 @@ function AppInner() {
 
             <AnimatedSheet style={[s.confirmSheet, { bottom: TABBAR_H + insets.bottom }]}>
               <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
-                Olib ketish nuqtasini xaritada to'g'rilang yoki tasdiqlang
+                {t('adjust_pickup')}
               </Text>
               <TouchableOpacity style={s.ctaBtn} onPress={() => { setEstimates({}); estCacheKey.current = null; setOrderStep('tariff'); }}>
-                <Text style={s.ctaBtnTxt}>TASDIQLASH →</Text>
+                <Text style={s.ctaBtnTxt}>{t('confirm_arrow')}</Text>
               </TouchableOpacity>
             </AnimatedSheet>
           </View>
@@ -2811,13 +3324,13 @@ function AppInner() {
                         )}
                       </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
-                        <Text style={{ color: GRAY1, fontSize: 11 }}>👤 {c.seats} o'rin</Text>
+                        <Text style={{ color: GRAY1, fontSize: 11 }}>👤 {c.seats} {t('seats')}</Text>
                         <Text style={{ color: GRAY2, fontSize: 11 }}>·</Text>
                         <Text style={{ color: GRAY1, fontSize: 11 }} numberOfLines={1}>{c.features.join(' · ')}</Text>
                         {est?.duration_min ? (
                           <>
                             <Text style={{ color: GRAY2, fontSize: 11 }}>·</Text>
-                            <Text style={{ color: GRAY1, fontSize: 11 }}>~{est.duration_min} daq</Text>
+                            <Text style={{ color: GRAY1, fontSize: 11 }}>~{est.duration_min} {t('min_short')}</Text>
                           </>
                         ) : null}
                         {est?.surge > 1 && <Text style={{ color: '#FF6B00', fontSize: 11 }}>⚡</Text>}
@@ -2831,7 +3344,7 @@ function AppInner() {
                           <Text style={{ color: active ? c.color : WHITE, fontSize: active ? 18 : 16, fontWeight: '800' }}>
                             {fmt(est.price)}
                           </Text>
-                          <Text style={{ color: GRAY2, fontSize: 10 }}>so'm</Text>
+                          <Text style={{ color: GRAY2, fontSize: 10 }}>{t('som')}</Text>
                         </>
                       ) : estLoading ? <ActivityIndicator color={c.color} size="small" /> : <Text style={{ color: GRAY2, fontSize: 12 }}>—</Text>}
                     </View>
@@ -2853,7 +3366,7 @@ function AppInner() {
                       activeOpacity={0.75}
                       onPress={() => setPayMethod(m.id)}>
                       <Text style={[s.payChipTxt, active && { color: '#000', fontWeight: '700' }]}>
-                        {PAY_ICONS[m.id] || '💳'} {m.name}{disabled ? ' (tez kunda)' : ''}
+                        {PAY_ICONS[m.id] || '💳'} {m.name}{disabled ? ` (${t('soon')})` : ''}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -2868,14 +3381,14 @@ function AppInner() {
                   style={{ flex: 1, borderRadius: 12, borderWidth: 1.5, paddingVertical: 9, alignItems: 'center',
                     borderColor: !schedAt ? YELLOW : BORDER, backgroundColor: !schedAt ? '#1a1707' : CARD2 }}
                   onPress={() => setSchedAt(null)}>
-                  <Text style={{ color: !schedAt ? YELLOW : GRAY1, fontSize: 13, fontWeight: '700' }}>⚡ Hozir</Text>
+                  <Text style={{ color: !schedAt ? YELLOW : GRAY1, fontSize: 13, fontWeight: '700' }}>⚡ {t('now')}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={{ flex: 1.4, borderRadius: 12, borderWidth: 1.5, paddingVertical: 9, alignItems: 'center',
                     borderColor: schedAt ? YELLOW : BORDER, backgroundColor: schedAt ? '#1a1707' : CARD2 }}
                   onPress={() => setSchedModal(true)}>
                   <Text style={{ color: schedAt ? YELLOW : GRAY1, fontSize: 13, fontWeight: '700' }}>
-                    ⏰ {schedAt ? fmtSched(schedAt) : 'Keyinroq'}
+                    ⏰ {schedAt ? fmtSched(schedAt) : t('later')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -2885,21 +3398,21 @@ function AppInner() {
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                 <TextInput
                   style={{ flex: 1, backgroundColor: CARD2, color: WHITE, borderRadius: 12, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 12, paddingVertical: 10, fontSize: 13 }}
-                  placeholder="Promo-kod (ixtiyoriy)" placeholderTextColor={GRAY2}
+                  placeholder={t('promo_ph')} placeholderTextColor={GRAY2}
                   autoCapitalize="characters" autoCorrect={false}
                   value={promoCode} onChangeText={setPromoCode}
                 />
                 <TouchableOpacity
                   style={{ backgroundColor: CARD2, borderRadius: 12, borderWidth: 1, borderColor: BORDER, paddingHorizontal: 14, justifyContent: 'center' }}
                   onPress={() => { estCacheKey.current = null; fetchAllEstimates(); }}>
-                  <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700' }}>Qo'llash</Text>
+                  <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700' }}>{t('apply')}</Text>
                 </TouchableOpacity>
               </View>
               {estimates[carClass]?.promo_applied && (
-                <Text style={{ color: GREEN, fontSize: 12, marginBottom: 8 }}>✓ Promo-kod qo'llandi — chegirma narxga kiritildi</Text>
+                <Text style={{ color: GREEN, fontSize: 12, marginBottom: 8 }}>{t('promo_applied')}</Text>
               )}
               {estimates[carClass]?.promo_invalid && (
-                <Text style={{ color: RED, fontSize: 12, marginBottom: 8 }}>Promo-kod yaroqsiz yoki muddati tugagan</Text>
+                <Text style={{ color: RED, fontSize: 12, marginBottom: 8 }}>{t('promo_invalid')}</Text>
               )}
               <TouchableOpacity
                 style={[s.orderCta, { marginHorizontal: 0 }, (!estimates[carClass] || loading) && { opacity: 0.5 }]}
@@ -2908,7 +3421,7 @@ function AppInner() {
                 disabled={loading || !estimates[carClass]}>
                 {loading
                   ? <ActivityIndicator color="#000" />
-                  : <Text style={s.orderCtaTxt}>Ketdik{estimates[carClass] ? ` · ${fmt(estimates[carClass].price)} so'm` : ''}</Text>}
+                  : <Text style={s.orderCtaTxt}>{t('lets_go')}{estimates[carClass] ? ` · ${fmt(estimates[carClass].price)} ${t('som')}` : ''}</Text>}
               </TouchableOpacity>
             </View>
             </AnimatedSheet>
@@ -2920,8 +3433,8 @@ function AppInner() {
       {tab === 'trips' && (
         <View style={[s.tabBody, { paddingTop: insets.top }]}>
           <View style={s.tabHeaderArea}>
-            <Text style={s.tabHeaderSub}>Sayohatlaringiz</Text>
-            <Text style={s.tabHeaderTitle}>Tarix</Text>
+            <Text style={s.tabHeaderSub}>{t('your_trips')}</Text>
+            <Text style={s.tabHeaderTitle}>{t('history')}</Text>
           </View>
 
           <FlatList
@@ -2934,25 +3447,25 @@ function AppInner() {
             ListEmptyComponent={
               <View style={s.emptyState}>
                 <Text style={{ fontSize: 48 }}>🚕</Text>
-                <Text style={{ color: GRAY1, fontSize: 15, marginTop: 12 }}>Hali safar yo'q</Text>
+                <Text style={{ color: GRAY1, fontSize: 15, marginTop: 12 }}>{t('no_trips_yet')}</Text>
               </View>
             }
             renderItem={({ item: row }) => {
               if (row.type === 'header') return (
                 <Text style={s.dayLabel}>{row.label}</Text>
               );
-              const t = row.item;
-              const isCompleted = t.status === 'completed';
-              const isCancelled = t.status === 'cancelled';
-              const timeStr = t.created_at ? new Date(t.created_at).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }) : '';
+              const tr = row.item; // R1B: 't' tarjima funksiyasi bilan to'qnashmasligi uchun 'tr'
+              const isCompleted = tr.status === 'completed';
+              const isCancelled = tr.status === 'cancelled';
+              const timeStr = tr.created_at ? new Date(tr.created_at).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }) : '';
               return (
                 <TouchableOpacity style={s.tripCard} activeOpacity={0.85}
-                  onLongPress={() => pickDest({ lat: Number(t.to_lat), lng: Number(t.to_lng), address: t.to_address })}>
+                  onLongPress={() => pickDest({ lat: Number(tr.to_lat), lng: Number(tr.to_lng), address: tr.to_address })}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <Text style={{ color: GRAY1, fontSize: 13 }}>{timeStr}</Text>
                     <View style={[s.statusBadge, isCompleted && s.statusBadgeGreen, isCancelled && s.statusBadgeGray]}>
                       <Text style={[s.statusBadgeTxt, isCompleted && { color: '#000' }, isCancelled && { color: GRAY1 }]}>
-                        {isCompleted ? 'Yakunlangan' : isCancelled ? 'Bekor qilingan' : statusText(t.status)}
+                        {isCompleted ? t('completed_lbl') : isCancelled ? t('cancelled_lbl') : statusText(tr.status)}
                       </Text>
                     </View>
                   </View>
@@ -2964,19 +3477,19 @@ function AppInner() {
                       <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: YELLOW }} />
                     </View>
                     <View style={{ flex: 1, gap: 14 }}>
-                      <Text style={{ color: GRAY1, fontSize: 13 }} numberOfLines={1}>{t.from_address || '—'}</Text>
-                      <Text style={{ color: WHITE, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{t.to_address || '—'}</Text>
+                      <Text style={{ color: GRAY1, fontSize: 13 }} numberOfLines={1}>{tr.from_address || '—'}</Text>
+                      <Text style={{ color: WHITE, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>{tr.to_address || '—'}</Text>
                     </View>
                   </View>
 
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
                     <View style={{ flexDirection: 'row', gap: 16 }}>
-                      <Text style={{ color: WHITE, fontSize: 15, fontWeight: '700' }}>{fmt(t.price)} so'm</Text>
-                      {t.distance_km && <Text style={{ color: GRAY1, fontSize: 13 }}>{t.distance_km} km</Text>}
+                      <Text style={{ color: WHITE, fontSize: 15, fontWeight: '700' }}>{fmt(tr.price)} {t('som')}</Text>
+                      {tr.distance_km && <Text style={{ color: GRAY1, fontSize: 13 }}>{tr.distance_km} km</Text>}
                     </View>
-                    {t.to_lat && t.to_lng && (
-                      <TouchableOpacity onPress={() => pickDest({ lat: Number(t.to_lat), lng: Number(t.to_lng), address: t.to_address })}>
-                        <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '600' }}>↻ Takrorlash</Text>
+                    {tr.to_lat && tr.to_lng && (
+                      <TouchableOpacity onPress={() => pickDest({ lat: Number(tr.to_lat), lng: Number(tr.to_lng), address: tr.to_address })}>
+                        <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '600' }}>{t('repeat')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -2992,8 +3505,8 @@ function AppInner() {
       {tab === 'help' && (
         <View style={[s.tabBody, { paddingTop: insets.top }]}>
           <View style={s.tabHeaderArea}>
-            <Text style={s.tabHeaderSub}>Sizga qanday yordam bera olamiz?</Text>
-            <Text style={s.tabHeaderTitle}>Yordam markazi</Text>
+            <Text style={s.tabHeaderSub}>{t('help_sub')}</Text>
+            <Text style={s.tabHeaderTitle}>{t('help_center')}</Text>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: TABBAR_H + insets.bottom + 16 }}>
@@ -3002,25 +3515,25 @@ function AppInner() {
                 <Ionicons name="call" size={28} color={YELLOW} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700' }}>Operator bilan bog'lanish</Text>
-                <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>24/7 jonli qo'llab-quvvatlash</Text>
+                <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700' }}>{t('call_operator')}</Text>
+                <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>{t('support_247')}</Text>
               </View>
               <View style={s.onlineBadge}>
                 <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: GREEN, marginRight: 5 }} />
-                <Text style={{ color: GREEN, fontSize: 12, fontWeight: '600' }}>Onlayn</Text>
+                <Text style={{ color: GREEN, fontSize: 12, fontWeight: '600' }}>{t('online_lbl')}</Text>
               </View>
             </TouchableOpacity>
 
-            <Text style={[s.listSectionTitle, { paddingHorizontal: 0, marginTop: 20 }]}>MAVZULAR</Text>
+            <Text style={[s.listSectionTitle, { paddingHorizontal: 0, marginTop: 20 }]}>{t('topics')}</Text>
             <View style={s.helpTopicsCard}>
               {[
-                { icon: 'document-text', label: 'Tez-tez beriladigan savollar', sub: "FAQ — eng ko'p so'raladi",
+                { icon: 'document-text', label: t('faq_lbl'), sub: t('faq_sub'),
                   answer: "❓ Tez-tez beriladigan savollar\n\n🔹 Haydovchi qancha kutadi?\n3 daqiqa bepul, keyin har daqiqaga qo'shimcha haq.\n\n🔹 Bekor qilsam jarima bo'ladimi?\nHaydovchi yetib kelgandan so'ng bekor qilsangiz — ha, kichik jarima.\n\n🔹 Bonus qanday ishlaydi?\nHar safardan % keshbek hisoblanadi, keyingi safarda ishlatiladi.\n\n🔹 Ovozli buyurtma nima?\nManzilni ovozda ayting — haydovchi eshitib keladi. Narx km+vaqt bo'yicha." },
-                { icon: 'card', label: "To'lov muammolari", sub: 'Karta, balans, cashback',
+                { icon: 'card', label: t('pay_issues'), sub: t('pay_issues_sub'),
                   answer: "💳 To'lov bo'yicha yordam\n\n🔹 Naqd to'lov: haydovchiga safar oxirida berasiz.\n\n🔹 Bonus balans: profil bo'limida ko'rinadi. Safar buyurtmasida 'Bonus ishlatish' ni yoqing.\n\n🔹 Karta to'lovi: tez kunda faollashtiriladi.\n\n🔹 Muammo bo'lsa — operator bilan bog'laning (yuqoridagi chat tugmasi)." },
-                { icon: 'person', label: 'Safar muammolari', sub: 'Buyurtma, kutish, manzil',
+                { icon: 'person', label: t('trip_issues'), sub: t('trip_issues_sub'),
                   answer: "🚕 Safar muammolari\n\n🔹 Haydovchi kelmayapti — /holat tugmasini bosing, haydovchi bilan bog'laning.\n\n🔹 Manzilni o'zgartirish — safar davomida 'Manzilni o'zgartirish' tugmasini bosing.\n\n🔹 Narx kutilgandan ko'p — narx km+kutish asosida hisoblanadi, app'dagi taxmin yo'l qisqaligiga bog'liq.\n\n🔹 Muammo davom etsa — operatorga murojaat qiling." },
-                { icon: 'flag', label: 'Haydovchi shikoyati', sub: 'Xizmat sifati, xulq',
+                { icon: 'flag', label: t('driver_complaint'), sub: t('driver_complaint_sub'),
                   answer: "🚩 Haydovchi haqida shikoyat\n\nSafar yakunlangach yulduz bering va izoh qoldiring — bu bizga muhim.\n\nJiddiy muammo bo'lsa:\n• Operatorga chat orqali yozing\n• Yoki +998 XX XXX-XX-XX ga qo'ng'iroq qiling\n\nBarcha shikoyatlar 24 soat ichida ko'rib chiqiladi." },
               ].map((item, idx, arr) => (
                 <View key={idx}>
@@ -3039,7 +3552,7 @@ function AppInner() {
 
             <TouchableOpacity style={s.aiEntryCard} activeOpacity={0.8} onPress={() => setAiModal(true)}>
               <Ionicons name="sparkles" size={18} color={YELLOW} style={{ marginRight: 10 }} />
-              <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>KetdikGo AI yordamchi</Text>
+              <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>{t('ai_name')}</Text>
               <View style={{ backgroundColor: GRAY2, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
                 <Text style={{ color: WHITE, fontSize: 11, fontWeight: '600' }}>Beta</Text>
               </View>
@@ -3058,7 +3571,7 @@ function AppInner() {
             <View style={[s.chatRow, { marginTop: 10 }]}>
               <TextInput
                 style={s.chatInput}
-                placeholder="Savolingiz..."
+                placeholder={t('your_question_ph')}
                 placeholderTextColor={GRAY2}
                 value={chatInput}
                 onChangeText={setChatInput}
@@ -3075,7 +3588,7 @@ function AppInner() {
       {tab === 'profile' && (
         <ScrollView style={[s.tabBody, { paddingTop: insets.top }]} contentContainerStyle={{ paddingBottom: TABBAR_H + insets.bottom + 24 }}>
           <View style={s.tabHeaderArea}>
-            <Text style={s.tabHeaderTitle}>Profil</Text>
+            <Text style={s.tabHeaderTitle}>{t('profile')}</Text>
           </View>
 
           <View style={{ paddingHorizontal: 16 }}>
@@ -3086,7 +3599,7 @@ function AppInner() {
                 </View>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: WHITE, fontSize: 20, fontWeight: '700' }}>{user?.name || 'Mijoz'}</Text>
+                <Text style={{ color: WHITE, fontSize: 20, fontWeight: '700' }}>{user?.name || t('client_def')}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
                   {!!user?.rating && <Text style={{ color: GRAY1, fontSize: 14 }}>⭐ {user.rating}</Text>}
                   <Text style={{ color: GRAY1, fontSize: 14 }}>{fmtPhone(user?.phone)}</Text>
@@ -3099,19 +3612,19 @@ function AppInner() {
                 {!(HIDE_BALANCE_IF_NONPOSITIVE && Number(balance.balance) <= 0) && (
                   <View style={[s.statCard, { flex: 1 }]}>
                     <Ionicons name="wallet" size={16} color={GRAY1} style={{ marginBottom: 6 }} />
-                    <Text style={{ color: GRAY1, fontSize: 11, fontWeight: '600' }}>Balans</Text>
+                    <Text style={{ color: GRAY1, fontSize: 11, fontWeight: '600' }}>{t('balance_lbl')}</Text>
                     <Text style={{ color: YELLOW, fontSize: 20, fontWeight: '700', marginTop: 2 }}>{fmt(balance.balance)}</Text>
-                    <Text style={{ color: GRAY1, fontSize: 11 }}>so'm</Text>
+                    <Text style={{ color: GRAY1, fontSize: 11 }}>{t('som')}</Text>
                   </View>
                 )}
                 <View style={[s.statCard, { flex: 1 }]}>
                   <Ionicons name="gift" size={16} color={GRAY1} style={{ marginBottom: 6 }} />
-                  <Text style={{ color: GRAY1, fontSize: 11, fontWeight: '600' }}>Cashback</Text>
+                  <Text style={{ color: GRAY1, fontSize: 11, fontWeight: '600' }}>{t('cashback_lbl')}</Text>
                   <Text style={{ color: WHITE, fontSize: 20, fontWeight: '700', marginTop: 2 }}>{fmt(balance.pending_cashback)}</Text>
-                  <Text style={{ color: GRAY1, fontSize: 11 }}>so'm</Text>
+                  <Text style={{ color: GRAY1, fontSize: 11 }}>{t('som')}</Text>
                   {balance.pending_cashback > 0 && (
                     <TouchableOpacity style={[s.ctaBtn, { marginTop: 8, paddingVertical: 8 }]} onPress={claimCashback}>
-                      <Text style={[s.ctaBtnTxt, { fontSize: 12 }]}>OLISH</Text>
+                      <Text style={[s.ctaBtnTxt, { fontSize: 12 }]}>{t('claim_up')}</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -3124,17 +3637,15 @@ function AppInner() {
               <TouchableOpacity style={s.referralCard} activeOpacity={0.85}
                 onPress={() => {
                   Share.share({
-                    message: `KetdikGo'da birinchi safaringga -50% chegirma! ` +
-                      `Ro'yxatdan o'tishda mening taklif kodimni kirit: ${balance.referral_code}\n` +
-                      `Yuklab olish: https://ketdikgo.uz`,
+                    message: `${t('ref_share_pre')}${balance.referral_code}\n${t('ref_share_dl')}`,
                   }).catch(() => {});
                 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
                   <Ionicons name="gift" size={22} color={YELLOW} style={{ marginRight: 12 }} />
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: WHITE, fontSize: 14, fontWeight: '600' }}>Do'stingni taklif qil — 10 000 so'm bonus</Text>
+                    <Text style={{ color: WHITE, fontSize: 14, fontWeight: '600' }}>{t('invite_friend')}</Text>
                     <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>
-                      Kodingiz: <Text style={{ color: YELLOW, fontWeight: '700' }}>{balance.referral_code}</Text> · do'stga birinchi safar -50%
+                      {t('your_code')} <Text style={{ color: YELLOW, fontWeight: '700' }}>{balance.referral_code}</Text> · {t('friend_discount')}
                     </Text>
                   </View>
                 </View>
@@ -3144,11 +3655,11 @@ function AppInner() {
 
             <View style={[s.menuCard, { marginTop: 16 }]}>
               {[
-                { icon: 'heart', label: 'Sevimli joylar', value: favorites.length > 0 ? `${favorites.length}` : null, onPress: () => Alert.alert('Sevimli joylar', favorites.length > 0 ? favorites.map(f => f.name).join('\n') : "Hali yo'q") },
-                { icon: 'card', label: "To'lov usullari", value: null, onPress: () => Alert.alert("To'lov usullari", "💵 Naqd — haydovchiga to'laysiz\n\n💰 Bonus balans — har safardan keshbek, keyingi safarda ishlatiladi\n\n💳 Karta — tez kunda. Payme, Click, Uzcard qo'shiladi") },
-                { icon: 'time', label: 'Safarlar tarixi', value: null, onPress: () => { setTab('trips'); loadTrips(); } },
-                { icon: 'shield-checkmark', label: 'Xavfsizlik va SOS', value: null, onPress: () => setSosModal(true) },
-                { icon: 'headset', label: 'Yordam markazi', value: null, onPress: () => setTab('help') },
+                { icon: 'heart', label: t('fav_places'), value: favorites.length > 0 ? `${favorites.length}` : null, onPress: () => Alert.alert(t('fav_places'), favorites.length > 0 ? favorites.map(f => f.name).join('\n') : t('none_yet')) },
+                { icon: 'card', label: t('pay_methods_lbl'), value: null, onPress: () => Alert.alert(t('pay_methods_lbl'), t('pay_methods_info')) },
+                { icon: 'time', label: t('trips_history'), value: null, onPress: () => { setTab('trips'); loadTrips(); } },
+                { icon: 'shield-checkmark', label: t('safety_sos'), value: null, onPress: () => setSosModal(true) },
+                { icon: 'headset', label: t('help_center'), value: null, onPress: () => setTab('help') },
               ].map((item, idx, arr) => (
                 <View key={idx}>
                   <TouchableOpacity style={s.menuRow} onPress={item.onPress} activeOpacity={0.7}>
@@ -3162,9 +3673,24 @@ function AppInner() {
               ))}
             </View>
 
+            {/* R1B: UI tili — UZ/RU chiplar (haydovchi ilovasidagi bilan bir xil uslub) */}
+            <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginTop: 16, marginBottom: 10, marginLeft: 4 }}>{t('language')}</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {[{ id: 'uz', label: "O'zbekcha" }, { id: 'ru', label: 'Русский' }].map((ln) => {
+                const on = lang === ln.id;
+                return (
+                  <TouchableOpacity key={ln.id} activeOpacity={0.8}
+                    onPress={() => setLang(ln.id)}
+                    style={{ flex: 1, backgroundColor: on ? YELLOW : CARD2, borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: on ? YELLOW : BORDER }}>
+                    <Text style={{ color: on ? '#15171c' : GRAY1, fontSize: 14, fontWeight: '700' }}>{ln.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             <TouchableOpacity style={s.logoutBtn} onPress={confirmLogout} activeOpacity={0.8}>
               <Ionicons name="log-out" size={18} color={RED} style={{ marginRight: 8 }} />
-              <Text style={{ color: RED, fontSize: 15, fontWeight: '600' }}>Chiqish</Text>
+              <Text style={{ color: RED, fontSize: 15, fontWeight: '600' }}>{t('logout')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -3173,17 +3699,17 @@ function AppInner() {
       {/* ===== TAB BAR ===== */}
       <View style={[s.tabBar, { height: TABBAR_H + insets.bottom, paddingBottom: insets.bottom }]}>
         {[
-          { id: 'order', icon: 'car', label: 'Buyurtma' },
-          { id: 'trips', icon: 'time', label: 'Tarix', onLoad: loadTrips },
-          { id: 'help', icon: 'headset', label: 'Yordam' },
-          { id: 'profile', icon: 'person', label: 'Profil', onLoad: loadBalance },
-        ].map(t => {
-          const active = tab === t.id;
+          { id: 'order', icon: 'car', label: t('tab_order') },
+          { id: 'trips', icon: 'time', label: t('tab_trips'), onLoad: loadTrips },
+          { id: 'help', icon: 'headset', label: t('tab_help') },
+          { id: 'profile', icon: 'person', label: t('tab_profile'), onLoad: loadBalance },
+        ].map(tb => {
+          const active = tab === tb.id;
           return (
-            <TouchableOpacity key={t.id} style={s.tabItem} activeOpacity={0.7}
-              onPress={() => { setTab(t.id); t.onLoad?.(); }}>
-              <Ionicons name={active ? t.icon : t.icon + '-outline'} size={24} color={active ? YELLOW : GRAY2} />
-              <Text style={{ fontSize: 10, color: active ? YELLOW : GRAY2, marginTop: 3, fontWeight: active ? '600' : '400' }}>{t.label}</Text>
+            <TouchableOpacity key={tb.id} style={s.tabItem} activeOpacity={0.7}
+              onPress={() => { setTab(tb.id); tb.onLoad?.(); }}>
+              <Ionicons name={active ? tb.icon : tb.icon + '-outline'} size={24} color={active ? YELLOW : GRAY2} />
+              <Text style={{ fontSize: 10, color: active ? YELLOW : GRAY2, marginTop: 3, fontWeight: active ? '600' : '400' }}>{tb.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -3196,7 +3722,7 @@ function AppInner() {
         <View style={s.modalOverlay}>
           <View style={[s.modalSheet, { height: '70%', paddingBottom: insets.bottom + 8 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={s.modalTitle}>Haydovchi bilan chat</Text>
+              <Text style={s.modalTitle}>{t('chat_with_driver')}</Text>
               <TouchableOpacity onPress={() => setTripChatModal(false)} style={{ marginLeft: 'auto' }}>
                 <Ionicons name="close" size={24} color={GRAY1} />
               </TouchableOpacity>
@@ -3221,7 +3747,7 @@ function AppInner() {
             <View style={s.chatRow}>
               <TextInput
                 style={s.chatInput}
-                placeholder="Xabar..."
+                placeholder={t('message_ph')}
                 placeholderTextColor={GRAY2}
                 value={tripChatInput}
                 onChangeText={setTripChatInput}
@@ -3239,10 +3765,9 @@ function AppInner() {
       <Modal visible={voiceModal} transparent animationType="slide" onRequestClose={closeVoiceOrder}>
         <View style={s.modalOverlay}>
           <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16, alignItems: 'center' }]}>
-            <Text style={[s.modalTitle, { color: WHITE }]}>🎙 Ovozli buyurtma</Text>
+            <Text style={[s.modalTitle, { color: WHITE }]}>{t('voice_order_title')}</Text>
             <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 }}>
-              Tugmani bosib ushlab turing va qayerga borishingizni tabiiy gapiring.
-              Masalan: «Meni Muzrabot bozoriga olib boring».
+              {t('voice_instr')}
             </Text>
 
             <TouchableOpacity
@@ -3257,11 +3782,11 @@ function AppInner() {
             {voiceParsing ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 18 }}>
                 <ActivityIndicator color={YELLOW} />
-                <Text style={{ color: GRAY1, fontSize: 15, fontWeight: '600' }}>Tahlil qilinmoqda…</Text>
+                <Text style={{ color: GRAY1, fontSize: 15, fontWeight: '600' }}>{t('analyzing')}</Text>
               </View>
             ) : (
               <Text style={{ color: recording ? RED : GRAY1, fontSize: 15, fontWeight: '600', marginTop: 18 }}>
-                {recording ? `● Yozilmoqda… ${voiceSec}s` : 'Bosib ushlab turing'}
+                {recording ? `${t('recording_lbl')} ${voiceSec}s` : t('hold_to_speak')}
               </Text>
             )}
 
@@ -3277,18 +3802,18 @@ function AppInner() {
               <View style={{ backgroundColor: CARD2, borderRadius: 12, padding: 14, marginTop: 14, width: '100%', borderWidth: 1, borderColor: YELLOW + '66' }}>
                 <Text style={{ color: YELLOW, fontSize: 14, fontWeight: '700', textAlign: 'center' }}>{voiceClarify}</Text>
                 <Text style={{ color: GRAY1, fontSize: 12, textAlign: 'center', marginTop: 6 }}>
-                  Tugmani bosib qayta gapiring yoki qo'lda qidiring.
+                  {t('voice_retry_hint')}
                 </Text>
                 <TouchableOpacity
                   onPress={() => { setVoiceModal(false); setVoiceClarify(''); setSearchOpen(true); }}
                   style={{ marginTop: 12, paddingVertical: 10, alignItems: 'center', backgroundColor: YELLOW, borderRadius: 10 }} activeOpacity={0.85}>
-                  <Text style={{ color: '#1A1A1A', fontSize: 14, fontWeight: '700' }}>🔍 Qo'lda qidirish</Text>
+                  <Text style={{ color: '#1A1A1A', fontSize: 14, fontWeight: '700' }}>{t('manual_search')}</Text>
                 </TouchableOpacity>
               </View>
             )}
 
             <TouchableOpacity onPress={closeVoiceOrder} style={{ marginTop: 20, alignItems: 'center' }}>
-              <Text style={{ color: GRAY1, fontSize: 15 }}>Yopish</Text>
+              <Text style={{ color: GRAY1, fontSize: 15 }}>{t('close')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -3297,18 +3822,18 @@ function AppInner() {
       <Modal visible={sosModal} transparent animationType="slide" onRequestClose={() => setSosModal(false)}>
         <View style={s.modalOverlay}>
           <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
-            <Text style={[s.modalTitle, { color: RED }]}>🆘 Favqulodda yordam</Text>
-            {[{ num: '101', label: "Yong'in" }, { num: '102', label: 'Militsiya' }, { num: '103', label: 'Tez yordam' }].map(s_ => (
+            <Text style={[s.modalTitle, { color: RED }]}>{t('sos_title')}</Text>
+            {[{ num: '101', label: t('fire_lbl') }, { num: '102', label: t('police_lbl') }, { num: '103', label: t('ambulance_lbl') }].map(s_ => (
               <TouchableOpacity key={s_.num} style={[s.ctaBtn, { backgroundColor: RED, marginBottom: 10 }]}
                 onPress={() => Linking.openURL(`tel:${s_.num}`)}>
                 <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>{s_.num} — {s_.label}</Text>
               </TouchableOpacity>
             ))}
             <TouchableOpacity style={s.ctaBtn} onPress={shareTrip}>
-              <Text style={s.ctaBtnTxt}>📍 Joylashuvni ulashish</Text>
+              <Text style={s.ctaBtnTxt}>{t('share_location')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setSosModal(false)} style={{ marginTop: 16, alignItems: 'center' }}>
-              <Text style={{ color: GRAY1, fontSize: 15 }}>Bekor qilish</Text>
+              <Text style={{ color: GRAY1, fontSize: 15 }}>{t('cancel_btn')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -3318,13 +3843,13 @@ function AppInner() {
       <Modal visible={changeDestModal} transparent animationType="slide" onRequestClose={() => setChangeDestModal(false)}>
         <View style={s.modalOverlay}>
           <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16, maxHeight: '75%' }]}>
-            <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700', marginBottom: 4 }}>Yangi manzil</Text>
+            <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700', marginBottom: 4 }}>{t('new_dest')}</Text>
             <Text style={{ color: GRAY1, fontSize: 12, marginBottom: 12 }}>
-              Manzil o'zgarsa, narx yangi masofa bo'yicha qayta hisoblanadi.
+              {t('new_dest_sub')}
             </Text>
             <TextInput
               style={s.searchBigInput}
-              placeholder="Manzilni qidiring..."
+              placeholder={t('search_addr_ph')}
               placeholderTextColor="#555"
               value={cdQ}
               onChangeText={cdSearch}
@@ -3349,14 +3874,14 @@ function AppInner() {
                 </TouchableOpacity>
               ))}
               {cdQ.length >= 2 && cdResults.length === 0 && (
-                <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 16 }}>Topilmadi</Text>
+                <Text style={{ color: GRAY1, textAlign: 'center', marginTop: 16 }}>{t('not_found')}</Text>
               )}
             </ScrollView>
             <TouchableOpacity
               style={[s.outlineBtn, { justifyContent: 'center', marginTop: 12 }]}
               onPress={() => setChangeDestModal(false)}
             >
-              <Text style={{ color: GRAY1, fontSize: 14 }}>Bekor</Text>
+              <Text style={{ color: GRAY1, fontSize: 14 }}>{t('cancel_short')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -3367,9 +3892,9 @@ function AppInner() {
       <Modal visible={schedModal} transparent animationType="slide" onRequestClose={() => setSchedModal(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: CARD, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: insets.bottom + 18 }}>
-            <Text style={{ color: WHITE, fontSize: 16, fontWeight: '800', textAlign: 'center', marginBottom: 12 }}>⏰ Qachonga?</Text>
+            <Text style={{ color: WHITE, fontSize: 16, fontWeight: '800', textAlign: 'center', marginBottom: 12 }}>{t('sched_when')}</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-              {['Bugun', 'Ertaga', 'Indin'].map((nm, i) => (
+              {[t('today_cap'), t('tomorrow'), t('after_tomorrow')].map((nm, i) => (
                 <TouchableOpacity key={nm} onPress={() => setSchedDay(i)}
                   style={{ flex: 1, paddingVertical: 10, borderRadius: 11, alignItems: 'center', borderWidth: 1.5,
                     borderColor: schedDay === i ? YELLOW : BORDER, backgroundColor: schedDay === i ? '#1a1707' : CARD2 }}>
@@ -3377,7 +3902,7 @@ function AppInner() {
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={{ color: GRAY1, fontSize: 12, marginBottom: 6 }}>Soat</Text>
+            <Text style={{ color: GRAY1, fontSize: 12, marginBottom: 6 }}>{t('hour_lbl')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
               {Array.from({ length: 17 }, (_, i) => i + 6).map((h) => (
                 <TouchableOpacity key={h} onPress={() => setSchedHour(h)}
@@ -3387,7 +3912,7 @@ function AppInner() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-            <Text style={{ color: GRAY1, fontSize: 12, marginBottom: 6 }}>Daqiqa</Text>
+            <Text style={{ color: GRAY1, fontSize: 12, marginBottom: 6 }}>{t('minute_lbl')}</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
               {[0, 15, 30, 45].map((m) => (
                 <TouchableOpacity key={m} onPress={() => setSchedMin(m)}
@@ -3400,7 +3925,7 @@ function AppInner() {
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <TouchableOpacity style={{ flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER }}
                 onPress={() => setSchedModal(false)}>
-                <Text style={{ color: GRAY1, fontSize: 14, fontWeight: '600' }}>Bekor</Text>
+                <Text style={{ color: GRAY1, fontSize: 14, fontWeight: '600' }}>{t('cancel_short')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={{ flex: 1.5, paddingVertical: 13, borderRadius: 12, alignItems: 'center', backgroundColor: YELLOW }}
                 onPress={() => {
@@ -3408,13 +3933,13 @@ function AppInner() {
                   const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + schedDay, schedHour, schedMin, 0);
                   // Backend talabi (config SCHEDULE_MIN_MIN=15): kamida 15 daqiqa keyinga
                   if (d.getTime() - now.getTime() < 15 * 60000) {
-                    Alert.alert('Vaqt juda yaqin', "Kamida 15 daqiqa keyinga tanlang. Undan yaqin bo'lsa — 'Hozir' bilan chaqiring.");
+                    Alert.alert(t('time_too_close'), t('time_too_close_msg'));
                     return;
                   }
                   setSchedAt(d);
                   setSchedModal(false);
                 }}>
-                <Text style={{ color: '#000', fontSize: 14, fontWeight: '800' }}>Tasdiqlash</Text>
+                <Text style={{ color: '#000', fontSize: 14, fontWeight: '800' }}>{t('confirm_btn')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -3424,12 +3949,12 @@ function AppInner() {
       <Modal visible={cancelModal} transparent animationType="slide" onRequestClose={() => setCancelModal(false)}>
         <View style={s.modalOverlay}>
           <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
-            <Text style={s.modalTitle}>Bekor qilish sababi</Text>
+            <Text style={s.modalTitle}>{t('cancel_reason_title')}</Text>
             <View style={s.helpTopicsCard}>
               {CANCEL_REASONS.map((r, i, arr) => (
                 <View key={i}>
-                  <TouchableOpacity style={s.helpTopicRow} onPress={() => confirmCancel(r)}>
-                    <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>{r}</Text>
+                  <TouchableOpacity style={s.helpTopicRow} onPress={() => confirmCancel(t(r))}>
+                    <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>{t(r)}</Text>
                     <Ionicons name="chevron-forward" size={15} color={GRAY2} />
                   </TouchableOpacity>
                   {i < arr.length - 1 && <View style={s.placeSep} />}
@@ -3438,18 +3963,18 @@ function AppInner() {
             </View>
             <TextInput
               style={[s.chatInput, { marginTop: 12 }]}
-              placeholder="Boshqa sabab..."
+              placeholder={t('other_reason_ph')}
               placeholderTextColor={GRAY2}
               value={customReason}
               onChangeText={setCustomReason}
             />
             {customReason.trim().length > 2 && (
               <TouchableOpacity style={[s.ctaBtn, { backgroundColor: RED, marginTop: 10 }]} onPress={() => confirmCancel(customReason)}>
-                <Text style={{ color: WHITE, fontWeight: '700', fontSize: 15 }}>BEKOR QILISH</Text>
+                <Text style={{ color: WHITE, fontWeight: '700', fontSize: 15 }}>{t('cancel_up')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity onPress={() => setCancelModal(false)} style={{ marginTop: 12, alignItems: 'center' }}>
-              <Text style={{ color: GRAY1 }}>Ortga</Text>
+              <Text style={{ color: GRAY1 }}>{t('back')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -3463,12 +3988,12 @@ function AppInner() {
               <Ionicons name="arrow-back" size={24} color={WHITE} />
             </TouchableOpacity>
             <Ionicons name="sparkles" size={18} color={YELLOW} style={{ marginRight: 8 }} />
-            <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>KetdikGo AI yordamchi</Text>
+            <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>{t('ai_name')}</Text>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 8 }}>
             {chat.length === 0 && (
               <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginTop: 24 }}>
-                Savolingizni yozing — KetdikGo AI darrov javob beradi.{'\n'}(narx, bonus, buyurtma, haydovchi...)
+                {t('ai_empty')}
               </Text>
             )}
             {chat.map((m, i) => (
@@ -3481,7 +4006,7 @@ function AppInner() {
           <View style={[s.chatRow, { paddingHorizontal: 16, paddingBottom: insets.bottom + 12, paddingTop: 8 }]}>
             <TextInput
               style={s.chatInput}
-              placeholder="Savolingiz..." placeholderTextColor={GRAY2}
+              placeholder={t('your_question_ph')} placeholderTextColor={GRAY2}
               value={chatInput} onChangeText={setChatInput}
               onSubmitEditing={sendChat} returnKeyType="send"
             />
@@ -3501,7 +4026,7 @@ function AppInner() {
               <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: GREEN + '22', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
                 <Ionicons name="checkmark-circle" size={30} color={GREEN} />
               </View>
-              <Text style={s.modalTitle}>Safar yakunlandi</Text>
+              <Text style={s.modalTitle}>{t('trip_finished')}</Text>
             </View>
 
             {/* Hisob-kitob (wait_fee bo'lsa qatorlar bilan) */}
@@ -3514,25 +4039,25 @@ function AppInner() {
                   {waitFee > 0 && (
                     <>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <Text style={{ color: GRAY1, fontSize: 13 }}>Safar narxi</Text>
-                        <Text style={{ color: WHITE, fontSize: 13, fontWeight: '500' }}>{fmt(base)} so'm</Text>
+                        <Text style={{ color: GRAY1, fontSize: 13 }}>{t('trip_fare_lbl')}</Text>
+                        <Text style={{ color: WHITE, fontSize: 13, fontWeight: '500' }}>{fmt(base)} {t('som')}</Text>
                       </View>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                           <Ionicons name="time" size={13} color={RED} />
-                          <Text style={{ color: RED, fontSize: 13 }}>Kutish haqi</Text>
+                          <Text style={{ color: RED, fontSize: 13 }}>{t('wait_fee_lbl')}</Text>
                         </View>
-                        <Text style={{ color: RED, fontSize: 13, fontWeight: '600' }}>+{fmt(waitFee)} so'm</Text>
+                        <Text style={{ color: RED, fontSize: 13, fontWeight: '600' }}>+{fmt(waitFee)} {t('som')}</Text>
                       </View>
                       <View style={{ height: 1, backgroundColor: BORDER, marginBottom: 10 }} />
                     </>
                   )}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <Text style={{ color: WHITE, fontSize: 15, fontWeight: '600' }}>Jami to'lov</Text>
-                    <Text style={{ color: YELLOW, fontSize: 22, fontWeight: '800' }}>{fmt(total)} so'm</Text>
+                    <Text style={{ color: WHITE, fontSize: 15, fontWeight: '600' }}>{t('total_pay')}</Text>
+                    <Text style={{ color: YELLOW, fontSize: 22, fontWeight: '800' }}>{fmt(total)} {t('som')}</Text>
                   </View>
                   <Text style={{ color: GRAY1, fontSize: 12, marginTop: 4 }}>
-                    {completedOrder.payment_method === 'cash' ? '💵 Naqd to\'lov' : '💳 Karta orqali'}
+                    {completedOrder.payment_method === 'cash' ? t('cash_pay') : t('card_pay')}
                     {completedOrder.distance_km ? ` · ${completedOrder.distance_km} km` : ''}
                   </Text>
                 </View>
@@ -3540,7 +4065,7 @@ function AppInner() {
             })()}
 
             {/* Yulduzli baho */}
-            <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginBottom: 10 }}>Haydovchini baholang</Text>
+            <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginBottom: 10 }}>{t('rate_driver')}</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
               {[1, 2, 3, 4, 5].map(n => (
                 <TouchableOpacity key={n} onPress={() => setStars(n)}>
@@ -3550,19 +4075,19 @@ function AppInner() {
             </View>
 
             {/* Choychaqa */}
-            <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 8 }}>Choychaqa (ixtiyoriy)</Text>
+            <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 8 }}>{t('tip_lbl')}</Text>
             <View style={{ flexDirection: 'row', gap: 8, marginBottom: 18 }}>
               {[0, 2000, 5000, 10000].map(a => (
                 <TouchableOpacity key={a} style={[s.payChip, tipAmount === a && s.payChipActive]}
                   onPress={() => setTipAmount(a)}>
                   <Text style={[s.payChipTxt, tipAmount === a && { color: '#000', fontWeight: '700' }]}>
-                    {a === 0 ? "Yo'q" : `${fmt(a)}`}
+                    {a === 0 ? t('no') : `${fmt(a)}`}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
             <TouchableOpacity style={s.ctaBtn} onPress={submitRating} disabled={loading}>
-              {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>BAHOLASH</Text>}
+              {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>{t('rate_up')}</Text>}
             </TouchableOpacity>
           </View>
         </View>
@@ -3582,20 +4107,20 @@ function fmtSched(d) {
   const now = new Date();
   const day0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const dd = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - day0) / 86400000);
-  const nm = dd === 0 ? 'Bugun' : dd === 1 ? 'Ertaga' : dd === 2 ? 'Indin' : `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+  const nm = dd === 0 ? t('today_cap') : dd === 1 ? t('tomorrow') : dd === 2 ? t('after_tomorrow') : `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
   return `${nm} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function statusText(status) {
   const m = {
-    searching:   '🔍 Haydovchi qidirilmoqda...',
-    assigned:    '🔍 Haydovchi qidirilmoqda...',
-    accepted:    "🚗 Haydovchi yo'lda",
-    arrived:     '✅ Haydovchi yetib keldi!',
-    in_progress: '🛣️ Safar davom etmoqda',
-    completed:   '🏁 Safar yakunlandi',
-    cancelled:   '❌ Bekor qilindi',
-    paid:        "✅ To'landi",
+    searching:   t('status_searching'),
+    assigned:    t('status_searching'),
+    accepted:    t('status_accepted'),
+    arrived:     t('status_arrived'),
+    in_progress: t('status_in_progress'),
+    completed:   t('status_completed'),
+    cancelled:   t('status_cancelled'),
+    paid:        t('status_paid'),
   };
   return m[status] || status;
 }
@@ -3636,12 +4161,12 @@ function CustomerWaitTimer({ arrivedAt, cfg }) {
       backgroundColor: CARD2, borderRadius: 14, padding: 14, marginTop: 12, marginHorizontal: 16,
       alignItems: 'center', borderWidth: 1, borderColor: free ? GREEN + '40' : RED + '40',
     }}>
-      <Text style={{ color: WHITE, fontSize: 15, fontWeight: '600' }}>⏱ Haydovchi kutmoqda · {mm(sec)}</Text>
+      <Text style={{ color: WHITE, fontSize: 15, fontWeight: '600' }}>{t('driver_waiting')} · {mm(sec)}</Text>
       {free ? (
-        <Text style={{ color: GREEN, fontSize: 13, marginTop: 4 }}>Bepul kutish: {mm(remain)} qoldi</Text>
+        <Text style={{ color: GREEN, fontSize: 13, marginTop: 4 }}>{t('free_wait')}: {mm(remain)} {t('left_lbl')}</Text>
       ) : (
         <Text style={{ color: RED, fontSize: 13, fontWeight: '600', marginTop: 4 }}>
-          Pullik kutish · {fmt(fee)} so'm qo'shiladi
+          {t('paid_wait')} · {fmt(fee)} {t('som')} {t('will_add')}
         </Text>
       )}
     </View>
@@ -3656,7 +4181,7 @@ function SearchingPulse() {
   const r2 = useRef(new Animated.Value(0)).current;
   const r3 = useRef(new Animated.Value(0)).current;
   const [msgIdx, setMsgIdx] = useState(0);
-  const MSGS = ['Yaqin haydovchilar qidirilmoqda…', 'Eng mos haydovchi tanlanmoqda…', 'Deyarli tayyor…'];
+  const MSGS = [t('srch_msg1'), t('srch_msg2'), t('srch_msg3')];
   useEffect(() => {
     const rings = [r1, r2, r3];
     const anims = rings.map((v, i) => Animated.loop(
@@ -3686,7 +4211,7 @@ function SearchingPulse() {
           <Ionicons name="car-sport" size={38} color="#15171C" />
         </View>
       </View>
-      <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>Haydovchi qidirilmoqda</Text>
+      <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>{t('searching_title')}</Text>
       <Text style={{ color: GRAY1, fontSize: 13.5, textAlign: 'center', paddingHorizontal: 24 }}>{MSGS[msgIdx]}</Text>
     </View>
   );
