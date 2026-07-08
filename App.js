@@ -165,6 +165,8 @@ const L = {
     to_dest: 'manzilgacha',
     to_customer: 'mijozgacha',
     new_order: 'Yangi buyurtma',
+    extra_ac_lbl: '❄️ A/C',
+    extra_baggage_lbl: '🧳 Bagaj',
     nearby: 'Yaqin',
     cash: 'Naqd',
     pickup_point: 'Olib ketish nuqtasi',
@@ -377,6 +379,8 @@ const L = {
     to_dest: 'до адреса',
     to_customer: 'до клиента',
     new_order: 'Новый заказ',
+    extra_ac_lbl: '❄️ A/C',
+    extra_baggage_lbl: '🧳 Багаж',
     nearby: 'Рядом',
     cash: 'Наличные',
     pickup_point: 'Точка подачи',
@@ -3048,6 +3052,22 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
               </Text>
             </View>
           </View>
+          {/* W1: mijoz PULLIK qo'shimcha xizmat tanlagan (need_ac/need_baggage) —
+              haydovchi qabul qilishdan OLDIN ko'radi (haqi narxga kiritilgan). */}
+          {!!(order.need_ac || order.need_baggage) && (
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+              {!!order.need_ac && (
+                <View style={{ backgroundColor: '#1A1400', borderWidth: 1, borderColor: YELLOW, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 6 }}>
+                  <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700' }}>{t('extra_ac_lbl')}</Text>
+                </View>
+              )}
+              {!!order.need_baggage && (
+                <View style={{ backgroundColor: '#1A1400', borderWidth: 1, borderColor: YELLOW, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 6 }}>
+                  <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700' }}>{t('extra_baggage_lbl')}</Text>
+                </View>
+              )}
+            </View>
+          )}
           {/* Route timeline */}
           <View style={{ flexDirection: 'row', gap: 12, marginBottom: 16 }}>
             <View style={{ alignItems: 'center', paddingTop: 4 }}>
@@ -3096,6 +3116,13 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
           <Text style={s.orderTitle}>📍 {safeStr(order.from_address, t('pickup_point'))}</Text>
           <Text style={s.orderSub}>→ {safeStr(order.to_address, t('dest'))}</Text>
           <Text style={s.orderPrice}>{fmt(order.price)} {t('som')} · {order.distance_km || '?'} {t('km')}</Text>
+          {/* W1: buyurtmadagi pullik xizmatlar — faol safar davomida ham eslatma */}
+          {!!(order.need_ac || order.need_baggage) && (
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+              {!!order.need_ac && <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '700' }}>{t('extra_ac_lbl')}</Text>}
+              {!!order.need_baggage && <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '700' }}>{t('extra_baggage_lbl')}</Text>}
+            </View>
+          )}
 
           {/* Mijoz ma'lumoti + qo'ng'iroq + xabar */}
           {showCustomer && (

@@ -143,6 +143,8 @@ const L = {
     apply: "Qo'llash",
     promo_applied: "✓ Promo-kod qo'llandi — chegirma narxga kiritildi",
     promo_invalid: 'Promo-kod yaroqsiz yoki muddati tugagan',
+    extra_ac_chip: '❄️ Konditsioner',
+    extra_baggage_chip: '🧳 Bagaj',
     lets_go: 'Ketdik',
     sched_when: '⏰ Qachonga?',
     today_cap: 'Bugun',
@@ -390,6 +392,8 @@ const L = {
     apply: 'Применить',
     promo_applied: '✓ Промокод применён — скидка учтена в цене',
     promo_invalid: 'Промокод недействителен или истёк',
+    extra_ac_chip: '❄️ Кондиционер',
+    extra_baggage_chip: '🧳 Багаж',
     lets_go: 'Поехали',
     sched_when: '⏰ На когда?',
     today_cap: 'Сегодня',
@@ -1117,6 +1121,13 @@ function AppInner() {
   const [estLoading, setEstLoading] = useState(false);
   const estCacheKey = useRef(null);
   const [promoCode, setPromoCode] = useState(''); // Q3: promo-kod (ixtiyoriy)
+  // W1: pullik qo'shimcha xizmatlar — A/C va bagaj (backend #134: need_ac/need_baggage,
+  // narx estimate/buyurtmaga extras_fee sifatida kiritiladi)
+  const [needAc, setNeedAc] = useState(false);
+  const [needBaggage, setNeedBaggage] = useState(false);
+  // Chip yorlig'idagi narxlar — /api/config/pricing (extra_ac/extra_baggage).
+  // Server bermasa zaxira: 2000/3000 so'm.
+  const [extrasCfg, setExtrasCfg] = useState({ ac: 2000, baggage: 3000 });
   // C1: rejalashtirilgan safar — tanlangan vaqt (Date) yoki null (hozir)
   const [schedAt, setSchedAt] = useState(null);
   const [schedModal, setSchedModal] = useState(false);
@@ -1389,6 +1400,7 @@ function AppInner() {
       resumeActiveOrder();
       loadPayMethods();
       loadCarImages();
+      loadExtrasPricing(); // W1: A/C va bagaj chip narxlari
       loadRecentPlaces();
       loadFavorites();
       loadPopularPlaces();
@@ -1593,6 +1605,17 @@ function AppInner() {
         const map = {};
         for (const c of r.classes) if (c.image) map[c.id] = c.image;
         setCarImages(map);
+      }
+    } catch (e) {}
+  }
+
+  // W1: qo'shimcha xizmat narxlari — chip yorlig'ida "+X so'm" ko'rsatish uchun
+  // (backend /api/config/pricing: extra_ac, extra_baggage). Xato bo'lsa zaxira qoladi.
+  async function loadExtrasPricing() {
+    try {
+      const r = await api('/api/config/pricing', 'GET');
+      if (r && (r.extra_ac != null || r.extra_baggage != null)) {
+        setExtrasCfg({ ac: Number(r.extra_ac) || 2000, baggage: Number(r.extra_baggage) || 3000 });
       }
     } catch (e) {}
   }
@@ -1945,6 +1968,7 @@ function AppInner() {
 
   function resetOrder() {
     setOrder(null); setDest(null); setEstimates({}); estCacheKey.current = null;
+    setNeedAc(false); setNeedBaggage(false); // W1: keyingi buyurtma toza boshlansin
     setDriverLoc(null); setOrderStep('dest'); setSearchQ(''); setSearchResults([]); setSearchOpen(false);
     // A2: eski safar chati keyingi buyurtmaga o'tib qolmasin — chat va badge tozalanadi
     setTripChat([]); setTripChatUnread(0); setTripChatModal(false);
@@ -2108,7 +2132,9 @@ function AppInner() {
     const from = pickup || myLoc;
     if (!from || !dest) return;
     const promoUse = promoCode.trim().toUpperCase();
-    const key = `${from.lat.toFixed(5)},${from.lng.toFixed(5)}>${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}>${promoUse}`;
+    // W1: needAc/needBaggage ham kalitga kiradi — chip almashtirilganda eski
+    // (extras'siz) narx keshdan ko'rinib qolmasin (promo bilan bir xil qolip).
+    const key = `${from.lat.toFixed(5)},${from.lng.toFixed(5)}>${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}>${promoUse}>${needAc ? 1 : 0}${needBaggage ? 1 : 0}`;
     if (estCacheKey.current === key && Object.keys(estimates).length) return;
     estCacheKey.current = key;
     setEstLoading(true);
@@ -2117,7 +2143,7 @@ function AppInner() {
       const roadKm = await fetchRoadKm(from, dest);
       const results = await Promise.all(
         CAR_CLASSES.map((c) =>
-          api('/api/orders/estimate', 'POST', { from, to: dest, car_class: c.id, ...(roadKm ? { road_km: roadKm } : {}), ...(promoUse ? { promo_code: promoUse } : {}) }, token)
+          api('/api/orders/estimate', 'POST', { from, to: dest, car_class: c.id, need_ac: needAc, need_baggage: needBaggage, ...(roadKm ? { road_km: roadKm } : {}), ...(promoUse ? { promo_code: promoUse } : {}) }, token)
             .then((est) => [c.id, est])
             .catch(() => [c.id, null])
         )
@@ -2131,7 +2157,7 @@ function AppInner() {
 
   useEffect(() => {
     if (orderStep === 'tariff' && dest && (pickup || myLoc) && !order) fetchAllEstimates();
-  }, [orderStep, dest, pickup, myLoc]);
+  }, [orderStep, dest, pickup, myLoc, needAc, needBaggage]); // W1: extras chip almashsa narx qayta yuklanadi
 
   // Qidiruv oynasi ochilganda: oxirgi + mashhur joylar uchun narxlarni hisoblash
   useEffect(() => {
@@ -2161,6 +2187,7 @@ function AppInner() {
       const roadKm = await fetchRoadKm(from, dest);
       const r = await api('/api/orders', 'POST', {
         from, to: dest, car_class: carClass, payment_method: payMethod,
+        need_ac: needAc, need_baggage: needBaggage, // W1: pullik xizmatlar (backend #134)
         ...(roadKm ? { road_km: roadKm } : {}),
         ...(promoCode.trim() ? { promo_code: promoCode.trim().toUpperCase() } : {}), // Q3
         ...(schedAt ? { scheduled_at: schedAt.toISOString() } : {}), // C1
@@ -2818,6 +2845,23 @@ function AppInner() {
                         )}
                       </View>
                     )}
+                    {/* W1: mijoz TANLAGAN pullik xizmatlar (need_ac/need_baggage) — sariq
+                        belgi. M-04 dagi kulrang belgilar haydovchi PROFILidan (bepul),
+                        bulari esa buyurtmaga buyurilgan va narxga kiritilgan. */}
+                    {!!(order.need_ac || order.need_baggage) && (
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                        {!!order.need_ac && (
+                          <View style={{ backgroundColor: '#1A1400', borderWidth: 1, borderColor: YELLOW, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                            <Text style={{ color: YELLOW, fontSize: 11, fontWeight: '600' }}>{t('extra_ac_chip')}</Text>
+                          </View>
+                        )}
+                        {!!order.need_baggage && (
+                          <View style={{ backgroundColor: '#1A1400', borderWidth: 1, borderColor: YELLOW, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                            <Text style={{ color: YELLOW, fontSize: 11, fontWeight: '600' }}>{t('extra_baggage_chip')}</Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
                     {(() => {
                       // M-05: masofa qatori (ETA endi sarlavhada — P2). Pickup: state → order.from_lat.
                       if (!driverLoc || order.status !== 'accepted') return null;
@@ -3414,6 +3458,29 @@ function AppInner() {
               {estimates[carClass]?.promo_invalid && (
                 <Text style={{ color: RED, fontSize: 12, marginBottom: 8 }}>{t('promo_invalid')}</Text>
               )}
+              {/* W1: pullik qo'shimcha xizmatlar — A/C va bagaj chiplari. Tanlansa
+                  backend estimate narxga extras_fee qo'shib qaytaradi (useEffect deps
+                  orqali narxlar avtomatik qayta yuklanadi). */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 9, alignItems: 'center',
+                    backgroundColor: needAc ? YELLOW : CARD2, borderColor: needAc ? YELLOW : BORDER }}
+                  activeOpacity={0.8}
+                  onPress={() => setNeedAc((v) => !v)}>
+                  <Text style={{ color: needAc ? '#15171c' : GRAY1, fontSize: 13, fontWeight: '700' }}>
+                    {t('extra_ac_chip')} (+{fmt(extrasCfg.ac)} {t('som')})
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, borderRadius: 12, borderWidth: 1, paddingVertical: 9, alignItems: 'center',
+                    backgroundColor: needBaggage ? YELLOW : CARD2, borderColor: needBaggage ? YELLOW : BORDER }}
+                  activeOpacity={0.8}
+                  onPress={() => setNeedBaggage((v) => !v)}>
+                  <Text style={{ color: needBaggage ? '#15171c' : GRAY1, fontSize: 13, fontWeight: '700' }}>
+                    {t('extra_baggage_chip')} (+{fmt(extrasCfg.baggage)} {t('som')})
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity
                 style={[s.orderCta, { marginHorizontal: 0 }, (!estimates[carClass] || loading) && { opacity: 0.5 }]}
                 activeOpacity={0.85}
