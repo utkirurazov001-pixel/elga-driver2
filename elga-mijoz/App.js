@@ -621,7 +621,7 @@ function AppInner() {
   const [rateModal, setRateModal] = useState(false);
   const [rateOrderId, setRateOrderId] = useState(null);
   const [completedOrder, setCompletedOrder] = useState(null); // yakunlangan safar tafsiloti
-  const [stars, setStars] = useState(5);
+  const [stars, setStars] = useState(0); // D4: mijoz O'ZI tanlasin (avval 5 oldindan bosilgan turardi)
   const [tipAmount, setTipAmount] = useState(0);
 
   // In-trip chat
@@ -1181,7 +1181,7 @@ function AppInner() {
         notify('Safar yakunlandi 🏁', 'Rahmat! Haydovchini baholang');
         playAdminSoundUrl(adminSoundUrl('trip_completed')); // T-19: admin ovozi (mijoz)
         setCompletedOrder(o);          // hisob-kitob ko'rsatish uchun saqlayмиз
-        setRateOrderId(o.id); setStars(5); setTipAmount(0); setRateModal(true);
+        setRateOrderId(o.id); setStars(0); setTipAmount(0); setRateModal(true); // D4: tanlanmagan holatdan
         resetOrder();
       }
       if (o.status === 'cancelled') {
@@ -1807,6 +1807,8 @@ function AppInner() {
 
   // ---- Baholash + tip ----
   async function submitRating() {
+    // D4: baho ONGLI tanlangan bo'lsin — yulduz bosilmagan bo'lsa yubormaymiz
+    if (!stars) { Alert.alert('Baholang', "Iltimos, avval yulduzlardan birini tanlang (1-5)."); return; }
     setLoading(true);
     try {
       await api(`/api/me/rate/${rateOrderId}`, 'POST', { stars }, token);
