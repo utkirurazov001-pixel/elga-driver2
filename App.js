@@ -165,6 +165,8 @@ const L = {
     to_dest: 'manzilgacha',
     to_customer: 'mijozgacha',
     new_order: 'Yangi buyurtma',
+    st_accepted: "Mijozga yo'lda",
+    st_arrived: 'Mijoz kutilmoqda',
     extra_ac_lbl: '❄️ A/C',
     extra_baggage_lbl: '🧳 Bagaj',
     nearby: 'Yaqin',
@@ -380,6 +382,8 @@ const L = {
     to_dest: 'до адреса',
     to_customer: 'до клиента',
     new_order: 'Новый заказ',
+    st_accepted: 'Едете к клиенту',
+    st_arrived: 'Ожидание клиента',
     extra_ac_lbl: '❄️ A/C',
     extra_baggage_lbl: '🧳 Багаж',
     nearby: 'Рядом',
@@ -1304,6 +1308,43 @@ function AppInner() {
   const [earnings, setEarnings] = useState(null);
   const [trips, setTrips] = useState(null);
   const [tab, setTab] = useState('home'); // home | earnings | history | profile
+
+  // W3: faol buyurtma pastki kartasi — ushlagichdan pastga surib YIG'ISH (Yandex Go
+  // qolipi): karta translateY bilan ekran pastiga suriladi, tepadagi ushlagich +
+  // kompakt qator ko'rinib qoladi, xarita to'liq ochiladi. Balandlik O'ZGARMAYDI —
+  // faqat transform (useNativeDriver: true, UI thread'da silliq).
+  const sheetY = useRef(new Animated.Value(0)).current; // 0 = ochiq, sheetDyRef = yig'ilgan
+  const sheetOpenRef = useRef(true);        // pan handler stale closure'siz o'qishi uchun
+  const [sheetOpen, setSheetOpen] = useState(true); // yig'ilganda kompakt qatorni chizish uchun
+  const sheetDyRef = useRef(300);           // onLayout'da aniq: karta balandligi - 84
+  function snapSheet(open) {
+    sheetOpenRef.current = open;
+    setSheetOpen(open);
+    Animated.spring(sheetY, { toValue: open ? 0 : sheetDyRef.current, useNativeDriver: true, bounciness: 4 }).start();
+  }
+  const sheetPan = useRef(PanResponder.create({
+    // Pan FAQAT ushlagich zonasida (panHandlers o'sha View'da) — kartaning ichki
+    // ScrollView aylanishi va tugmalar bosilishi buzilmaydi.
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+    onPanResponderMove: (_, g) => {
+      const dyMax = sheetDyRef.current;
+      const base = sheetOpenRef.current ? 0 : dyMax;
+      sheetY.setValue(Math.min(dyMax, Math.max(0, base + g.dy)));
+    },
+    onPanResponderRelease: (_, g) => {
+      if (Math.abs(g.dy) < 6 && Math.abs(g.dx) < 6) { snapSheet(!sheetOpenRef.current); return; } // tegish — ochish/yig'ish
+      const base = sheetOpenRef.current ? 0 : sheetDyRef.current;
+      snapSheet(base + g.dy < sheetDyRef.current / 2); // yarmidan yuqorida qolsa — ochiq
+    },
+    onPanResponderTerminate: () => snapSheet(sheetOpenRef.current),
+  })).current;
+  // Buyurtma holati o'zgarganda karta avtomatik to'liq ochiladi (muhim o'zgarish ko'rinsin);
+  // buyurtma tugaganda keyingisi uchun ochiq holatga qaytariladi.
+  useEffect(() => {
+    if (order) snapSheet(true);
+    else { sheetOpenRef.current = true; setSheetOpen(true); sheetY.setValue(0); }
+  }, [order?.status]);
 
   // R1: UI tili (uz/ru). LANG — modul o'zgaruvchisi (t() uchun), state — re-render uchun.
   const [lang, setLangState] = useState('uz');
@@ -2838,17 +2879,39 @@ function AppInner() {
 
           {/* ── Buyurtma BILAN: OrderPanel (scroll) ── */}
           {order && (
-            <ScrollView
-              style={[s.bottom, { bottom: insets.bottom }]}
-              contentContainerStyle={{ paddingBottom: 8 }}>
-              <OrderPanel
-                order={order} loading={loading} meter={meter} liveMeter={liveMeter} tripWait={tripWait}
-                onAction={orderAction} onNavigate={navigateTo} onFollow={() => setFollowMode(true)}
-                onCall={callCustomer} onChat={() => { loadChatHistory(order.id); setChatUnread(0); setChatModal(true); }}
-                chatUnread={chatUnread}
-                onPlayVoice={playVoiceOrder} voiceBusy={voiceStatus === 'loading'}
-              />
-            </ScrollView>
+            <Animated.View
+              style={[s.bottom, { bottom: insets.bottom, maxHeight: '80%', transform: [{ translateY: sheetY }] }]}
+              onLayout={(e) => {
+                // W3: yig'ilganda ushlagich + kompakt qator (~84px) ko'rinib qoladi
+                const dy = Math.max(0, Math.round(e.nativeEvent.layout.height) - 84);
+                sheetDyRef.current = dy;
+                if (!sheetOpenRef.current) sheetY.setValue(dy); // yig'iq holatda balandlik o'zgarsa moslash
+              }}>
+              {/* W3: ushlagich (drag handle) zonasi — pan FAQAT shu yerda */}
+              <View {...sheetPan.panHandlers} style={{ alignItems: 'center', paddingBottom: 10 }}>
+                <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: BORDER }} />
+                {!sheetOpen && (
+                  <Text numberOfLines={1} style={{ color: WHITE, fontSize: 15, fontWeight: '700', marginTop: 10 }}>
+                    {order.status === 'accepted' ? t('st_accepted')
+                      : order.status === 'arrived' ? t('st_arrived')
+                      : order.status === 'in_progress' ? t('trip_in_progress')
+                      : t('new_order')}
+                    <Text style={{ color: YELLOW }}> · {fmt(order.price)} {t('som')}</Text>
+                  </Text>
+                )}
+              </View>
+              <ScrollView
+                style={{ flexShrink: 1 }}
+                contentContainerStyle={{ paddingBottom: 8 }}>
+                <OrderPanel
+                  order={order} loading={loading} meter={meter} liveMeter={liveMeter} tripWait={tripWait}
+                  onAction={orderAction} onNavigate={navigateTo} onFollow={() => setFollowMode(true)}
+                  onCall={callCustomer} onChat={() => { loadChatHistory(order.id); setChatUnread(0); setChatModal(true); }}
+                  chatUnread={chatUnread}
+                  onPlayVoice={playVoiceOrder} voiceBusy={voiceStatus === 'loading'}
+                />
+              </ScrollView>
+            </Animated.View>
           )}
         </View>
       ) : tab === 'earnings' ? (

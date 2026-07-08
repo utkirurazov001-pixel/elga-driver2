@@ -1147,6 +1147,44 @@ function AppInner() {
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
     setDriverLoc((prev) => (prev && prev.lat === lat && prev.lng === lng) ? prev : { lat, lng });
   };
+  // W3: faol buyurtma pastki kartasi — ushlagichdan pastga surib YIG'ISH (Yandex Go
+  // qolipi): karta translateY bilan pastga suriladi, ushlagich + holat + narx ko'rinib
+  // qoladi, xarita to'liq ochiladi. Balandlik O'ZGARMAYDI — faqat transform
+  // (useNativeDriver: true). Bosh ekran sheet'lariga TEGILMAGAN.
+  const sheetY = useRef(new Animated.Value(0)).current; // 0 = ochiq, sheetDyRef = yig'ilgan
+  const sheetOpenRef = useRef(true);        // pan handler stale closure'siz o'qishi uchun
+  const [sheetOpen, setSheetOpen] = useState(true); // yig'ilganda kompakt narx qatorini chizish uchun
+  const sheetDyRef = useRef(300);           // onLayout'da aniq: karta balandligi - 84
+  function snapSheet(open) {
+    sheetOpenRef.current = open;
+    setSheetOpen(open);
+    Animated.spring(sheetY, { toValue: open ? 0 : sheetDyRef.current, useNativeDriver: true, bounciness: 4 }).start();
+  }
+  const sheetPan = useRef(PanResponder.create({
+    // Pan FAQAT ushlagich zonasida (panHandlers o'sha View'da) — kartaning ichki
+    // ScrollView aylanishi va tugmalar bosilishi buzilmaydi.
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+    onPanResponderMove: (_, g) => {
+      const dyMax = sheetDyRef.current;
+      const base = sheetOpenRef.current ? 0 : dyMax;
+      sheetY.setValue(Math.min(dyMax, Math.max(0, base + g.dy)));
+    },
+    onPanResponderRelease: (_, g) => {
+      if (Math.abs(g.dy) < 6 && Math.abs(g.dx) < 6) { snapSheet(!sheetOpenRef.current); return; } // tegish — ochish/yig'ish
+      const base = sheetOpenRef.current ? 0 : sheetDyRef.current;
+      snapSheet(base + g.dy < sheetDyRef.current / 2); // yarmidan yuqorida qolsa — ochiq
+    },
+    onPanResponderTerminate: () => snapSheet(sheetOpenRef.current),
+  })).current;
+  // Buyurtma holati o'zgarganda karta avtomatik to'liq ochiladi (muhim o'zgarish ko'rinsin);
+  // buyurtma tugaganda keyingisi uchun ochiq holatga qaytariladi.
+  useEffect(() => {
+    if (order) snapSheet(true);
+    else { sheetOpenRef.current = true; setSheetOpen(true); sheetY.setValue(0); }
+  }, [order?.status]);
+  // Yangi buyurtma paydo bo'lganda pastdan ko'tarilish effekti (avvalgi AnimatedSheet qolipi)
+  useEffect(() => { if (order?.id) { sheetY.setValue(40); snapSheet(true); } }, [order?.id]);
   const [nearby, setNearby] = useState([]);
   const [carClass, setCarClass] = useState('ekonom');
   const [payMethod, setPayMethod] = useState('cash');
@@ -2790,11 +2828,19 @@ function AppInner() {
               </TouchableOpacity>
             )}
 
-            <AnimatedSheet style={[s.activeSheet, { bottom: TABBAR_H + insets.bottom }]}>
-            <View style={{ alignItems: 'center', paddingTop: 8 }}>
+            <Animated.View
+              style={[s.activeSheet, { bottom: TABBAR_H + insets.bottom, transform: [{ translateY: sheetY }] }]}
+              onLayout={(e) => {
+                // W3: yig'ilganda ushlagich + holat + narx (~84px) ko'rinib qoladi
+                const dy = Math.max(0, Math.round(e.nativeEvent.layout.height) - 84);
+                sheetDyRef.current = dy;
+                if (!sheetOpenRef.current) sheetY.setValue(dy); // yig'iq holatda balandlik o'zgarsa moslash
+              }}>
+            {/* W3: ushlagich (drag handle) zonasi — pan FAQAT shu yerda. Holat
+                sarlavhasi ScrollView'dan shu zonaga ko'chirildi: yig'ilganda ham
+                ko'rinib turadi, ichki ScrollView bemalol aylanaveradi. */}
+            <View {...sheetPan.panHandlers} style={{ alignItems: 'center', paddingTop: 8 }}>
               <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: BORDER }} />
-            </View>
-            <ScrollView contentContainerStyle={{ paddingBottom: 8 }}>
               {/* P2 (T-1): sarlavha — accepted'da umumiy holat o'rniga ANIQ javob:
                   "Yetib keladi: ~X daqiqa" (Yandex qolipi). Boshqa holatlarda statusText. */}
               <Text style={s.activeStatusTxt}>
@@ -2809,6 +2855,13 @@ function AppInner() {
                   return statusText(order.status);
                 })()}
               </Text>
+              {!sheetOpen && order.price > 0 && (
+                <Text numberOfLines={1} style={{ color: GRAY1, fontSize: 14, marginTop: -4, marginBottom: 10 }}>
+                  {fmt(order.price)} {t('som')} · {order.payment_method === 'cash' ? t('cash_lbl') : order.payment_method}
+                </Text>
+              )}
+            </View>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 8 }}>
 
               {order.driver_name && !['searching', 'assigned'].includes(order.status) && (
                 <View style={s.driverCard}>
@@ -3002,7 +3055,7 @@ function AppInner() {
                 </TouchableOpacity>
               )}
             </ScrollView>
-            </AnimatedSheet>
+            </Animated.View>
           </View>
 
         ) : orderStep === 'dest' ? (
