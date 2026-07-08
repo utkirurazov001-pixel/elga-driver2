@@ -472,6 +472,8 @@ textarea.input{resize:vertical;min-height:88px;line-height:1.5}
 .gs-empty{padding:14px;font-size:13px;color:var(--text-dim,#8E8E93)}
 
 /* ---- B4: Dispetcher doskasi (kanban) ---- */
+/* doska stripi: 4 mini karta bir qatorga (default .strip 3 ustun) */
+.strip-4{grid-template-columns:repeat(4,1fr)}
 .kb-cols{display:grid;grid-template-columns:repeat(5,minmax(215px,1fr));gap:12px;overflow-x:auto;
   padding-bottom:4px;align-items:start}
 .kb-col{background:var(--surface);border:1px solid var(--border);border-radius:14px;min-width:215px;

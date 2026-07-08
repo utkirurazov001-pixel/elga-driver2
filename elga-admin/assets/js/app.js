@@ -232,6 +232,8 @@
         var dot=document.querySelector('#bellBtn .dot'); if(dot) dot.style.display='block';
         window.refreshBadges();
       });
+      // Jonli rejimda polling har ~6s 'kpi:update' beradi — badge'lar ham jonli bo'lsin
+      window.Bus.on('kpi:update', function(){ window.refreshBadges(); });
       window.Bus.on('order:new', function(o){
         if(current.route==='grid' || current.route==='radio') return; // o'sha sahifa o'zi ko'rsatadi
       });
@@ -464,6 +466,9 @@
   window.refreshBadges = function(){
     var c=window.DB.complaints.filter(function(x){return x.status==='new';}).length;
     var w=window.DB.withdrawals.filter(function(x){return x.status==='pending';}).length;
+    // Dispetcher belgisi — JONLI navbat (ilgari demo'dagi qotib qolgan '7' turardi)
+    var q=window.DB.orders.filter(function(x){return x.status==='new'||x.status==='searching';}).length;
+    var rb=document.querySelector('.nav-item[data-route="radio"] .badge'); if(rb) rb.textContent=q;
     var wb=document.querySelector('.nav-item[data-route="warn"] .badge'); if(wb) wb.textContent=c;
     var cb=document.querySelector('.nav-item[data-route="cash"] .badge'); if(cb) cb.textContent=w;
   };

@@ -356,7 +356,7 @@
     }
 
     root.innerHTML = window.pageHead({title:'Dispetcher doskasi', sub:'Faol buyurtmalar holat bo\'yicha · haydovchilar xaritada', live:true})+
-      '<div class="strip" id="kbStrip"></div>'+
+      '<div class="strip strip-4" id="kbStrip"></div>'+
       '<div class="kb-cols" id="kbCols"></div>'+
       '<div class="card" style="margin-top:16px"><div class="card-head"><div><h3>Jonli xarita</h3>'+
       '<p>Haydovchilar (holat rangi) va buyurtma olib ketish nuqtalari (sariq halqa)</p></div></div>'+
