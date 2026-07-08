@@ -74,6 +74,442 @@ function isForwardUpdate(cur, next) {
 // Faol buyurtma lokal saqlanadigan kalit (crash/kill/OS-restart'da yo'qolmaydi).
 const ACTIVE_ORDER_KEY = 'ACTIVE_ORDER';
 
+// ============================================================
+//  R1: UZ/RU KO'P TILLILIK
+//  LANG — modul o'zgaruvchisi; t() render ichida chaqiriladi. Til almashganda
+//  setLang (AppInner) state'ni yangilab re-render qiladi (LANG sinxron yangi).
+//  FAQAT ko'rinadigan UI matnlari tarjima qilinadi; server bilan almashinadigan
+//  qiymatlar (statuslar, API pathlar, storage kalitlari) TEGILMAGAN.
+// ============================================================
+const L = {
+  uz: {
+    error: 'Xato',
+    saved: 'Saqlandi',
+    save: 'Saqlash',
+    close: 'Yopish',
+    cancel_btn: 'Bekor qilish',
+    cancel_short: 'Bekor',
+    agree: 'Roziman',
+    no: "Yo'q",
+    ready: 'Tayyor',
+    som: "so'm",
+    km: 'km',
+    min_short: 'daq',
+    min_full: 'daqiqa',
+    distance: 'Masofa',
+    time: 'Vaqt',
+    price: 'Narx',
+    customer: 'Mijoz',
+    driver_def: 'Haydovchi',
+    loading: 'Yuklanmoqda...',
+    retry: 'Qayta urinish',
+    unexpected_error: 'Kutilmagan xatolik',
+    unexpected_error_sub: 'Ilova qayta ishga tushirilmoqda. Buyurtmalaringiz saqlanib qoladi.',
+    notif_title: '🚕 KetdikGo Haydovchi',
+    waiting_order: 'Buyurtma kutilmoqda...',
+    trip_ongoing_notif: 'Safar davom etmoqda...',
+    accepted_notif: "Buyurtma qabul qilindi · Yo'lda",
+    arrived_notif: 'Mijoz oldida · Kutilmoqda',
+    waiting_offline_notif: 'Buyurtma kutilmoqda... (oflayn — sinxronlanadi)',
+    loc_tracking: 'Joylashuv kuzatilmoqda',
+    loc_perm_title: 'Joylashuv ruxsati',
+    loc_perm_msg: "KetdikGo buyurtmalarni qabul qilish va bajarish uchun joylashuvingizni FONDA — ilova yopiq yoki ishlatilmayotgan paytda ham — yig'adi. Davom etish uchun roziligingiz kerak.",
+    driver_app: 'Haydovchi ilovasi',
+    get_code: 'KOD OLISH',
+    sms_code: 'SMS kod',
+    confirm: 'TASDIQLASH',
+    change_number: "← Raqamni o'zgartirish",
+    driver_reg: "Haydovchi ro'yxati:",
+    your_name: 'Ismingiz',
+    car_ph_reg: 'Mashina (masalan: Cobalt)',
+    plate_ph_reg: 'Davlat raqami (01A123BC)',
+    register_btn: "RO'YXATDAN O'TISH",
+    enter_valid_phone: "To'g'ri raqam kiriting",
+    sent: 'Yuborildi',
+    sms_sent: 'SMS kod yuborildi',
+    enter_code: 'Kodni kiriting',
+    enter_name: 'Ismingizni kiriting',
+    enter_car: 'Mashina rusumini kiriting',
+    enter_plate: 'Mashina raqamini kiriting',
+    congrats: 'Tabriklaymiz!',
+    registered_msg: "Ro'yxatdan o'tdingiz. Onlayn chiqish uchun admin tasdig'i kerak bo'lishi mumkin.",
+    pin_set: "PIN o'rnating",
+    pin_enter: 'PIN kiriting',
+    pin_hint: "Keyingi kirishlarda SMS shart bo'lmaydi",
+    pin_save: 'PIN SAQLASH',
+    login_btn: 'KIRISH',
+    skip: "O'tkazib yuborish",
+    login_sms: 'SMS orqali kirish',
+    pin_4digits: '4 ta raqam kiriting',
+    pin_wrong: "PIN noto'g'ri",
+    online: 'Onlayn',
+    offline: 'Oflayn',
+    go_online: "ONLAYN BO'LISH",
+    go_offline: "Oflayn bo'lish",
+    online_fail: "Onlayn chiqib bo'lmadi",
+    syncing: 'Sinxronlanmoqda…',
+    no_internet: "Internet yo'q. Qayta ulanish kutilmoqda…",
+    gps_stale: "GPS signal yo'q — joylashuv yangilanmayapti",
+    high_demand: 'Hududda talab yuqori',
+    today_som: "Bugun · so'm",
+    trips: 'Safarlar',
+    rating: 'Reyting',
+    taximeter_on: '⏱ TAKSOMETR ISHLAYAPTI',
+    finish: 'Tugatish',
+    solo_meter: '🚕 Mustaqil taksometr',
+    solo_meter_sub: 'Buyurtmasiz narx hisoblash',
+    wait_gps: 'Avval GPS joylashuvingizni kuting',
+    note: 'Eslatma',
+    solo_need_online: "Taksometr ishlashi uchun Online bo'lishingiz kerak (GPS uzluksiz ishlaydi)",
+    trip_done: 'Safar yakunlandi',
+    to_dest: 'manzilgacha',
+    to_customer: 'mijozgacha',
+    new_order: 'Yangi buyurtma',
+    nearby: 'Yaqin',
+    cash: 'Naqd',
+    pickup_point: 'Olib ketish nuqtasi',
+    dest: 'Manzil',
+    voice_badge: '🔊 Ovozli',
+    voice_sub: 'Mijoz manzilni gapirgan',
+    listen: '▶ Eshitish',
+    reject: 'Rad etish',
+    accept: 'Qabul qilish',
+    to_customer_btn: "MIJOZGA YO'L",
+    arrived_btn: 'YETIB KELDIM',
+    cancel_trip: 'Safarni bekor qilish',
+    cancel_trip_msg: 'Rostdan bekor qilasizmi? Buyurtma sizdan olinadi va mijozga xabar beriladi.',
+    yes_cancel: 'Ha, bekor qilish',
+    start_trip: 'SAFARNI BOSHLASH',
+    to_dest_btn: "MANZILGA YO'L",
+    complete_trip: 'SAFARNI YAKUNLASH',
+    trip_in_progress: 'SAFAR DAVOM ETMOQDA',
+    waiting_lbl: 'Kutish',
+    free_lbl: 'bepul',
+    wait_time: 'Kutish vaqti',
+    free_wait: 'Bepul kutish',
+    left: 'qoldi',
+    paid_wait: 'Pullik kutish',
+    voice_order_title: '🎙 Mijoz ovozli buyurtmasi',
+    playing: "O'ynalmoqda...",
+    voice_empty: 'Ovozli xabar topilmadi',
+    voice_error: "Ovozni o'ynab bo'lmadi",
+    done_lbl: 'Tugadi',
+    replay: '↻ Qayta eshitish',
+    type_message: 'Xabar yozing...',
+    ai_title: 'KetdikGo AI yordamchi',
+    ai_empty: "Savol yozing — AI darrov javob beradi.\n(daromad, reyting, to'lov, buyurtma...)",
+    ai_help_empty: "Savolingizni yozing — KetdikGo AI darrov javob beradi (daromad, reyting, to'lov...).",
+    ask_placeholder: 'Savol yozing...',
+    ai_fail: "Kechirasiz, javob berib bo'lmadi. Qayta urinib ko'ring 🙏",
+    ticket: 'Murojaat',
+    tab_orders: 'Buyurtmalar',
+    tab_earnings: 'Daromad',
+    tab_history: 'Tarix',
+    tab_profile: 'Profil',
+    finance: 'Moliya',
+    total_income: 'JAMI DAROMAD',
+    this_week: 'Bu hafta',
+    withdraw: 'YECHIB OLISH',
+    withdraw_title: 'Yechib olish',
+    withdraw_soon: "Ushbu funksiya tez orada ishga tushadi.\nHozircha admin bilan bog'laning.",
+    balance_lbl: 'HISOB BALANSI',
+    topup_click: "Click orqali to'ldirish",
+    topup_title: "Hisobni to'ldirish",
+    topup_sub: "Click orqali to'lov",
+    enter_amount: "Summani kiriting (so'm)",
+    amount_ph: 'Masalan: 50000',
+    pay_click: "Click orqali to'lash",
+    min_amount: "Eng kam 5 000 so'm kiriting",
+    topup_fail: "To'ldirish imkoni yo'q",
+    today_trips: 'Bugungi safarlar',
+    week_trips: 'Haftalik safarlar',
+    accept_rate: 'Qabul foizi',
+    week_chart: 'Haftalik grafik',
+    refresh: 'YANGILASH',
+    trip_fare: 'Safar haqi',
+    commission_lbl: 'KetdikGo komissiya',
+    your_income: 'Sizning daromad',
+    rate_passenger: "Yo'lovchini baholang",
+    continue_btn: 'DAVOM ETISH',
+    completed_trips: 'Yakunlangan safarlar',
+    no_trips: "Hozircha safarlar yo'q",
+    today: 'Bugun',
+    yesterday: 'Kecha',
+    cancelled_short: 'Bekor',
+    cancelled_full: 'Bekor qilingan',
+    car_info: "Avtomobil ma'lumotlari",
+    documents: 'Hujjatlar',
+    verified: 'Tasdiqlangan',
+    payment_card: "To'lov va karta",
+    help_center: 'Yordam markazi',
+    settings: 'Sozlamalar',
+    logout: 'Chiqish',
+    car_default: 'Avtomobil',
+    plate_lbl: 'Davlat raqami',
+    car_model_lbl: 'Mashina rusumi',
+    car_model_ph: 'Masalan: Chevrolet Malibu',
+    plate_ph: 'Masalan: 01 A 123 BC',
+    car_color_lbl: 'Mashina rangi',
+    color_ph: 'Masalan: Oq',
+    services_lbl: "Xizmatlar (mijozga ko'rinadi)",
+    ac: '❄️ Konditsioner (A/C)',
+    baggage: '🧳 Bagaj / katta yuk',
+    car_saved: "Avtomobil ma'lumotlari yangilandi",
+    card_saved: "Karta ma'lumotlari yangilandi",
+    save_fail: "Saqlab bo'lmadi",
+    card_hint: "Keshbek hisobiga o'tkazish va bonus olish uchun karta qo'shing",
+    cash_always: "Naqd pul to'lovi har doim mavjud",
+    call_operator: "Operator bilan bog'lanish",
+    tg_channel: 'Telegram kanal',
+    tech_support: 'Texnik yordam',
+    faq: "KO'P SO'RALADIGAN SAVOLLAR",
+    faq_q1: "Haydovchi hisobim blok bo'ldi",
+    faq_a1: "Admin bilan bog'laning: @ketdikgobot",
+    faq_q2: "To'lov qachon chiqadi?",
+    faq_a2: "Har kuni 18:00 da avtomatik o'tkaziladi",
+    faq_q3: 'Reyting qanday hisoblanadi?',
+    faq_a3: "Mijozlar bergan 1-5 ball o'rtachasi",
+    faq_q4: "Mashina ma'lumotlarini o'zgartirish",
+    faq_a4: "Profil → Avtomobil ma'lumotlari bo'limidan",
+    notif_section: 'BILDIRISHNOMALAR',
+    order_sound: 'Yangi buyurtma ovozi',
+    on_lbl: 'Yoqiq',
+    off_lbl: "O'chiq",
+    night_mode: 'Tun rejimi',
+    always_on: 'Doim yoqiq',
+    about_section: 'ILOVA HAQIDA',
+    version: 'Versiya',
+    built: 'Qurilgan',
+    license: 'Litsenziya',
+    clear_data: "Ma'lumotlarni tozalash",
+    clear_msg: "Kesh ma'lumotlari tozalanadi. Davom etasizmi?",
+    clear_do: 'Tozalash',
+    cache_cleared: 'Kesh tozalandi',
+    clear_fail: 'Tozalash amalga oshmadi',
+    language: 'TIL',
+    order_cancelled_msg: 'Buyurtma bekor qilindi',
+    offline_mode: 'Oflayn rejim',
+    offline_saved: "Internet yo'q. Amal saqlandi — internet qaytganda avtomatik yuboriladi.",
+    no_phone: "Telefon yo'q",
+    no_phone_msg: 'Mijoz telefoni mavjud emas',
+    call_fail: "Qo'ng'iroq ochilmadi",
+  },
+  ru: {
+    error: 'Ошибка',
+    saved: 'Сохранено',
+    save: 'Сохранить',
+    close: 'Закрыть',
+    cancel_btn: 'Отмена',
+    cancel_short: 'Отмена',
+    agree: 'Согласен',
+    no: 'Нет',
+    ready: 'Готово',
+    som: 'сум',
+    km: 'км',
+    min_short: 'мин',
+    min_full: 'мин',
+    distance: 'Расстояние',
+    time: 'Время',
+    price: 'Цена',
+    customer: 'Клиент',
+    driver_def: 'Водитель',
+    loading: 'Загрузка...',
+    retry: 'Повторить',
+    unexpected_error: 'Непредвиденная ошибка',
+    unexpected_error_sub: 'Приложение перезапускается. Ваши заказы сохранятся.',
+    notif_title: '🚕 KetdikGo Водитель',
+    waiting_order: 'Ожидание заказа...',
+    trip_ongoing_notif: 'Поездка продолжается...',
+    accepted_notif: 'Заказ принят · В пути',
+    arrived_notif: 'У клиента · Ожидание',
+    waiting_offline_notif: 'Ожидание заказа... (офлайн — синхронизация)',
+    loc_tracking: 'Отслеживается местоположение',
+    loc_perm_title: 'Разрешение на геолокацию',
+    loc_perm_msg: 'KetdikGo собирает данные о вашем местоположении В ФОНЕ — даже когда приложение закрыто или не используется — для приёма и выполнения заказов. Для продолжения нужно ваше согласие.',
+    driver_app: 'Приложение водителя',
+    get_code: 'ПОЛУЧИТЬ КОД',
+    sms_code: 'SMS-код',
+    confirm: 'ПОДТВЕРДИТЬ',
+    change_number: '← Изменить номер',
+    driver_reg: 'Регистрация водителя:',
+    your_name: 'Ваше имя',
+    car_ph_reg: 'Машина (например: Cobalt)',
+    plate_ph_reg: 'Госномер (01A123BC)',
+    register_btn: 'ЗАРЕГИСТРИРОВАТЬСЯ',
+    enter_valid_phone: 'Введите корректный номер',
+    sent: 'Отправлено',
+    sms_sent: 'SMS-код отправлен',
+    enter_code: 'Введите код',
+    enter_name: 'Введите ваше имя',
+    enter_car: 'Введите модель машины',
+    enter_plate: 'Введите госномер',
+    congrats: 'Поздравляем!',
+    registered_msg: 'Вы зарегистрированы. Для выхода на линию может потребоваться подтверждение администратора.',
+    pin_set: 'Установите PIN',
+    pin_enter: 'Введите PIN',
+    pin_hint: 'При следующем входе SMS не понадобится',
+    pin_save: 'СОХРАНИТЬ PIN',
+    login_btn: 'ВОЙТИ',
+    skip: 'Пропустить',
+    login_sms: 'Войти через SMS',
+    pin_4digits: 'Введите 4 цифры',
+    pin_wrong: 'Неверный PIN',
+    online: 'Онлайн',
+    offline: 'Офлайн',
+    go_online: 'ВЫЙТИ НА ЛИНИЮ',
+    go_offline: 'Уйти с линии',
+    online_fail: 'Не удалось выйти на линию',
+    syncing: 'Синхронизация…',
+    no_internet: 'Нет интернета. Ожидание переподключения…',
+    gps_stale: 'Нет сигнала GPS — местоположение не обновляется',
+    high_demand: 'Высокий спрос в районе',
+    today_som: 'Сегодня · сум',
+    trips: 'Поездки',
+    rating: 'Рейтинг',
+    taximeter_on: '⏱ ТАКСОМЕТР РАБОТАЕТ',
+    finish: 'Завершить',
+    solo_meter: '🚕 Свободный таксометр',
+    solo_meter_sub: 'Расчёт цены без заказа',
+    wait_gps: 'Сначала дождитесь сигнала GPS',
+    note: 'Примечание',
+    solo_need_online: 'Для работы таксометра нужно быть онлайн (GPS работает непрерывно)',
+    trip_done: 'Поездка завершена',
+    to_dest: 'до адреса',
+    to_customer: 'до клиента',
+    new_order: 'Новый заказ',
+    nearby: 'Рядом',
+    cash: 'Наличные',
+    pickup_point: 'Точка подачи',
+    dest: 'Адрес',
+    voice_badge: '🔊 Голосовой',
+    voice_sub: 'Клиент назвал адрес голосом',
+    listen: '▶ Прослушать',
+    reject: 'Отклонить',
+    accept: 'Принять',
+    to_customer_btn: 'МАРШРУТ К КЛИЕНТУ',
+    arrived_btn: 'Я ПРИЕХАЛ',
+    cancel_trip: 'Отменить поездку',
+    cancel_trip_msg: 'Действительно отменить? Заказ будет снят с вас, клиент получит уведомление.',
+    yes_cancel: 'Да, отменить',
+    start_trip: 'НАЧАТЬ ПОЕЗДКУ',
+    to_dest_btn: 'МАРШРУТ К МЕСТУ',
+    complete_trip: 'ЗАВЕРШИТЬ ПОЕЗДКУ',
+    trip_in_progress: 'ПОЕЗДКА ПРОДОЛЖАЕТСЯ',
+    waiting_lbl: 'Ожидание',
+    free_lbl: 'бесплатно',
+    wait_time: 'Время ожидания',
+    free_wait: 'Бесплатное ожидание',
+    left: 'осталось',
+    paid_wait: 'Платное ожидание',
+    voice_order_title: '🎙 Голосовой заказ клиента',
+    playing: 'Воспроизводится...',
+    voice_empty: 'Голосовое сообщение не найдено',
+    voice_error: 'Не удалось воспроизвести',
+    done_lbl: 'Готово',
+    replay: '↻ Прослушать ещё раз',
+    type_message: 'Напишите сообщение...',
+    ai_title: 'KetdikGo AI-помощник',
+    ai_empty: 'Напишите вопрос — AI сразу ответит.\n(доход, рейтинг, оплата, заказ...)',
+    ai_help_empty: 'Напишите ваш вопрос — KetdikGo AI сразу ответит (доход, рейтинг, оплата...).',
+    ask_placeholder: 'Напишите вопрос...',
+    ai_fail: 'Извините, не удалось ответить. Попробуйте ещё раз 🙏',
+    ticket: 'Обращение',
+    tab_orders: 'Заказы',
+    tab_earnings: 'Доход',
+    tab_history: 'История',
+    tab_profile: 'Профиль',
+    finance: 'Финансы',
+    total_income: 'ОБЩИЙ ДОХОД',
+    this_week: 'За эту неделю',
+    withdraw: 'ВЫВЕСТИ',
+    withdraw_title: 'Вывод средств',
+    withdraw_soon: 'Эта функция скоро заработает.\nПока свяжитесь с администратором.',
+    balance_lbl: 'БАЛАНС СЧЁТА',
+    topup_click: 'Пополнить через Click',
+    topup_title: 'Пополнение счёта',
+    topup_sub: 'Оплата через Click',
+    enter_amount: 'Введите сумму (сум)',
+    amount_ph: 'Например: 50000',
+    pay_click: 'Оплатить через Click',
+    min_amount: 'Минимум 5 000 сум',
+    topup_fail: 'Пополнение недоступно',
+    today_trips: 'Поездок сегодня',
+    week_trips: 'Поездок за неделю',
+    accept_rate: 'Процент принятия',
+    week_chart: 'График недели',
+    refresh: 'ОБНОВИТЬ',
+    trip_fare: 'Стоимость поездки',
+    commission_lbl: 'Комиссия KetdikGo',
+    your_income: 'Ваш доход',
+    rate_passenger: 'Оцените пассажира',
+    continue_btn: 'ПРОДОЛЖИТЬ',
+    completed_trips: 'Завершённые поездки',
+    no_trips: 'Пока нет поездок',
+    today: 'Сегодня',
+    yesterday: 'Вчера',
+    cancelled_short: 'Отмена',
+    cancelled_full: 'Отменён',
+    car_info: 'Данные автомобиля',
+    documents: 'Документы',
+    verified: 'Подтверждено',
+    payment_card: 'Оплата и карта',
+    help_center: 'Центр поддержки',
+    settings: 'Настройки',
+    logout: 'Выйти',
+    car_default: 'Автомобиль',
+    plate_lbl: 'Госномер',
+    car_model_lbl: 'Модель машины',
+    car_model_ph: 'Например: Chevrolet Malibu',
+    plate_ph: 'Например: 01 A 123 BC',
+    car_color_lbl: 'Цвет машины',
+    color_ph: 'Например: Белый',
+    services_lbl: 'Услуги (видны клиенту)',
+    ac: '❄️ Кондиционер (A/C)',
+    baggage: '🧳 Багаж / крупный груз',
+    car_saved: 'Данные автомобиля обновлены',
+    card_saved: 'Данные карты обновлены',
+    save_fail: 'Не удалось сохранить',
+    card_hint: 'Добавьте карту для кешбэка и бонусов',
+    cash_always: 'Оплата наличными доступна всегда',
+    call_operator: 'Связаться с оператором',
+    tg_channel: 'Telegram-канал',
+    tech_support: 'Техподдержка',
+    faq: 'ЧАСТЫЕ ВОПРОСЫ',
+    faq_q1: 'Мой аккаунт водителя заблокирован',
+    faq_a1: 'Свяжитесь с админом: @ketdikgobot',
+    faq_q2: 'Когда приходит оплата?',
+    faq_a2: 'Автоматически каждый день в 18:00',
+    faq_q3: 'Как считается рейтинг?',
+    faq_a3: 'Среднее из оценок клиентов (1-5)',
+    faq_q4: 'Как изменить данные машины',
+    faq_a4: 'Профиль → Данные автомобиля',
+    notif_section: 'УВЕДОМЛЕНИЯ',
+    order_sound: 'Звук нового заказа',
+    on_lbl: 'Вкл',
+    off_lbl: 'Выкл',
+    night_mode: 'Тёмная тема',
+    always_on: 'Всегда вкл',
+    about_section: 'О ПРИЛОЖЕНИИ',
+    version: 'Версия',
+    built: 'Сборка',
+    license: 'Лицензия',
+    clear_data: 'Очистить данные',
+    clear_msg: 'Кеш будет очищен. Продолжить?',
+    clear_do: 'Очистить',
+    cache_cleared: 'Кеш очищен',
+    clear_fail: 'Не удалось очистить',
+    language: 'ЯЗЫК',
+    order_cancelled_msg: 'Заказ отменён',
+    offline_mode: 'Офлайн-режим',
+    offline_saved: 'Нет интернета. Действие сохранено — отправится автоматически при подключении.',
+    no_phone: 'Нет телефона',
+    no_phone_msg: 'Телефон клиента недоступен',
+    call_fail: 'Не удалось позвонить',
+  },
+};
+let LANG = 'uz';
+function t(k) { return (L[LANG] && L[LANG][k]) || L.uz[k] || k; }
+
 // G2: osilib qoladigan chaqiruvlar (GPS fix) UI oqimini bloklamasin —
 // muddat o'tsa reject bo'ladi, chaqiruvchi .catch bilan davom etadi.
 function withTimeout(promise, ms) {
@@ -145,13 +581,13 @@ if (Platform.OS === 'android') {
 const PERSISTENT_ID = 'elga-driver-active';
 
 // Fon ko'rsatkichi: ekranning yuqori qismida KetdikGo logosi bilan doimiy bildirishnoma
-async function showPersistentNotif(status = 'Buyurtma kutilmoqda...') {
+async function showPersistentNotif(status) {
   try {
     await Notifications.scheduleNotificationAsync({
       identifier: PERSISTENT_ID,
       content: {
-        title: '🚕 KetdikGo Haydovchi',
-        body: status,
+        title: t('notif_title'),
+        body: status || t('waiting_order'),
         sticky: true,          // Android: siljitib o'chirib bo'lmaydi
         priority: 'low',
         android: {
@@ -429,12 +865,12 @@ async function showLocationDisclosure() {
   } catch (e) {}
   return new Promise((resolve) => {
     Alert.alert(
-      'Joylashuv ruxsati',
-      "KetdikGo buyurtmalarni qabul qilish va bajarish uchun joylashuvingizni FONDA — ilova yopiq yoki ishlatilmayotgan paytda ham — yig'adi. Davom etish uchun roziligingiz kerak.",
+      t('loc_perm_title'),
+      t('loc_perm_msg'),
       [
-        { text: 'Bekor', style: 'cancel', onPress: () => resolve(false) },
+        { text: t('cancel_short'), style: 'cancel', onPress: () => resolve(false) },
         {
-          text: 'Roziman',
+          text: t('agree'),
           onPress: async () => {
             try { await AsyncStorage.setItem(BG_LOCATION_CONSENT_KEY, '1'); } catch (e) {}
             resolve(true);
@@ -468,8 +904,8 @@ async function startBackgroundLocation() {
       pausesUpdatesAutomatically: false,
       showsBackgroundLocationIndicator: true,
       foregroundService: {
-        notificationTitle: '🚕 KetdikGo Haydovchi',
-        notificationBody: 'Joylashuv kuzatilmoqda',
+        notificationTitle: t('notif_title'),
+        notificationBody: t('loc_tracking'),
         notificationColor: '#FFC700',
       },
     });
@@ -560,17 +996,13 @@ class ErrorBoundary extends React.Component {
       return (
         <View style={{ flex: 1, backgroundColor: BG, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
           <Text style={{ fontSize: 40, marginBottom: 16 }}>⚠️</Text>
-          <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 8 }}>
-            Kutilmagan xatolik
-          </Text>
-          <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginBottom: 24 }}>
-            Ilova qayta ishga tushirilmoqda. Buyurtmalaringiz saqlanib qoladi.
-          </Text>
+          <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 8 }}>{t('unexpected_error')}</Text>
+          <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginBottom: 24 }}>{t('unexpected_error_sub')}</Text>
           <TouchableOpacity
             onPress={this.reset}
             style={{ backgroundColor: YELLOW, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40 }}
             activeOpacity={0.85}>
-            <Text style={{ color: '#000', fontSize: 16, fontWeight: '700' }}>Qayta urinish</Text>
+            <Text style={{ color: '#000', fontSize: 16, fontWeight: '700' }}>{t('retry')}</Text>
           </TouchableOpacity>
         </View>
       );
@@ -665,9 +1097,9 @@ function AiChatModal({ visible, onClose, token, insets }) {
     setMsgs(next); setInput(''); setBusy(true);
     try {
       const r = await api('/api/ai/chat', 'POST', { messages: next.slice(-4), context_role: 'driver' }, token, 25000, { retries: 1 });
-      setMsgs([...next, { role: 'assistant', text: r.reply + (r.ticket ? `\n\n📋 Murojaat: ${r.ticket}` : '') }]);
+      setMsgs([...next, { role: 'assistant', text: r.reply + (r.ticket ? `\n\n📋 ${t('ticket')}: ${r.ticket}` : '') }]);
     } catch (e) {
-      setMsgs([...next, { role: 'assistant', text: 'Kechirasiz, javob berib bo\'lmadi. Qayta urinib ko\'ring 🙏' }]);
+      setMsgs([...next, { role: 'assistant', text: t('ai_fail') }]);
     } finally { setBusy(false); }
   }
   return (
@@ -678,12 +1110,12 @@ function AiChatModal({ visible, onClose, token, insets }) {
             <Ionicons name="arrow-back" size={24} color={WHITE} />
           </TouchableOpacity>
           <Ionicons name="sparkles" size={18} color={YELLOW} style={{ marginRight: 8 }} />
-          <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>KetdikGo AI yordamchi</Text>
+          <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>{t('ai_title')}</Text>
         </View>
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
           {msgs.length === 0 && (
             <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginTop: 24 }}>
-              Savol yozing — AI darrov javob beradi.{'\n'}(daromad, reyting, to'lov, buyurtma...)
+              {t('ai_empty')}
             </Text>
           )}
           {msgs.map((m, i) => (
@@ -701,7 +1133,7 @@ function AiChatModal({ visible, onClose, token, insets }) {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 8, paddingBottom: (insets?.bottom || 0) + 12 }}>
           <TextInput
             style={{ flex: 1, backgroundColor: CARD2, borderRadius: 12, borderWidth: 1, borderColor: BORDER, color: WHITE, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 }}
-            placeholder="Savol yozing..." placeholderTextColor={GRAY2}
+            placeholder={t('ask_placeholder')} placeholderTextColor={GRAY2}
             value={input} onChangeText={setInput}
             onSubmitEditing={send} returnKeyType="send"
           />
@@ -865,6 +1297,14 @@ function AppInner() {
   const [trips, setTrips] = useState(null);
   const [tab, setTab] = useState('home'); // home | earnings | history | profile
 
+  // R1: UI tili (uz/ru). LANG — modul o'zgaruvchisi (t() uchun), state — re-render uchun.
+  const [lang, setLangState] = useState('uz');
+  function setLang(l) {
+    LANG = l;
+    setLangState(l);
+    AsyncStorage.setItem('app_lang', l).catch(() => {});
+  }
+
   // Mustaqil taksometr (buyurtmasiz — narxni o'zi hisoblab beradi)
   const [soloMeter, setSoloMeter] = useState(null); // null | { startMs, km, prevLoc }
   const soloTimerRef = useRef(null);
@@ -939,6 +1379,11 @@ function AppInner() {
     (async () => {
       // OTA yangilanish: faqat standalone APK da ishlaydi, Expo Go da o'tkazib yuboriladi
 
+      // R1: saqlangan UI tilini tiklaymiz — birinchi renderdan to'g'ri til ko'rinadi
+      try {
+        const lg = await AsyncStorage.getItem('app_lang');
+        if (lg === 'ru' || lg === 'uz') { LANG = lg; setLangState(lg); }
+      } catch (e) {}
       try {
         const t = await AsyncStorage.getItem('token');
         const u = await AsyncStorage.getItem('user');
@@ -1292,7 +1737,7 @@ function AppInner() {
           const ttl = Number(o.offer_ttl_ms) > 0 ? Number(o.offer_ttl_ms) : 30000;
           offerTimerRef.current = setTimeout(() => {
             setOrder((prev) => (prev && prev.id === o.id && OFFER_STATUSES.includes(prev.status)) ? null : prev);
-            updatePersistentNotif('Buyurtma kutilmoqda...');
+            updatePersistentNotif(t('waiting_order'));
             stopOrderAlert(); // T-07: taklif TTL tugadi — ovoz to'xtaydi
           }, ttl);
         }
@@ -1308,9 +1753,9 @@ function AppInner() {
           // audio umuman ishlamasa — TTS zaxira (robot ovoz)
           announce(`Yangi buyurtma! ${fmt(o?.price)} so'm. ${addr}`, o?.voice_url);
         }
-        notify('🚖 Yangi buyurtma!', `${addr || 'Manzil'} → ${fmt(o?.price)} so'm`);
+        notify('🚖 ' + t('new_order') + '!', `${addr || t('dest')} → ${fmt(o?.price)} ${t('som')}`);
         // Fon bildirishnomasi — buyurtma tafsiloti
-        updatePersistentNotif(`Yangi buyurtma · ${fmt(o?.price)} so'm`);
+        updatePersistentNotif(`${t('new_order')} · ${fmt(o?.price)} ${t('som')}`);
         // Buyurtma ekranda ko'rinishi uchun ekranni yoqib qo'yamiz (xavfsiz wrapper)
         keepAwakeOn();
       } catch (e) {
@@ -1321,16 +1766,16 @@ function AppInner() {
       clearOfferTimer(); // T-14: yangi buyurtma ovozini DARROV to'xtatadi
       // T-17: bekor qilindi — admin ovozi (order_cancelled). Admin bermasa — jim.
       playStatusSound(adminSound('order_cancelled'), null);
-      notify('Buyurtma bekor qilindi', '');
+      notify(t('order_cancelled_msg'), '');
       setOrder(null);
       setChatMessages([]); setChatUnread(0); // A2: badge ham tozalanadi
-      updatePersistentNotif('Buyurtma kutilmoqda...');
+      updatePersistentNotif(t('waiting_order'));
     });
     // Boshqa haydovchi oldindan oldi (yoki offer muddati tugadi) — offer'ni yopamiz
     s.on('order_taken', () => {
       clearOfferTimer();
       setOrder((prev) => (prev && OFFER_STATUSES.includes(prev.status)) ? null : prev);
-      updatePersistentNotif('Buyurtma kutilmoqda...');
+      updatePersistentNotif(t('waiting_order'));
     });
     // Kechikkan/eskirgan yangilanish holatni orqaga qaytarmasligi kerak (#status-regress):
     // masalan 'accepted' dan keyin kechikib kelgan 'assigned' e'tiborsiz qoldiriladi,
@@ -1349,7 +1794,7 @@ function AppInner() {
       // doim false edi (modal ochiq bo'lsa ham notify chiqardi)
       if (!chatModalRef.current) {
         setChatUnread((c) => c + 1); // badge: sariq doira ichida son
-        notify('💬 Mijoz', msg.text || '');
+        notify('💬 ' + t('customer'), msg.text || '');
       }
     });
     // Faqat o'zgargan qiymatda yangilaymiz — bekorga re-render qilmaymiz
@@ -1666,9 +2111,9 @@ function AppInner() {
 
   // ---- Mustaqil taksometr ----
   function startSoloMeter() {
-    if (!myLoc) { Alert.alert("GPS", "Avval GPS joylashuvingizni kuting"); return; }
+    if (!myLoc) { Alert.alert('GPS', t('wait_gps')); return; }
     setSoloMeter({ startMs: Date.now(), km: 0, prevLoc: myLoc });
-    if (!online) Alert.alert("Eslatma", "Taksometr ishlashi uchun Online bo'lishingiz kerak (GPS uzluksiz ishlaydi)");
+    if (!online) Alert.alert(t('note'), t('solo_need_online'));
   }
   function stopSoloMeter() {
     const m = soloMeter;
@@ -1676,26 +2121,26 @@ function AppInner() {
     const mins = Math.round((Date.now() - m.startMs) / 60000);
     const fare = Math.round((5000 + (m.km || 0) * 2800) / 500) * 500;
     Alert.alert(
-      '🚕 Safar yakunlandi',
-      `Masofa: ${(m.km || 0).toFixed(2)} km\nVaqt: ${mins} daqiqa\nNarx: ${fare.toLocaleString('ru-RU')} so'm`,
-      [{ text: 'Yopish', onPress: () => setSoloMeter(null) }]
+      '🚕 ' + t('trip_done'),
+      `${t('distance')}: ${(m.km || 0).toFixed(2)} ${t('km')}\n${t('time')}: ${mins} ${t('min_full')}\n${t('price')}: ${fare.toLocaleString('ru-RU')} ${t('som')}`,
+      [{ text: t('close'), onPress: () => setSoloMeter(null) }]
     );
   }
 
   // ---- LOGIN ----
   async function sendCode() {
-    if (phone.replace(/\D/g, '').length < 9) { Alert.alert('Xato', "To'g'ri raqam kiriting"); return; }
+    if (phone.replace(/\D/g, '').length < 9) { Alert.alert(t('error'), t('enter_valid_phone')); return; }
     setLoading(true);
     try {
       await api('/api/auth/send-code', 'POST', { phone });
       setStep('code');
-      Alert.alert('Yuborildi', 'SMS kod yuborildi');
-    } catch (e) { Alert.alert('Xato', e.message); }
+      Alert.alert(t('sent'), t('sms_sent'));
+    } catch (e) { Alert.alert(t('error'), e.message); }
     setLoading(false);
   }
 
   async function verifyCode() {
-    if (code.length < 4) { Alert.alert('Xato', 'Kodni kiriting'); return; }
+    if (code.length < 4) { Alert.alert(t('error'), t('enter_code')); return; }
     setLoading(true);
     try {
       const r = await api('/api/auth/verify', 'POST', { phone, code });
@@ -1703,15 +2148,15 @@ function AppInner() {
     } catch (e) {
       if (e.data?.new_user && e.data?.reg_token) {
         setRegToken(e.data.reg_token); setStep('register');
-      } else { Alert.alert('Xato', e.message); }
+      } else { Alert.alert(t('error'), e.message); }
     }
     setLoading(false);
   }
 
   async function register() {
-    if (name.trim().length < 2) { Alert.alert('Xato', 'Ismingizni kiriting'); return; }
-    if (carModel.trim().length < 2) { Alert.alert('Xato', 'Mashina rusumini kiriting'); return; }
-    if (carNumber.trim().length < 3) { Alert.alert('Xato', 'Mashina raqamini kiriting'); return; }
+    if (name.trim().length < 2) { Alert.alert(t('error'), t('enter_name')); return; }
+    if (carModel.trim().length < 2) { Alert.alert(t('error'), t('enter_car')); return; }
+    if (carNumber.trim().length < 3) { Alert.alert(t('error'), t('enter_plate')); return; }
     setLoading(true);
     try {
       const r = await api('/api/auth/verify', 'POST', {
@@ -1720,8 +2165,8 @@ function AppInner() {
         offer_accepted: true, reg_token: regToken,
       });
       await saveAuth(r);
-      Alert.alert('Tabriklaymiz!', "Ro'yxatdan o'tdingiz. Onlayn chiqish uchun admin tasdig'i kerak bo'lishi mumkin.");
-    } catch (e) { Alert.alert('Xato', e.message); }
+      Alert.alert(t('congrats'), t('registered_msg'));
+    } catch (e) { Alert.alert(t('error'), e.message); }
     setLoading(false);
   }
 
@@ -1766,7 +2211,7 @@ function AppInner() {
 
   // ---- PIN ----
   async function savePin() {
-    if (pinInput.length !== 4) { Alert.alert('Xato', '4 ta raqam kiriting'); return; }
+    if (pinInput.length !== 4) { Alert.alert(t('error'), t('pin_4digits')); return; }
     await AsyncStorage.setItem('pin', pinInput);
     setStoredPin(pinInput);
     setPinInput('');
@@ -1778,7 +2223,7 @@ function AppInner() {
       setPinStep(null);
       setPinInput('');
     } else {
-      Alert.alert('Xato', "PIN noto'g'ri");
+      Alert.alert(t('error'), t('pin_wrong'));
       setPinInput('');
     }
   }
@@ -1825,7 +2270,7 @@ function AppInner() {
         startBackgroundLocation();
         // T-08: online-idle'da keep-awake YOQILMAYDI (batareya). Faqat FAOL SAFARDA
         // (yuqoridagi effekt: assigned/accepted/arrived/in_progress) ekran yoqiq turadi.
-        showPersistentNotif('Buyurtma kutilmoqda...');
+        showPersistentNotif(t('waiting_order'));
       } else {
         await api('/api/drivers/status', 'POST', { online: false }, token);
         setOnline(false);
@@ -1838,7 +2283,7 @@ function AppInner() {
         hidePersistentNotif();
       }
     } catch (e) {
-      Alert.alert('Onlayn chiqib bo\'lmadi', e.message);
+      Alert.alert(t('online_fail'), e.message);
     }
     setLoading(false);
   }
@@ -1938,7 +2383,7 @@ function AppInner() {
         setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0;
         setChatMessages([]); setChatUnread(0); // A2: badge ham tozalanadi
         loadEarnings();
-        updatePersistentNotif('Buyurtma kutilmoqda...');
+        updatePersistentNotif(t('waiting_order'));
       } else if (action === 'reject' || action === 'cancel') {
         // F-04: 'cancel' — faol (accepted/arrived) safarni bekor qilish. Backend
         // accepted'da buyurtmani boshqa haydovchiga qaytaradi (requeue), mijozga
@@ -1947,18 +2392,18 @@ function AppInner() {
         setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0;
         setChatMessages([]); setChatUnread(0); // A2: badge ham tozalanadi
         loadEarnings();
-        updatePersistentNotif('Buyurtma kutilmoqda...');
+        updatePersistentNotif(t('waiting_order'));
       } else {
         const nextStatus = r.order?.status || statusAfter(action);
         if (action === 'start') {
           // T-19: admin yuklagan trip_started ovozi USTUN; yo'q bo'lsa TTS zaxira
           playStatusSound(adminSound('trip_started'), "Safar boshlandi. Yaxshi yo'l!");
-          updatePersistentNotif('Safar davom etmoqda...');
+          updatePersistentNotif(t('trip_ongoing_notif'));
         } else if (action === 'accept') {
-          updatePersistentNotif('Buyurtma qabul qilindi · Yo\'lda');
+          updatePersistentNotif(t('accepted_notif'));
           loadChatHistory(orderId); // A2: qabul qilingach mavjud chat tarixi darrov yuklanadi
         } else if (action === 'arrived') {
-          updatePersistentNotif('Mijoz oldida · Kutilmoqda');
+          updatePersistentNotif(t('arrived_notif'));
         }
         setOrder((p) => ({ ...p, ...(r.order || {}), status: nextStatus }));
       }
@@ -1974,18 +2419,18 @@ function AppInner() {
           AsyncStorage.removeItem(TRIP_KM_KEY).catch(() => {});
           setCompletedTrip(order);
           setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0; setChatMessages([]); setChatUnread(0);
-          updatePersistentNotif('Buyurtma kutilmoqda... (oflayn — sinxronlanadi)');
+          updatePersistentNotif(t('waiting_offline_notif'));
         } else if (action === 'reject' || action === 'cancel') {
           setOrder(null); setMeter(null); setLiveMeter(null); meterBaseRef.current = null; setTripWait(null); waitActiveRef.current = false; stopSinceRef.current = 0; setChatMessages([]); setChatUnread(0);
         } else {
           setOrder((p) => (p ? { ...p, status: statusAfter(action) } : p));
         }
-        Alert.alert('Oflayn rejim', "Internet yo'q. Amal saqlandi — internet qaytganda avtomatik yuboriladi.");
+        Alert.alert(t('offline_mode'), t('offline_saved'));
       } else if (e && e.status === 409) {
         // Server: holat allaqachon o'zgargan (amal qo'llangan) — joriy holatni tiklaymiz
         resumeActiveOrder();
       } else {
-        Alert.alert('Xato', e.message);
+        Alert.alert(t('error'), e.message);
       }
     }
     setLoading(false);
@@ -2042,10 +2487,10 @@ function AppInner() {
 
   // ---- Mijozga qo'ng'iroq qilish ----
   function callCustomer(phone) {
-    if (!phone) return Alert.alert('Telefon yo\'q', 'Mijoz telefoni mavjud emas');
+    if (!phone) return Alert.alert(t('no_phone'), t('no_phone_msg'));
     const d = String(phone).replace(/\D/g, '');
     const tel = d.startsWith('998') ? '+' + d : (d.length === 9 ? '+998' + d : '+' + d);
-    Linking.openURL('tel:' + tel).catch(() => Alert.alert('Xato', 'Qo\'ng\'iroq ochilmadi'));
+    Linking.openURL('tel:' + tel).catch(() => Alert.alert(t('error'), t('call_fail')));
   }
 
   // ---- Navigatsiya (tashqi xarita ilovasi) ----
@@ -2079,8 +2524,8 @@ function AppInner() {
         <StatusBar style="light" />
         <FadeInView delay={0} from={20}>
         <View style={{ alignItems: "center", marginBottom: 8 }}><ElgaLogo size={56} /></View>
-        <Text style={s.sub}>{isSetup ? "PIN o'rnating" : 'PIN kiriting'}</Text>
-        {isSetup && <Text style={s.hint}>Keyingi kirishlarda SMS shart bo'lmaydi</Text>}
+        <Text style={s.sub}>{isSetup ? t('pin_set') : t('pin_enter')}</Text>
+        {isSetup && <Text style={s.hint}>{t('pin_hint')}</Text>}
         <TextInput
           style={[s.input, { letterSpacing: 16, textAlign: 'center', fontSize: 30 }]}
           placeholder="• • • •"
@@ -2093,15 +2538,15 @@ function AppInner() {
           autoFocus
         />
         <PressableScale style={s.btn} onPress={isSetup ? savePin : checkPin}>
-          <Text style={s.btnTxt}>{isSetup ? 'PIN SAQLASH' : 'KIRISH'}</Text>
+          <Text style={s.btnTxt}>{isSetup ? t('pin_save') : t('login_btn')}</Text>
         </PressableScale>
         {isSetup ? (
           <TouchableOpacity onPress={() => setPinStep(null)}>
-            <Text style={s.link}>O'tkazib yuborish</Text>
+            <Text style={s.link}>{t('skip')}</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity onPress={forgotPin}>
-            <Text style={s.link}>SMS orqali kirish</Text>
+            <Text style={s.link}>{t('login_sms')}</Text>
           </TouchableOpacity>
         )}
         </FadeInView>
@@ -2116,32 +2561,32 @@ function AppInner() {
         <StatusBar style="light" />
         <FadeInView delay={0} from={24} duration={500}>
           <View style={{ alignItems: "center", marginBottom: 8 }}><ElgaLogo size={56} /></View>
-          <Text style={s.sub}>Haydovchi ilovasi</Text>
+          <Text style={s.sub}>{t('driver_app')}</Text>
         </FadeInView>
         {step === 'phone' && <FadeInView key="phone" delay={120} from={20}>
           <TextInput style={s.input} placeholder="+998..." placeholderTextColor="#888"
             keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
           <PressableScale style={s.btn} onPress={sendCode} disabled={loading}>
-            {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>KOD OLISH</Text>}
+            {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>{t('get_code')}</Text>}
           </PressableScale>
         </FadeInView>}
         {step === 'code' && <FadeInView key="code" delay={60} from={20}>
-          <TextInput style={s.input} placeholder="SMS kod" placeholderTextColor="#888"
+          <TextInput style={s.input} placeholder={t('sms_code')} placeholderTextColor="#888"
             keyboardType="number-pad" value={code} onChangeText={setCode} />
           <PressableScale style={s.btn} onPress={verifyCode} disabled={loading}>
-            {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>TASDIQLASH</Text>}
+            {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>{t('confirm')}</Text>}
           </PressableScale>
           <TouchableOpacity onPress={() => setStep('phone')}>
-            <Text style={s.link}>← Raqamni o'zgartirish</Text>
+            <Text style={s.link}>{t('change_number')}</Text>
           </TouchableOpacity>
         </FadeInView>}
         {step === 'register' && <FadeInView key="register" delay={60} from={20}>
-          <Text style={s.hint}>Haydovchi ro'yxati:</Text>
-          <TextInput style={s.input} placeholder="Ismingiz" placeholderTextColor="#888" value={name} onChangeText={setName} />
-          <TextInput style={s.input} placeholder="Mashina (masalan: Cobalt)" placeholderTextColor="#888" value={carModel} onChangeText={setCarModel} />
-          <TextInput style={s.input} placeholder="Davlat raqami (01A123BC)" placeholderTextColor="#888" value={carNumber} onChangeText={setCarNumber} autoCapitalize="characters" />
+          <Text style={s.hint}>{t('driver_reg')}</Text>
+          <TextInput style={s.input} placeholder={t('your_name')} placeholderTextColor="#888" value={name} onChangeText={setName} />
+          <TextInput style={s.input} placeholder={t('car_ph_reg')} placeholderTextColor="#888" value={carModel} onChangeText={setCarModel} />
+          <TextInput style={s.input} placeholder={t('plate_ph_reg')} placeholderTextColor="#888" value={carNumber} onChangeText={setCarNumber} autoCapitalize="characters" />
           <PressableScale style={s.btn} onPress={register} disabled={loading}>
-            {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>RO'YXATDAN O'TISH</Text>}
+            {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>{t('register_btn')}</Text>}
           </PressableScale>
         </FadeInView>}
       </ScrollView>
@@ -2175,8 +2620,8 @@ function AppInner() {
           <Ionicons name={netOnline ? 'sync' : 'cloud-offline-outline'} size={14} color={netOnline ? GREEN : '#FF6B6B'} />
           <Text style={s.netBannerTxt}>
             {netOnline
-              ? `Sinxronlanmoqda… (${queuedCount})`
-              : "Internet yo'q. Qayta ulanish kutilmoqda…"}
+              ? `${t('syncing')} (${queuedCount})`
+              : t('no_internet')}
           </Text>
         </View>
       )}
@@ -2185,7 +2630,7 @@ function AppInner() {
       {online && gpsStale && netOnline && queuedCount === 0 && (
         <View style={[s.netBanner, { top: insets.top, backgroundColor: '#3A2E12' }]}>
           <Ionicons name="locate-outline" size={14} color={YELLOW} />
-          <Text style={s.netBannerTxt}>GPS signal yo'q — joylashuv yangilanmayapti</Text>
+          <Text style={s.netBannerTxt}>{t('gps_stale')}</Text>
         </View>
       )}
 
@@ -2206,7 +2651,7 @@ function AppInner() {
                 </Text>
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={s.topName} numberOfLines={1}>{user?.name || 'Haydovchi'}</Text>
+                <Text style={s.topName} numberOfLines={1}>{user?.name || t('driver_def')}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 1 }}>
                   <Ionicons name="star" size={10} color={YELLOW} />
                   <Text style={{ color: GRAY1, fontSize: 11, fontWeight: '500' }}>
@@ -2225,7 +2670,7 @@ function AppInner() {
                 ? <ActivityIndicator size="small" color={online ? GREEN : GRAY1} style={{ width: 8, height: 8 }} />
                 : <View style={[s.onlineDot, { backgroundColor: online ? GREEN : GRAY2 }]} />}
               <Text style={[s.onlinePillTxt, { color: online ? GREEN : GRAY1 }]}>
-                {online ? 'Onlayn' : 'Oflayn'}
+                {online ? t('online') : t('offline')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -2241,10 +2686,10 @@ function AppInner() {
             }}>
               <Ionicons name="navigate" size={14} color={YELLOW} />
               <Text style={{ color: WHITE, fontSize: 13, fontWeight: '700' }}>
-                {routeInfo.km} km · ~{routeInfo.min} daq
+                {routeInfo.km} {t('km')} · ~{routeInfo.min} {t('min_short')}
               </Text>
               <Text style={{ color: GRAY1, fontSize: 11 }}>
-                {order.status === 'in_progress' ? 'manzilgacha' : 'mijozgacha'}
+                {order.status === 'in_progress' ? t('to_dest') : t('to_customer')}
               </Text>
             </View>
           )}
@@ -2265,8 +2710,8 @@ function AppInner() {
                       <View style={s.radarDot} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>Buyurtma kutilmoqda...</Text>
-                      <Text style={{ color: GRAY1, fontSize: 13, marginTop: 2 }}>Hududda talab yuqori</Text>
+                      <Text style={{ color: WHITE, fontSize: 17, fontWeight: '700' }}>{t('waiting_order')}</Text>
+                      <Text style={{ color: GRAY1, fontSize: 13, marginTop: 2 }}>{t('high_demand')}</Text>
                     </View>
                   </View>
                   {/* Bugungi stats */}
@@ -2274,33 +2719,33 @@ function AppInner() {
                     <View style={s.todayStats}>
                       <View style={{ flex: 1, alignItems: 'center' }}>
                         <Text style={s.statVal}>{fmt(earnings.today?.earned)}</Text>
-                        <Text style={s.statLbl}>Bugun · so'm</Text>
+                        <Text style={s.statLbl}>{t('today_som')}</Text>
                       </View>
                       <View style={s.statDiv} />
                       <View style={{ flex: 1, alignItems: 'center' }}>
                         <Text style={s.statVal}>{earnings.today?.trips || 0}</Text>
-                        <Text style={s.statLbl}>Safarlar</Text>
+                        <Text style={s.statLbl}>{t('trips')}</Text>
                       </View>
                       <View style={s.statDiv} />
                       <View style={{ flex: 1, alignItems: 'center' }}>
                         <Text style={[s.statVal, { color: GRAY1 }]}>{earnings.stats?.rating || '—'}</Text>
-                        <Text style={s.statLbl}>Reyting</Text>
+                        <Text style={s.statLbl}>{t('rating')}</Text>
                       </View>
                     </View>
                   )}
                   {/* Mustaqil taksometr */}
                   {soloMeter ? (
                     <View style={{ backgroundColor: CARD2, borderRadius: 14, borderWidth: 1, borderColor: GREEN + '55', padding: 14, marginBottom: 8 }}>
-                      <Text style={{ color: GREEN, fontSize: 12, fontWeight: '700', marginBottom: 4 }}>⏱ TAKSOMETR ISHLAYAPTI</Text>
+                      <Text style={{ color: GREEN, fontSize: 12, fontWeight: '700', marginBottom: 4 }}>{t('taximeter_on')}</Text>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                         <View>
                           <Text style={{ color: WHITE, fontSize: 22, fontWeight: '800' }}>
                             {(Math.round((5000 + (soloMeter.km || 0) * 2800) / 500) * 500).toLocaleString('ru-RU')}
                           </Text>
-                          <Text style={{ color: GRAY1, fontSize: 12 }}>so'm · {(soloMeter.km || 0).toFixed(2)} km</Text>
+                          <Text style={{ color: GRAY1, fontSize: 12 }}>{t('som')} · {(soloMeter.km || 0).toFixed(2)} {t('km')}</Text>
                         </View>
                         <TouchableOpacity onPress={stopSoloMeter} style={{ backgroundColor: RED + '22', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 }}>
-                          <Text style={{ color: RED, fontWeight: '700' }}>Tugatish</Text>
+                          <Text style={{ color: RED, fontWeight: '700' }}>{t('finish')}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -2308,14 +2753,14 @@ function AppInner() {
                     <TouchableOpacity
                       style={{ backgroundColor: CARD2, borderRadius: 14, borderWidth: 1, borderColor: BORDER, paddingVertical: 12, alignItems: 'center', marginBottom: 8 }}
                       onPress={startSoloMeter} activeOpacity={0.8}>
-                      <Text style={{ color: YELLOW, fontSize: 14, fontWeight: '600' }}>🚕 Mustaqil taksometr</Text>
-                      <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>Buyurtmasiz narx hisoblash</Text>
+                      <Text style={{ color: YELLOW, fontSize: 14, fontWeight: '600' }}>{t('solo_meter')}</Text>
+                      <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>{t('solo_meter_sub')}</Text>
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity style={s.offlineBtn} onPress={toggleOnline} disabled={loading} activeOpacity={0.8}>
                     {loading
                       ? <ActivityIndicator color={GRAY1} />
-                      : <Text style={{ color: GRAY1, fontSize: 15, fontWeight: '600' }}>Oflayn bo'lish</Text>}
+                      : <Text style={{ color: GRAY1, fontSize: 15, fontWeight: '600' }}>{t('go_offline')}</Text>}
                   </TouchableOpacity>
                 </>
               ) : (
@@ -2324,17 +2769,17 @@ function AppInner() {
                     <View style={[s.todayStats, { marginBottom: 14 }]}>
                       <View style={{ flex: 1, alignItems: 'center' }}>
                         <Text style={s.statVal}>{fmt(earnings.today?.earned)}</Text>
-                        <Text style={s.statLbl}>Bugun · so'm</Text>
+                        <Text style={s.statLbl}>{t('today_som')}</Text>
                       </View>
                       <View style={s.statDiv} />
                       <View style={{ flex: 1, alignItems: 'center' }}>
                         <Text style={s.statVal}>{earnings.today?.trips || 0}</Text>
-                        <Text style={s.statLbl}>Safarlar</Text>
+                        <Text style={s.statLbl}>{t('trips')}</Text>
                       </View>
                       <View style={s.statDiv} />
                       <View style={{ flex: 1, alignItems: 'center' }}>
                         <Text style={[s.statVal, { color: GRAY1 }]}>{earnings.stats?.rating || '—'}</Text>
-                        <Text style={s.statLbl}>Reyting</Text>
+                        <Text style={s.statLbl}>{t('rating')}</Text>
                       </View>
                     </View>
                   )}
@@ -2343,7 +2788,7 @@ function AppInner() {
                       ? <ActivityIndicator color="#000" />
                       : <>
                           <Ionicons name="power" size={20} color="#1A1500" style={{ marginRight: 8 }} />
-                          <Text style={s.btnTxt}>ONLAYN BO'LISH</Text>
+                          <Text style={s.btnTxt}>{t('go_online')}</Text>
                         </>}
                   </TouchableOpacity>
                 </>
@@ -2369,28 +2814,28 @@ function AppInner() {
       ) : tab === 'earnings' ? (
         <EarningsScreen earnings={earnings} onRefresh={loadEarnings} insets={insets} token={token} />
       ) : tab === 'history' ? (
-        <DriverHistory trips={trips} insets={insets} />
+        <DriverHistory trips={trips} insets={insets} lang={lang} />
       ) : (
-        <DriverProfile user={user} earnings={earnings} onLogout={logout} insets={insets} token={token} />
+        <DriverProfile user={user} earnings={earnings} onLogout={logout} insets={insets} token={token} lang={lang} onSetLang={setLang} />
       )}
 
       {/* ===== 🎙 OVOZLI BUYURTMA TINGLASH MODALI (expo-audio) ===== */}
       <Modal visible={voiceModal} transparent animationType="fade" onRequestClose={closeVoiceModal}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', padding: 24 }}>
           <View style={{ backgroundColor: CARD, borderRadius: 16, padding: 20 }}>
-            <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700', marginBottom: 16 }}>🎙 Mijoz ovozli buyurtmasi</Text>
+            <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700', marginBottom: 16 }}>{t('voice_order_title')}</Text>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 }}>
               {voiceStatus === 'loading' ? (
-                <><ActivityIndicator color={YELLOW} /><Text style={{ color: GRAY1, fontSize: 14 }}>Yuklanmoqda...</Text></>
+                <><ActivityIndicator color={YELLOW} /><Text style={{ color: GRAY1, fontSize: 14 }}>{t('loading')}</Text></>
               ) : voiceStatus === 'playing' ? (
-                <><Ionicons name="volume-high" size={22} color={GREEN} /><Text style={{ color: WHITE, fontSize: 14 }}>O'ynalmoqda...</Text></>
+                <><Ionicons name="volume-high" size={22} color={GREEN} /><Text style={{ color: WHITE, fontSize: 14 }}>{t('playing')}</Text></>
               ) : voiceStatus === 'empty' ? (
-                <><Ionicons name="alert-circle-outline" size={22} color={GRAY1} /><Text style={{ color: GRAY1, fontSize: 14 }}>Ovozli xabar topilmadi</Text></>
+                <><Ionicons name="alert-circle-outline" size={22} color={GRAY1} /><Text style={{ color: GRAY1, fontSize: 14 }}>{t('voice_empty')}</Text></>
               ) : voiceStatus === 'error' ? (
-                <><Ionicons name="warning-outline" size={22} color={RED} /><Text style={{ color: GRAY1, fontSize: 14 }}>Ovozni o'ynab bo'lmadi</Text></>
+                <><Ionicons name="warning-outline" size={22} color={RED} /><Text style={{ color: GRAY1, fontSize: 14 }}>{t('voice_error')}</Text></>
               ) : (
-                <><Ionicons name="checkmark-circle-outline" size={22} color={GREEN} /><Text style={{ color: GRAY1, fontSize: 14 }}>Tugadi</Text></>
+                <><Ionicons name="checkmark-circle-outline" size={22} color={GREEN} /><Text style={{ color: GRAY1, fontSize: 14 }}>{t('done_lbl')}</Text></>
               )}
             </View>
 
@@ -2398,12 +2843,12 @@ function AppInner() {
             {orderForVoiceId.current && (voiceStatus === 'error' || voiceStatus === 'idle') ? (
               <TouchableOpacity onPress={() => playVoiceOrder(orderForVoiceId.current)} activeOpacity={0.8}
                 style={{ marginTop: 16, paddingVertical: 12, alignItems: 'center', backgroundColor: CARD2, borderRadius: 10, borderWidth: 1, borderColor: BORDER }}>
-                <Text style={{ color: YELLOW, fontWeight: '700', fontSize: 15 }}>↻ Qayta eshitish</Text>
+                <Text style={{ color: YELLOW, fontWeight: '700', fontSize: 15 }}>{t('replay')}</Text>
               </TouchableOpacity>
             ) : null}
 
             <TouchableOpacity onPress={closeVoiceModal} style={{ marginTop: 12, paddingVertical: 12, alignItems: 'center', backgroundColor: YELLOW, borderRadius: 10 }} activeOpacity={0.85}>
-              <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>Yopish</Text>
+              <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>{t('close')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2414,7 +2859,7 @@ function AppInner() {
         <KeyboardAvoidingView style={s.chatModalWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={s.chatModalSheet}>
             <View style={s.chatModalHeader}>
-              <Text style={s.chatModalTitle}>💬 {order?.customer_name || 'Mijoz'}</Text>
+              <Text style={s.chatModalTitle}>💬 {order?.customer_name || t('customer')}</Text>
               <TouchableOpacity onPress={() => setChatModal(false)}>
                 <Ionicons name="close" size={22} color={GRAY1} />
               </TouchableOpacity>
@@ -2445,7 +2890,7 @@ function AppInner() {
             <View style={s.chatInputRow}>
               <TextInput
                 style={s.chatInput}
-                placeholder="Xabar yozing..."
+                placeholder={t('type_message')}
                 placeholderTextColor={GRAY2}
                 value={chatInput}
                 onChangeText={setChatInput}
@@ -2467,21 +2912,21 @@ function AppInner() {
       {!order && (
         <View style={[s.tabBar, { height: TABBAR_H + insets.bottom, paddingBottom: insets.bottom + 6 }]}>
           {[
-            { id: 'home', label: 'Buyurtmalar', icon: 'navigate' },
-            { id: 'earnings', label: 'Daromad', icon: 'wallet' },
-            { id: 'history', label: 'Tarix', icon: 'time' },
-            { id: 'profile', label: 'Profil', icon: 'person' },
-          ].map((t) => {
-            const on = tab === t.id;
+            { id: 'home', label: t('tab_orders'), icon: 'navigate' },
+            { id: 'earnings', label: t('tab_earnings'), icon: 'wallet' },
+            { id: 'history', label: t('tab_history'), icon: 'time' },
+            { id: 'profile', label: t('tab_profile'), icon: 'person' },
+          ].map((tb) => {
+            const on = tab === tb.id;
             return (
-              <TouchableOpacity key={t.id} style={s.tabItem} activeOpacity={0.7}
+              <TouchableOpacity key={tb.id} style={s.tabItem} activeOpacity={0.7}
                 onPress={() => {
-                  setTab(t.id);
-                  if (t.id === 'earnings') loadEarnings();
-                  if (t.id === 'history') loadTrips();
+                  setTab(tb.id);
+                  if (tb.id === 'earnings') loadEarnings();
+                  if (tb.id === 'history') loadTrips();
                 }}>
-                <Ionicons name={on ? t.icon : `${t.icon}-outline`} size={23} color={on ? YELLOW : GRAY2} />
-                <Text style={[s.tabTxt, on && s.tabActive]}>{t.label}</Text>
+                <Ionicons name={on ? tb.icon : `${tb.icon}-outline`} size={23} color={on ? YELLOW : GRAY2} />
+                <Text style={[s.tabTxt, on && s.tabActive]}>{tb.label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -2537,11 +2982,11 @@ function WaitTimer({ arrivedAt }) {
   const fee = serverWaitCfg.fee > 0 ? serverWaitCfg.fee : localFee;
   return (
     <View style={s.waitBox}>
-      <Text style={s.waitLabel}>⏱ Kutish vaqti: {mm(sec)}</Text>
+      <Text style={s.waitLabel}>⏱ {t('wait_time')}: {mm(sec)}</Text>
       {free ? (
-        <Text style={s.waitFree}>Bepul kutish: {mm(remain)} qoldi</Text>
+        <Text style={s.waitFree}>{t('free_wait')}: {mm(remain)} {t('left')}</Text>
       ) : (
-        <Text style={s.waitPaid}>Pullik kutish · {fmt(fee)} so'm</Text>
+        <Text style={s.waitPaid}>{t('paid_wait')} · {fmt(fee)} {t('som')}</Text>
       )}
     </View>
   );
@@ -2567,11 +3012,11 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
   // arrived'da bekor qilinadi; ikkala holatda ham mijozga xabar boradi.
   function confirmCancelTrip() {
     Alert.alert(
-      'Safarni bekor qilish',
-      "Rostdan bekor qilasizmi? Buyurtma sizdan olinadi va mijozga xabar beriladi.",
+      t('cancel_trip'),
+      t('cancel_trip_msg'),
       [
-        { text: "Yo'q", style: 'cancel' },
-        { text: 'Ha, bekor qilish', style: 'destructive', onPress: () => onAction('cancel') },
+        { text: t('no'), style: 'cancel' },
+        { text: t('yes_cancel'), style: 'destructive', onPress: () => onAction('cancel') },
       ]
     );
   }
@@ -2584,22 +3029,22 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
       {isNew ? (
         <>
           <CountdownBar />
-          <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '600', letterSpacing: 0.4, marginBottom: 8 }}>YANGI BUYURTMA</Text>
+          <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '600', letterSpacing: 0.4, marginBottom: 8 }}>{t('new_order').toUpperCase()}</Text>
           {/* P6 (T-4): haydovchi qarori IKKI raqamga bog'liq — mijozgacha masofa/vaqt
               va narx. Avval masofa 13px kulrang edi (narx 28px) — endi teng katta,
               yonma-yon (Yandex Pro qolipi). */}
           <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
             <View style={{ flex: 1, backgroundColor: CARD2, borderRadius: 12, paddingVertical: 10, alignItems: 'center' }}>
               <Text style={{ color: GREEN, fontSize: 22, fontWeight: '800', lineHeight: 24 }}>
-                {order.eta_min ? `~${order.eta_min} daq` : 'Yaqin'}
+                {order.eta_min ? `~${order.eta_min} ${t('min_short')}` : t('nearby')}
               </Text>
-              <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>mijozgacha</Text>
+              <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>{t('to_customer')}</Text>
             </View>
             <View style={{ flex: 1, backgroundColor: CARD2, borderRadius: 12, paddingVertical: 10, alignItems: 'center' }}>
               <Text style={{ color: WHITE, fontSize: 22, fontWeight: '800', lineHeight: 24 }}>{fmt(order.price)}</Text>
               <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>
-                so'm · {order.payment_method === 'cash' ? 'Naqd' : (order.payment_method || 'Naqd')}
-                {order.distance_km ? ` · ${order.distance_km} km` : ''}
+                {t('som')} · {order.payment_method === 'cash' ? t('cash') : (order.payment_method || t('cash'))}
+                {order.distance_km ? ` · ${order.distance_km} ${t('km')}` : ''}
               </Text>
             </View>
           </View>
@@ -2611,10 +3056,10 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
               <Ionicons name="square" size={10} color={YELLOW} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 14 }} numberOfLines={1}>{safeStr(order.from_address, 'Olib ketish nuqtasi')}</Text>
+              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 14 }} numberOfLines={1}>{safeStr(order.from_address, t('pickup_point'))}</Text>
               <Text style={{ color: WHITE, fontSize: 14, fontWeight: '600' }} numberOfLines={1}>
-                {safeStr(order.to_address, 'Manzil')}
-                {order.distance_km ? <Text style={{ color: GRAY1, fontWeight: '400' }}> · {order.distance_km} km</Text> : null}
+                {safeStr(order.to_address, t('dest'))}
+                {order.distance_km ? <Text style={{ color: GRAY1, fontWeight: '400' }}> · {order.distance_km} {t('km')}</Text> : null}
               </Text>
             </View>
           </View>
@@ -2623,40 +3068,40 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
           {order.is_voice ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: CARD2, borderWidth: 1, borderColor: YELLOW, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12, marginBottom: 12 }}>
               <View style={{ backgroundColor: '#1A1400', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-                <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '700' }}>🔊 Ovozli</Text>
+                <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '700' }}>{t('voice_badge')}</Text>
               </View>
-              <Text style={{ color: GRAY1, fontSize: 12, flex: 1 }}>Mijoz manzilni gapirgan</Text>
+              <Text style={{ color: GRAY1, fontSize: 12, flex: 1 }}>{t('voice_sub')}</Text>
               <TouchableOpacity
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: YELLOW, borderRadius: 9, paddingVertical: 8, paddingHorizontal: 14 }}
                 onPress={() => onPlayVoice && onPlayVoice(order.id)} disabled={voiceBusy} activeOpacity={0.8}>
                 {voiceBusy
                   ? <ActivityIndicator color="#000" size="small" />
-                  : <Text style={{ color: '#000', fontSize: 14, fontWeight: '700' }}>▶ Eshitish</Text>}
+                  : <Text style={{ color: '#000', fontSize: 14, fontWeight: '700' }}>{t('listen')}</Text>}
               </TouchableOpacity>
             </View>
           ) : null}
           <View style={s.row}>
             <TouchableOpacity style={[s.btnHalf, { backgroundColor: CARD2, borderWidth: 1, borderColor: BORDER }]}
               onPress={() => onAction('reject')} disabled={loading}>
-              <Text style={{ color: GRAY1, fontSize: 15, fontWeight: '600' }}>Rad etish</Text>
+              <Text style={{ color: GRAY1, fontSize: 15, fontWeight: '600' }}>{t('reject')}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[s.btnHalf, { backgroundColor: YELLOW }]}
               onPress={() => onAction('accept')} disabled={loading}>
-              {loading ? <ActivityIndicator color="#000" /> : <Text style={{ color: '#000', fontSize: 15, fontWeight: '700' }}>Qabul qilish</Text>}
+              {loading ? <ActivityIndicator color="#000" /> : <Text style={{ color: '#000', fontSize: 15, fontWeight: '700' }}>{t('accept')}</Text>}
             </TouchableOpacity>
           </View>
         </>
       ) : (
         <>
-          <Text style={s.orderTitle}>📍 {safeStr(order.from_address, 'Olib ketish nuqtasi')}</Text>
-          <Text style={s.orderSub}>→ {safeStr(order.to_address, 'Manzil')}</Text>
-          <Text style={s.orderPrice}>{fmt(order.price)} so'm · {order.distance_km || '?'} km</Text>
+          <Text style={s.orderTitle}>📍 {safeStr(order.from_address, t('pickup_point'))}</Text>
+          <Text style={s.orderSub}>→ {safeStr(order.to_address, t('dest'))}</Text>
+          <Text style={s.orderPrice}>{fmt(order.price)} {t('som')} · {order.distance_km || '?'} {t('km')}</Text>
 
           {/* Mijoz ma'lumoti + qo'ng'iroq + xabar */}
           {showCustomer && (
             <View style={s.custRow}>
               <View style={{ flex: 1 }}>
-                <Text style={s.custName}>{order.customer_name || 'Mijoz'}</Text>
+                <Text style={s.custName}>{order.customer_name || t('customer')}</Text>
                 <Text style={s.custPhone}>{fmtPhone(order.customer_phone)}</Text>
               </View>
               <TouchableOpacity style={[s.callBtn, { marginRight: 8, backgroundColor: CARD2 }]} onPress={() => onChat()}>
@@ -2682,15 +3127,15 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
             <View style={{ gap: 8, marginTop: 8 }}>
               <TouchableOpacity style={s.btnNav} onPress={() => onNavigate(order.from_lat, order.from_lng)} activeOpacity={0.8}>
                 <Ionicons name="navigate" size={18} color="#15171c" style={{ marginRight: 8 }} />
-                <Text style={[s.btnTxtW, { color: '#15171c' }]}>MIJOZGA YO'L</Text>
+                <Text style={[s.btnTxtW, { color: '#15171c' }]}>{t('to_customer_btn')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.btn} onPress={() => onAction('arrived')} disabled={loading} activeOpacity={0.85}>
-                {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>YETIB KELDIM</Text>}
+                {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>{t('arrived_btn')}</Text>}
               </TouchableOpacity>
               {/* F-04: haydovchi safardan oldin voz kechishi mumkin — backend buyurtmani
                   boshqa haydovchiga qaytaradi (requeue), mijoz xabar oladi. */}
               <TouchableOpacity style={{ alignItems: 'center', paddingVertical: 8 }} onPress={confirmCancelTrip} disabled={loading}>
-                <Text style={{ color: RED, fontSize: 13, fontWeight: '600' }}>Safarni bekor qilish</Text>
+                <Text style={{ color: RED, fontSize: 13, fontWeight: '600' }}>{t('cancel_trip')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -2699,11 +3144,11 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
           {st === 'arrived' && (
             <View style={{ gap: 8, marginTop: 12 }}>
               <TouchableOpacity style={s.btn} onPress={() => onAction('start')} disabled={loading} activeOpacity={0.85}>
-                {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>SAFARNI BOSHLASH</Text>}
+                {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>{t('start_trip')}</Text>}
               </TouchableOpacity>
               {/* F-04: mijoz chiqmadi va h.k. — haydovchi bekor qila oladi, mijoz xabar oladi */}
               <TouchableOpacity style={{ alignItems: 'center', paddingVertical: 8 }} onPress={confirmCancelTrip} disabled={loading}>
-                <Text style={{ color: RED, fontSize: 13, fontWeight: '600' }}>Safarni bekor qilish</Text>
+                <Text style={{ color: RED, fontSize: 13, fontWeight: '600' }}>{t('cancel_trip')}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -2719,16 +3164,16 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
                 return (
                 <View style={s.meterBox}>
                   <View>
-                    <Text style={{ color: GREEN, fontSize: 11, fontWeight: '600', letterSpacing: 0.4 }}>SAFAR DAVOM ETMOQDA</Text>
+                    <Text style={{ color: GREEN, fontSize: 11, fontWeight: '600', letterSpacing: 0.4 }}>{t('trip_in_progress')}</Text>
                     <Text style={{ color: WHITE, fontSize: 22, fontWeight: '800', marginTop: 4 }}>
-                      {Number(dispKm).toFixed(1)} <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '600' }}>km</Text>
+                      {Number(dispKm).toFixed(1)} <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '600' }}>{t('km')}</Text>
                     </Text>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
                     <Text style={{ color: YELLOW, fontSize: 34, fontWeight: '800', lineHeight: 36 }}>
                       {fmt(dispFare)}
                     </Text>
-                    <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>so'm</Text>
+                    <Text style={{ color: GRAY1, fontSize: 11, marginTop: 2 }}>{t('som')}</Text>
                   </View>
                 </View>
                 );
@@ -2737,19 +3182,19 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
               {tripWait && (tripWait.waiting || tripWait.fee > 0) && (
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#2A2410', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 }}>
                   <Text style={{ color: YELLOW, fontSize: 14, fontWeight: '700' }}>
-                    ⏱ Kutish {Math.floor((tripWait.sec || 0) / 60)}:{String((tripWait.sec || 0) % 60).padStart(2, '0')}
+                    ⏱ {t('waiting_lbl')} {Math.floor((tripWait.sec || 0) / 60)}:{String((tripWait.sec || 0) % 60).padStart(2, '0')}
                   </Text>
                   <Text style={{ color: tripWait.fee > 0 ? YELLOW : GRAY1, fontSize: 14, fontWeight: '700' }}>
-                    {tripWait.fee > 0 ? `+${fmt(tripWait.fee)} so'm` : 'bepul'}
+                    {tripWait.fee > 0 ? `+${fmt(tripWait.fee)} ${t('som')}` : t('free_lbl')}
                   </Text>
                 </View>
               )}
               <TouchableOpacity style={s.btnNav} onPress={() => onNavigate(order.to_lat, order.to_lng)} activeOpacity={0.8}>
                 <Ionicons name="navigate" size={18} color="#15171c" style={{ marginRight: 8 }} />
-                <Text style={[s.btnTxtW, { color: '#15171c' }]}>MANZILGA YO'L</Text>
+                <Text style={[s.btnTxtW, { color: '#15171c' }]}>{t('to_dest_btn')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={s.btn} onPress={() => onAction('complete')} disabled={loading} activeOpacity={0.85}>
-                {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>SAFARNI YAKUNLASH</Text>}
+                {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>{t('complete_trip')}</Text>}
               </TouchableOpacity>
             </View>
           )}
@@ -2810,7 +3255,7 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
 
   async function doTopup() {
     const amount = parseInt(String(topupAmount).replace(/\D/g, ''), 10);
-    if (!amount || amount < 5000) { Alert.alert('Xato', "Eng kam 5 000 so'm kiriting"); return; }
+    if (!amount || amount < 5000) { Alert.alert(t('error'), t('min_amount')); return; }
     setTopupLoading(true);
     try {
       const r = await api('/api/me/topup-create', 'POST', { amount }, token);
@@ -2818,15 +3263,15 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
       setTopupAmount('');
       await Linking.openURL(r.url);
     } catch (e) {
-      Alert.alert('Xato', e.message || "To'ldirish imkoni yo'q");
+      Alert.alert(t('error'), e.message || t('topup_fail'));
     }
     setTopupLoading(false);
   }
 
   return (
     <ScrollView style={s.earnWrap} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: top, paddingBottom: bottom }}>
-      <Text style={s.screenSub}>Moliya</Text>
-      <Text style={s.screenTitle}>Daromad</Text>
+      <Text style={s.screenSub}>{t('finance')}</Text>
+      <Text style={s.screenTitle}>{t('tab_earnings')}</Text>
 
       {!earnings ? (
         <ActivityIndicator color={YELLOW} style={{ marginTop: 40 }} />
@@ -2834,20 +3279,20 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
         <>
           {/* Balans kartasi */}
           <View style={[s.balanceCard, { marginTop: 20 }]}>
-            <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '500', letterSpacing: 0.3 }}>JAMI DAROMAD</Text>
+            <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '500', letterSpacing: 0.3 }}>{t('total_income')}</Text>
             <Text style={{ color: WHITE, fontSize: 36, fontWeight: '800', marginTop: 6, lineHeight: 40 }}>
-              {fmt(totalEarned)} <Text style={{ color: GRAY1, fontSize: 18, fontWeight: '500' }}>so'm</Text>
+              {fmt(totalEarned)} <Text style={{ color: GRAY1, fontSize: 18, fontWeight: '500' }}>{t('som')}</Text>
             </Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: GREEN }} />
-              <Text style={{ color: GRAY1, fontSize: 13 }}>Bu hafta: {fmt(weekEarned)} so'm</Text>
+              <Text style={{ color: GRAY1, fontSize: 13 }}>{t('this_week')}: {fmt(weekEarned)} {t('som')}</Text>
             </View>
             <TouchableOpacity
               style={s.withdrawBtn}
-              onPress={() => Alert.alert('Yechib olish', 'Ushbu funksiya tez orada ishga tushadi.\nHozircha admin bilan bog\'laning.')}
+              onPress={() => Alert.alert(t('withdraw_title'), t('withdraw_soon'))}
               activeOpacity={0.8}>
               <Ionicons name="arrow-up-circle" size={18} color="#000" style={{ marginRight: 6 }} />
-              <Text style={{ color: '#000', fontSize: 14, fontWeight: '700' }}>YECHIB OLISH</Text>
+              <Text style={{ color: '#000', fontSize: 14, fontWeight: '700' }}>{t('withdraw')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -2855,9 +3300,9 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
           <View style={{ backgroundColor: CARD, borderRadius: 16, padding: 16, marginTop: 14, borderWidth: 1, borderColor: BORDER }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <View>
-                <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5 }}>HISOB BALANSI</Text>
+                <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5 }}>{t('balance_lbl')}</Text>
                 <Text style={{ color: driverBalance != null && driverBalance < 0 ? RED : WHITE, fontSize: 24, fontWeight: '800', marginTop: 4 }}>
-                  {driverBalance != null ? fmt(driverBalance) : '—'} <Text style={{ color: GRAY1, fontSize: 14, fontWeight: '400' }}>so'm</Text>
+                  {driverBalance != null ? fmt(driverBalance) : '—'} <Text style={{ color: GRAY1, fontSize: 14, fontWeight: '400' }}>{t('som')}</Text>
                 </Text>
               </View>
               <View style={{ backgroundColor: CARD2, borderRadius: 10, padding: 10 }}>
@@ -2868,7 +3313,7 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
               style={{ backgroundColor: YELLOW, borderRadius: 12, height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
               onPress={() => setTopupModal(true)}
               activeOpacity={0.85}>
-              <Text style={{ color: '#15171c', fontSize: 16, fontWeight: '700' }}>Click orqali to'ldirish</Text>
+              <Text style={{ color: '#15171c', fontSize: 16, fontWeight: '700' }}>{t('topup_click')}</Text>
             </TouchableOpacity>
           </View>
 
@@ -2876,12 +3321,12 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
           <Modal visible={topupModal} transparent animationType="slide" onRequestClose={() => setTopupModal(false)}>
             <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
               <View style={{ backgroundColor: CARD, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: (insets?.bottom || 0) + 24 }}>
-                <Text style={{ color: WHITE, fontSize: 20, fontWeight: '700', textAlign: 'center', marginBottom: 6 }}>Hisobni to'ldirish</Text>
-                <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginBottom: 20 }}>Click orqali to'lov</Text>
-                <Text style={{ color: GRAY1, fontSize: 12, marginBottom: 6 }}>Summani kiriting (so'm)</Text>
+                <Text style={{ color: WHITE, fontSize: 20, fontWeight: '700', textAlign: 'center', marginBottom: 6 }}>{t('topup_title')}</Text>
+                <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginBottom: 20 }}>{t('topup_sub')}</Text>
+                <Text style={{ color: GRAY1, fontSize: 12, marginBottom: 6 }}>{t('enter_amount')}</Text>
                 <TextInput
                   style={{ backgroundColor: CARD2, borderRadius: 12, padding: 16, fontSize: 22, fontWeight: '700', color: WHITE, marginBottom: 12, textAlign: 'center' }}
-                  placeholder="Masalan: 50000"
+                  placeholder={t('amount_ph')}
                   placeholderTextColor={GRAY2}
                   keyboardType="number-pad"
                   value={topupAmount}
@@ -2901,10 +3346,10 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
                   onPress={doTopup}
                   disabled={topupLoading}
                   activeOpacity={0.85}>
-                  {topupLoading ? <ActivityIndicator color="#15171c" /> : <Text style={{ color: '#15171c', fontSize: 16, fontWeight: '700' }}>Click orqali to'lash</Text>}
+                  {topupLoading ? <ActivityIndicator color="#15171c" /> : <Text style={{ color: '#15171c', fontSize: 16, fontWeight: '700' }}>{t('pay_click')}</Text>}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => { setTopupModal(false); setTopupAmount(''); }} style={{ marginTop: 14, alignItems: 'center' }}>
-                  <Text style={{ color: GRAY1, fontSize: 15 }}>Bekor qilish</Text>
+                  <Text style={{ color: GRAY1, fontSize: 15 }}>{t('cancel_btn')}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -2914,19 +3359,19 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
           <View style={s.statsGrid}>
             <View style={s.statCell}>
               <Text style={s.statCellVal}>{earnings.today?.trips || 0}</Text>
-              <Text style={s.statCellLbl}>Bugungi safarlar</Text>
+              <Text style={s.statCellLbl}>{t('today_trips')}</Text>
             </View>
             <View style={s.statCell}>
               <Text style={s.statCellVal}>{earnings.week?.trips || 0}</Text>
-              <Text style={s.statCellLbl}>Haftalik safarlar</Text>
+              <Text style={s.statCellLbl}>{t('week_trips')}</Text>
             </View>
             <View style={s.statCell}>
               <Text style={[s.statCellVal, { color: YELLOW }]}>{st.rating || '—'}</Text>
-              <Text style={s.statCellLbl}>Reyting ⭐</Text>
+              <Text style={s.statCellLbl}>{t('rating')} ⭐</Text>
             </View>
             <View style={s.statCell}>
               <Text style={[s.statCellVal, { color: GREEN }]}>{st.accept_rate != null ? st.accept_rate + '%' : '—'}</Text>
-              <Text style={s.statCellLbl}>Qabul foizi</Text>
+              <Text style={s.statCellLbl}>{t('accept_rate')}</Text>
             </View>
           </View>
 
@@ -2934,8 +3379,8 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
           {earnings.days && earnings.days.length > 0 && (
             <View style={s.chartCard}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                <Text style={{ color: WHITE, fontSize: 15, fontWeight: '700' }}>Haftalik grafik</Text>
-                <Text style={{ color: GRAY1, fontSize: 13 }}>{fmt(weekEarned)} so'm</Text>
+                <Text style={{ color: WHITE, fontSize: 15, fontWeight: '700' }}>{t('week_chart')}</Text>
+                <Text style={{ color: GRAY1, fontSize: 13 }}>{fmt(weekEarned)} {t('som')}</Text>
               </View>
               <WeekChart days={earnings.days} />
             </View>
@@ -2944,18 +3389,18 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
           {/* Bugun karta */}
           <View style={s.earnDayCard}>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>BUGUN</Text>
-              <Text style={{ color: YELLOW, fontSize: 22, fontWeight: '800', marginTop: 4 }}>{fmt(earnings.today?.earned)} so'm</Text>
+              <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>{t('today').toUpperCase()}</Text>
+              <Text style={{ color: YELLOW, fontSize: 22, fontWeight: '800', marginTop: 4 }}>{fmt(earnings.today?.earned)} {t('som')}</Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>SAFARLAR</Text>
+              <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>{t('trips').toUpperCase()}</Text>
               <Text style={{ color: WHITE, fontSize: 22, fontWeight: '800', marginTop: 4 }}>{earnings.today?.trips || 0}</Text>
             </View>
           </View>
 
           <TouchableOpacity style={[s.btn, { marginTop: 8 }]} onPress={onRefresh} activeOpacity={0.85}>
             <Ionicons name="refresh" size={18} color="#000" style={{ marginRight: 8 }} />
-            <Text style={s.btnTxt}>YANGILASH</Text>
+            <Text style={s.btnTxt}>{t('refresh')}</Text>
           </TouchableOpacity>
         </>
       )}
@@ -2984,30 +3429,30 @@ function TripComplete({ trip, insets, onRate, onDone }) {
         <View style={s.completeCheck}>
           <Ionicons name="checkmark" size={34} color={GREEN} />
         </View>
-        <Text style={{ color: WHITE, fontSize: 21, fontWeight: '700' }}>Safar yakunlandi</Text>
+        <Text style={{ color: WHITE, fontSize: 21, fontWeight: '700' }}>{t('trip_done')}</Text>
       </View>
 
       {/* Hisob-kitob */}
       <View style={s.completeCard}>
         <View style={s.completeRow}>
-          <Text style={s.completeLbl}>Safar haqi</Text>
-          <Text style={{ color: WHITE, fontSize: 14, fontWeight: '500' }}>{fmt(gross)} so'm</Text>
+          <Text style={s.completeLbl}>{t('trip_fare')}</Text>
+          <Text style={{ color: WHITE, fontSize: 14, fontWeight: '500' }}>{fmt(gross)} {t('som')}</Text>
         </View>
         <View style={s.completeRow}>
-          <Text style={s.completeLbl}>KetdikGo komissiya</Text>
-          <Text style={{ color: RED, fontSize: 14, fontWeight: '500' }}>−{fmt(commission)} so'm</Text>
+          <Text style={s.completeLbl}>{t('commission_lbl')}</Text>
+          <Text style={{ color: RED, fontSize: 14, fontWeight: '500' }}>−{fmt(commission)} {t('som')}</Text>
         </View>
         <View style={[s.completeRow, { borderTopWidth: 1, borderTopColor: BORDER, paddingTop: 14, marginTop: 4, marginBottom: 0 }]}>
-          <Text style={{ color: WHITE, fontSize: 15, fontWeight: '600' }}>Sizning daromad</Text>
+          <Text style={{ color: WHITE, fontSize: 15, fontWeight: '600' }}>{t('your_income')}</Text>
           <Text style={{ color: YELLOW, fontSize: 22, fontWeight: '800' }}>
-            {fmt(net)} <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '500' }}>so'm</Text>
+            {fmt(net)} <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '500' }}>{t('som')}</Text>
           </Text>
         </View>
       </View>
 
       {/* Yo'lovchini baholash */}
       <View style={{ alignItems: 'center', marginVertical: 20 }}>
-        <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 12 }}>Yo'lovchini baholang</Text>
+        <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 12 }}>{t('rate_passenger')}</Text>
         <View style={{ flexDirection: 'row', gap: 10 }}>
           {[1, 2, 3, 4, 5].map((sN) => (
             <TouchableOpacity key={sN} onPress={() => setStars(sN)} activeOpacity={0.7}>
@@ -3018,7 +3463,7 @@ function TripComplete({ trip, insets, onRate, onDone }) {
       </View>
 
       <TouchableOpacity style={[s.btn, { marginTop: 'auto' }]} onPress={finish} activeOpacity={0.85}>
-        <Text style={s.btnTxt}>DAVOM ETISH</Text>
+        <Text style={s.btnTxt}>{t('continue_btn')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -3027,7 +3472,8 @@ function TripComplete({ trip, insets, onRate, onDone }) {
 // ---- Tarix ekrani (yakunlangan safarlar, kunlar bo'yicha) ----
 // React.memo: ota komponent (AppInner) GPS/meter yangilanishlarida har 5 sek
 // qayta render bo'lganda ham, bu ekran faqat trips/insets o'zgarsa render bo'ladi.
-const DriverHistory = React.memo(function DriverHistory({ trips, insets }) {
+// R1: `lang` prop — til almashganda memo qayta render bo'lishi uchun (matnlar t() dan)
+const DriverHistory = React.memo(function DriverHistory({ trips, insets, lang }) {
   const top = (insets?.top || 0) + 16;
   const bottom = TABBAR_H + (insets?.bottom || 0) + 20;
   // Guruhlash faqat trips o'zgarganda hisoblanadi.
@@ -3044,34 +3490,34 @@ const DriverHistory = React.memo(function DriverHistory({ trips, insets }) {
   }, [trips]);
   return (
     <ScrollView style={s.screenWrap} contentContainerStyle={{ paddingTop: top, paddingBottom: bottom, paddingHorizontal: 20 }}>
-      <Text style={s.screenSub}>Yakunlangan safarlar</Text>
-      <Text style={s.screenTitle}>Tarix</Text>
+      <Text style={s.screenSub}>{t('completed_trips')}</Text>
+      <Text style={s.screenTitle}>{t('tab_history')}</Text>
       {trips === null ? (
         <ActivityIndicator color={YELLOW} style={{ marginTop: 30 }} />
       ) : trips.length === 0 ? (
         <View style={{ alignItems: 'center', marginTop: 60 }}>
           <Ionicons name="time-outline" size={48} color={GRAY2} />
-          <Text style={{ color: GRAY1, fontSize: 15, marginTop: 12 }}>Hozircha safarlar yo'q</Text>
+          <Text style={{ color: GRAY1, fontSize: 15, marginTop: 12 }}>{t('no_trips')}</Text>
         </View>
       ) : Object.keys(groups).map((day) => (
         <View key={day} style={{ marginTop: 18 }}>
-          <Text style={s.histDay}>{day.toUpperCase()}</Text>
-          {groups[day].map((t, i) => {
-            const d = new Date(t.created_at || t.completed_at || Date.now());
+          <Text style={s.histDay}>{(day === 'Bugun' ? t('today') : day === 'Kecha' ? t('yesterday') : day).toUpperCase()}</Text>
+          {groups[day].map((tr, i) => {
+            const d = new Date(tr.created_at || tr.completed_at || Date.now());
             const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
             return (
-              <View key={t.id || i} style={s.histCard}>
+              <View key={tr.id || i} style={s.histCard}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
                   <Text style={{ color: GRAY1, fontSize: 13 }}>{time}</Text>
-                  {t.status === 'cancelled' ? (
+                  {tr.status === 'cancelled' ? (
                     // H-09: bekor qilingan safar daromad EMAS — "+narx" ko'rsatmaymiz.
                     // (Backend daromadi allaqachon faqat completed/paid ni sanaydi.)
                     <Text style={{ color: GRAY1, fontSize: 15, fontWeight: '700' }}>
-                      Bekor <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>· 0 so'm</Text>
+                      {t('cancelled_short')} <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>· 0 {t('som')}</Text>
                     </Text>
                   ) : (
                     <Text style={{ color: YELLOW, fontSize: 15, fontWeight: '700' }}>
-                      +{fmt(t.driver_earned || t.price)} <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>so'm</Text>
+                      +{fmt(tr.driver_earned || tr.price)} <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>{t('som')}</Text>
                     </Text>
                   )}
                 </View>
@@ -3082,13 +3528,13 @@ const DriverHistory = React.memo(function DriverHistory({ trips, insets }) {
                     <Ionicons name="square" size={10} color={YELLOW} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.histAddr} numberOfLines={1}>{t.from_address || '—'}</Text>
-                    <Text style={[s.histAddr, { color: WHITE, fontWeight: '600', marginTop: 10 }]} numberOfLines={1}>{t.to_address || '—'}</Text>
+                    <Text style={s.histAddr} numberOfLines={1}>{tr.from_address || '—'}</Text>
+                    <Text style={[s.histAddr, { color: WHITE, fontWeight: '600', marginTop: 10 }]} numberOfLines={1}>{tr.to_address || '—'}</Text>
                   </View>
                 </View>
                 <View style={s.histFoot}>
-                  {t.distance_km != null && <Text style={s.histMeta}>{t.distance_km} km</Text>}
-                  {t.status === 'cancelled' && <Text style={[s.histMeta, { color: RED }]}>Bekor qilingan</Text>}
+                  {tr.distance_km != null && <Text style={s.histMeta}>{tr.distance_km} {t('km')}</Text>}
+                  {tr.status === 'cancelled' && <Text style={[s.histMeta, { color: RED }]}>{t('cancelled_full')}</Text>}
                 </View>
               </View>
             );
@@ -3100,7 +3546,7 @@ const DriverHistory = React.memo(function DriverHistory({ trips, insets }) {
 });
 
 // ---- Profil ekrani ----
-function DriverProfile({ user, earnings, onLogout, insets, token }) {
+function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLang }) {
   const top = (insets?.top || 0) + 16;
   const bottom = TABBAR_H + (insets?.bottom || 0) + 20;
   const st = earnings?.stats || {};
@@ -3144,10 +3590,10 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
     try {
       // Tejamkorlik: faqat oxirgi 4 xabar (token tejash); timeout+retry — jim to'xtamasin
       const r = await api('/api/ai/chat', 'POST', { messages: next.slice(-4), context_role: 'driver' }, token, 25000, { retries: 1 });
-      const reply = r.reply + (r.ticket ? `\n\n📋 Murojaat raqami: ${r.ticket}` : '');
+      const reply = r.reply + (r.ticket ? `\n\n📋 ${t('ticket')}: ${r.ticket}` : '');
       setAiChat([...next, { role: 'assistant', text: reply }]);
     } catch (e) {
-      setAiChat([...next, { role: 'assistant', text: 'Kechirasiz, javob berib bo\'lmadi. Keyinroq urinib ko\'ring.' }]);
+      setAiChat([...next, { role: 'assistant', text: t('ai_fail') }]);
     }
     setAiLoading(false);
   }
@@ -3168,10 +3614,10 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
     setSavingCar(true);
     try {
       await api('/api/me/profile', 'PATCH', { car_model: editCar, car_number: editPlate, car_color: editColor, has_ac: editAc, has_baggage: editBaggage }, token);
-      Alert.alert('Saqlandi', 'Avtomobil ma\'lumotlari yangilandi');
+      Alert.alert(t('saved'), t('car_saved'));
       setCarModal(false);
     } catch (e) {
-      Alert.alert('Xatolik', e.message || 'Saqlab bo\'lmadi');
+      Alert.alert(t('error'), e.message || t('save_fail'));
     } finally {
       setSavingCar(false);
     }
@@ -3181,10 +3627,10 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
     setSavingCard(true);
     try {
       await api('/api/me/profile', 'PATCH', { bank_card: editCard.replace(/\s/g, '') }, token);
-      Alert.alert('Saqlandi', 'Karta ma\'lumotlari yangilandi');
+      Alert.alert(t('saved'), t('card_saved'));
       setCardModal(false);
     } catch (e) {
-      Alert.alert('Xatolik', e.message || 'Saqlab bo\'lmadi');
+      Alert.alert(t('error'), e.message || t('save_fail'));
     } finally {
       setSavingCard(false);
     }
@@ -3208,14 +3654,14 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
 
   return (
     <ScrollView style={s.screenWrap} contentContainerStyle={{ paddingTop: top, paddingBottom: bottom, paddingHorizontal: 20 }}>
-      <Text style={s.screenTitle}>Profil</Text>
+      <Text style={s.screenTitle}>{t('tab_profile')}</Text>
       {/* Avatar + reyting */}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 16, marginBottom: 20 }}>
         <View style={s.profAvatar}>
           <Text style={{ color: YELLOW, fontSize: 28, fontWeight: '700' }}>{(user?.name?.[0] || 'H').toUpperCase()}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: WHITE, fontSize: 20, fontWeight: '700' }}>{user?.name || 'Haydovchi'}</Text>
+          <Text style={{ color: WHITE, fontSize: 20, fontWeight: '700' }}>{user?.name || t('driver_def')}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
             <Ionicons name="star" size={14} color={YELLOW} />
             <Text style={{ color: GRAY1, fontSize: 14, fontWeight: '600' }}>{st.rating || '—'}</Text>
@@ -3230,8 +3676,8 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
         <View style={s.profCarCard}>
           <Ionicons name="car-sport" size={30} color={YELLOW} />
           <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={{ color: WHITE, fontSize: 15, fontWeight: '600' }}>{car || 'Avtomobil'}</Text>
-            <Text style={{ color: GRAY1, fontSize: 13, marginTop: 2 }}>Davlat raqami</Text>
+            <Text style={{ color: WHITE, fontSize: 15, fontWeight: '600' }}>{car || t('car_default')}</Text>
+            <Text style={{ color: GRAY1, fontSize: 13, marginTop: 2 }}>{t('plate_lbl')}</Text>
           </View>
           {plate ? (
             <View style={s.plateBox}>
@@ -3246,36 +3692,36 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
       <View style={{ flexDirection: 'row', gap: 12, marginTop: 14 }}>
         <View style={s.profStat}>
           <Text style={s.profStatVal}>{st.trips_done ?? earnings?.total?.trips ?? 0}</Text>
-          <Text style={s.profStatLbl}>Safarlar</Text>
+          <Text style={s.profStatLbl}>{t('trips')}</Text>
         </View>
         <View style={s.profStat}>
           <Text style={[s.profStatVal, { color: YELLOW }]}>{st.accept_rate != null ? st.accept_rate + '%' : '—'}</Text>
-          <Text style={s.profStatLbl}>Qabul foizi</Text>
+          <Text style={s.profStatLbl}>{t('accept_rate')}</Text>
         </View>
         <View style={s.profStat}>
           <Text style={s.profStatVal}>{st.rating || '—'}</Text>
-          <Text style={s.profStatLbl}>Reyting</Text>
+          <Text style={s.profStatLbl}>{t('rating')}</Text>
         </View>
       </View>
 
       {/* Menyu */}
       <View style={[s.profMenu, { marginTop: 20 }]}>
-        <ProfRow icon="car-outline" title="Avtomobil ma'lumotlari" onPress={() => {
+        <ProfRow icon="car-outline" title={t('car_info')} onPress={() => {
           setEditCar(car); setEditPlate(plate); setEditColor(color); setCarModal(true);
           // M-04: joriy xizmat belgilarini serverdan olamiz (user prop eskirgan bo'lishi mumkin)
           api('/api/me/profile', 'GET', null, token, 8000).then((r) => { setEditAc(!!r.has_ac); setEditBaggage(!!r.has_baggage); }).catch(() => {});
         }} />
-        <ProfRow icon="document-text-outline" title="Hujjatlar" detail="Tasdiqlangan" />
-        <ProfRow icon="card-outline" title="To'lov va karta" detail={bankCard ? '●●●● ' + bankCard.slice(-4) : undefined} last onPress={() => { setEditCard(bankCard ? formatCardInput(bankCard) : ''); setCardModal(true); }} />
+        <ProfRow icon="document-text-outline" title={t('documents')} detail={t('verified')} />
+        <ProfRow icon="card-outline" title={t('payment_card')} detail={bankCard ? '●●●● ' + bankCard.slice(-4) : undefined} last onPress={() => { setEditCard(bankCard ? formatCardInput(bankCard) : ''); setCardModal(true); }} />
       </View>
       <View style={s.profMenu}>
-        <ProfRow icon="headset-outline" title="Yordam markazi" onPress={() => setHelpModal(true)} />
-        <ProfRow icon="settings-outline" title="Sozlamalar" last onPress={() => setSettingsModal(true)} />
+        <ProfRow icon="headset-outline" title={t('help_center')} onPress={() => setHelpModal(true)} />
+        <ProfRow icon="settings-outline" title={t('settings')} last onPress={() => setSettingsModal(true)} />
       </View>
 
       <TouchableOpacity style={s.logoutBtn} onPress={onLogout} activeOpacity={0.8}>
         <Ionicons name="log-out-outline" size={18} color={RED} style={{ marginRight: 8 }} />
-        <Text style={{ color: RED, fontSize: 15, fontWeight: '600' }}>Chiqish</Text>
+        <Text style={{ color: RED, fontSize: 15, fontWeight: '600' }}>{t('logout')}</Text>
       </TouchableOpacity>
 
       {/* ===== A. Avtomobil ma'lumotlari Modal ===== */}
@@ -3285,24 +3731,24 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
             <TouchableOpacity onPress={() => setCarModal(false)} style={{ marginRight: 12 }}>
               <Ionicons name="arrow-back" size={24} color={WHITE} />
             </TouchableOpacity>
-            <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700' }}>Avtomobil ma'lumotlari</Text>
+            <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700' }}>{t('car_info')}</Text>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
             <View style={{ backgroundColor: CARD2, borderRadius: 14, padding: 16, marginBottom: 14 }}>
-              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 8 }}>Mashina rusumi</Text>
+              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 8 }}>{t('car_model_lbl')}</Text>
               <TextInput
                 style={[s.input, { marginBottom: 0 }]}
-                placeholder="Masalan: Chevrolet Malibu"
+                placeholder={t('car_model_ph')}
                 placeholderTextColor={GRAY2}
                 value={editCar}
                 onChangeText={setEditCar}
               />
             </View>
             <View style={{ backgroundColor: CARD2, borderRadius: 14, padding: 16, marginBottom: 14 }}>
-              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 8 }}>Davlat raqami</Text>
+              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 8 }}>{t('plate_lbl')}</Text>
               <TextInput
                 style={[s.input, { marginBottom: 0 }]}
-                placeholder="Masalan: 01 A 123 BC"
+                placeholder={t('plate_ph')}
                 placeholderTextColor={GRAY2}
                 value={editPlate}
                 onChangeText={setEditPlate}
@@ -3310,10 +3756,10 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
               />
             </View>
             <View style={{ backgroundColor: CARD2, borderRadius: 14, padding: 16, marginBottom: 24 }}>
-              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 8 }}>Mashina rangi</Text>
+              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 8 }}>{t('car_color_lbl')}</Text>
               <TextInput
                 style={[s.input, { marginBottom: 0 }]}
-                placeholder="Masalan: Oq"
+                placeholder={t('color_ph')}
                 placeholderTextColor={GRAY2}
                 value={editColor}
                 onChangeText={setEditColor}
@@ -3321,24 +3767,24 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
             </View>
             {/* M-04: xizmatlar — mijoz haydovchi kartasida belgi sifatida ko'radi (narxga ta'sir yo'q) */}
             <View style={{ backgroundColor: CARD2, borderRadius: 14, padding: 16, marginBottom: 24 }}>
-              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 12 }}>Xizmatlar (mijozga ko'rinadi)</Text>
+              <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 12 }}>{t('services_lbl')}</Text>
               <TouchableOpacity
                 style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}
                 onPress={() => setEditAc(!editAc)} activeOpacity={0.7}>
                 <Ionicons name={editAc ? 'checkbox' : 'square-outline'} size={24} color={editAc ? YELLOW : GRAY2} />
-                <Text style={{ color: WHITE, fontSize: 15, marginLeft: 12, flex: 1 }}>❄️ Konditsioner (A/C)</Text>
+                <Text style={{ color: WHITE, fontSize: 15, marginLeft: 12, flex: 1 }}>{t('ac')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10 }}
                 onPress={() => setEditBaggage(!editBaggage)} activeOpacity={0.7}>
                 <Ionicons name={editBaggage ? 'checkbox' : 'square-outline'} size={24} color={editBaggage ? YELLOW : GRAY2} />
-                <Text style={{ color: WHITE, fontSize: 15, marginLeft: 12, flex: 1 }}>🧳 Bagaj / katta yuk</Text>
+                <Text style={{ color: WHITE, fontSize: 15, marginLeft: 12, flex: 1 }}>{t('baggage')}</Text>
               </TouchableOpacity>
             </View>
             <TouchableOpacity style={s.btn} onPress={saveCar} activeOpacity={0.8} disabled={savingCar}>
               {savingCar
                 ? <ActivityIndicator color="#000" />
-                : <Text style={s.btnTxt}>Saqlash</Text>}
+                : <Text style={s.btnTxt}>{t('save')}</Text>}
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -3351,12 +3797,12 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
             <TouchableOpacity onPress={() => setCardModal(false)} style={{ marginRight: 12 }}>
               <Ionicons name="arrow-back" size={24} color={WHITE} />
             </TouchableOpacity>
-            <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700' }}>To'lov va karta</Text>
+            <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700' }}>{t('payment_card')}</Text>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
             <View style={{ backgroundColor: CARD2, borderRadius: 14, padding: 16, marginBottom: 14 }}>
               <Text style={{ color: GRAY1, fontSize: 13, marginBottom: 6 }}>
-                Keshbek hisobiga o'tkazish va bonus olish uchun karta qo'shing
+                {t('card_hint')}
               </Text>
               {bank && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
@@ -3377,12 +3823,12 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
             </View>
             <View style={{ backgroundColor: CARD2, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 24, flexDirection: 'row', alignItems: 'center' }}>
               <Ionicons name="cash-outline" size={18} color={GREEN} style={{ marginRight: 8 }} />
-              <Text style={{ color: GRAY1, fontSize: 13 }}>Naqd pul to'lovi har doim mavjud</Text>
+              <Text style={{ color: GRAY1, fontSize: 13 }}>{t('cash_always')}</Text>
             </View>
             <TouchableOpacity style={s.btn} onPress={saveCard} activeOpacity={0.8} disabled={savingCard}>
               {savingCard
                 ? <ActivityIndicator color="#000" />
-                : <Text style={s.btnTxt}>Saqlash</Text>}
+                : <Text style={s.btnTxt}>{t('save')}</Text>}
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -3395,16 +3841,16 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
             <TouchableOpacity onPress={() => setHelpModal(false)} style={{ marginRight: 12 }}>
               <Ionicons name="arrow-back" size={24} color={WHITE} />
             </TouchableOpacity>
-            <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700' }}>Yordam markazi</Text>
+            <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700' }}>{t('help_center')}</Text>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
             {/* T-13: KetdikGo AI yordamchi — savol yozing, AI (Claude) javob beradi.
                 AI o'chiq bo'lsa backend murojaatni operatorga ochadi (ticket). */}
-            <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, marginLeft: 4 }}>KETDIKGO AI YORDAMCHI</Text>
+            <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, marginLeft: 4 }}>{t('ai_title').toUpperCase()}</Text>
             <View style={{ backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: BORDER, marginBottom: 16, padding: 12 }}>
               {aiChat.length === 0 && (
                 <Text style={{ color: GRAY1, fontSize: 13, padding: 6 }}>
-                  Savolingizni yozing — KetdikGo AI darrov javob beradi (daromad, reyting, to'lov...).
+                  {t('ai_help_empty')}
                 </Text>
               )}
               {aiChat.map((m, i) => (
@@ -3421,7 +3867,7 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
                 <TextInput
                   style={{ flex: 1, backgroundColor: CARD2, borderRadius: 12, borderWidth: 1, borderColor: BORDER, color: WHITE, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 }}
-                  placeholder="Savol yozing..." placeholderTextColor={GRAY2}
+                  placeholder={t('ask_placeholder')} placeholderTextColor={GRAY2}
                   value={aiInput} onChangeText={setAiInput}
                   onSubmitEditing={sendAiChat} returnKeyType="send"
                 />
@@ -3436,30 +3882,30 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
               <TouchableOpacity onPress={() => Linking.openURL('tel:+998712000000')} activeOpacity={0.75}
                 style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: BORDER }}>
                 <Text style={{ fontSize: 18, marginRight: 12 }}>📞</Text>
-                <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>Operator bilan bog'lanish</Text>
+                <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>{t('call_operator')}</Text>
                 <Ionicons name="chevron-forward" size={18} color={GRAY2} />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => Linking.openURL('https://t.me/ketdikgobot')} activeOpacity={0.75}
                 style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: BORDER }}>
                 <Text style={{ fontSize: 18, marginRight: 12 }}>✈️</Text>
-                <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>Telegram kanal</Text>
+                <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>{t('tg_channel')}</Text>
                 <Ionicons name="chevron-forward" size={18} color={GRAY2} />
               </TouchableOpacity>
               <TouchableOpacity onPress={() => Linking.openURL('https://t.me/ketdikgobot')} activeOpacity={0.75}
                 style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
                 <Text style={{ fontSize: 18, marginRight: 12 }}>💬</Text>
-                <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>Texnik yordam</Text>
+                <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>{t('tech_support')}</Text>
                 <Ionicons name="chevron-forward" size={18} color={GRAY2} />
               </TouchableOpacity>
             </View>
 
-            <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, marginLeft: 4 }}>KO'P SO'RALADIGAN SAVOLLAR</Text>
+            <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, marginLeft: 4 }}>{t('faq')}</Text>
             <View style={{ backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: BORDER }}>
               {[
-                { q: 'Haydovchi hisobim blok bo\'ldi', a: 'Admin bilan bog\'laning: @ketdikgobot' },
-                { q: 'To\'lov qachon chiqadi?', a: 'Har kuni 18:00 da avtomatik o\'tkaziladi' },
-                { q: 'Reyting qanday hisoblanadi?', a: 'Mijozlar bergan 1-5 ball o\'rtachasi' },
-                { q: 'Mashina ma\'lumotlarini o\'zgartirish', a: 'Profil → Avtomobil ma\'lumotlari bo\'limidan' },
+                { q: t('faq_q1'), a: t('faq_a1') },
+                { q: t('faq_q2'), a: t('faq_a2') },
+                { q: t('faq_q3'), a: t('faq_a3') },
+                { q: t('faq_q4'), a: t('faq_a4') },
               ].map((item, i, arr) => (
                 <View key={i} style={[{ padding: 16 }, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: BORDER }]}>
                   <Text style={{ color: WHITE, fontSize: 14, fontWeight: '600', marginBottom: 4 }}>{item.q}</Text>
@@ -3478,32 +3924,46 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
             <TouchableOpacity onPress={() => setSettingsModal(false)} style={{ marginRight: 12 }}>
               <Ionicons name="arrow-back" size={24} color={WHITE} />
             </TouchableOpacity>
-            <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700' }}>Sozlamalar</Text>
+            <Text style={{ color: WHITE, fontSize: 18, fontWeight: '700' }}>{t('settings')}</Text>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20 }}>
-            <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, marginLeft: 4 }}>BILDIRISHNOMALAR</Text>
+            {/* R1: UI tili — UZ/RU chiplar (tanlangani sariq, mavjud uslubga mos) */}
+            <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, marginLeft: 4 }}>{t('language')}</Text>
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+              {[{ id: 'uz', label: "O'zbekcha" }, { id: 'ru', label: 'Русский' }].map((ln) => {
+                const on = lang === ln.id;
+                return (
+                  <TouchableOpacity key={ln.id} activeOpacity={0.8}
+                    onPress={() => onSetLang && onSetLang(ln.id)}
+                    style={{ flex: 1, backgroundColor: on ? YELLOW : CARD2, borderRadius: 12, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: on ? YELLOW : BORDER }}>
+                    <Text style={{ color: on ? '#15171c' : GRAY1, fontSize: 14, fontWeight: '700' }}>{ln.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, marginLeft: 4 }}>{t('notif_section')}</Text>
             <View style={{ backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: BORDER, marginBottom: 16 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: BORDER }}>
-                <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>Yangi buyurtma ovozi</Text>
+                <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>{t('order_sound')}</Text>
                 <TouchableOpacity onPress={toggleSound} activeOpacity={0.8}
                   style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: soundNotif ? GREEN : CARD2, borderWidth: 1, borderColor: soundNotif ? GREEN : BORDER }}>
-                  <Text style={{ color: soundNotif ? '#000' : GRAY1, fontSize: 12, fontWeight: '700' }}>{soundNotif ? 'Yoqiq' : 'O\'chiq'}</Text>
+                  <Text style={{ color: soundNotif ? '#000' : GRAY1, fontSize: 12, fontWeight: '700' }}>{soundNotif ? t('on_lbl') : t('off_lbl')}</Text>
                 </TouchableOpacity>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
-                <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>Tun rejimi</Text>
+                <Text style={{ color: WHITE, fontSize: 15, flex: 1 }}>{t('night_mode')}</Text>
                 <View style={{ paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: CARD2, borderWidth: 1, borderColor: BORDER }}>
-                  <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '700' }}>Doim yoqiq</Text>
+                  <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '700' }}>{t('always_on')}</Text>
                 </View>
               </View>
             </View>
 
-            <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, marginLeft: 4 }}>ILOVA HAQIDA</Text>
+            <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '600', letterSpacing: 0.5, marginBottom: 10, marginLeft: 4 }}>{t('about_section')}</Text>
             <View style={{ backgroundColor: CARD, borderRadius: 16, borderWidth: 1, borderColor: BORDER, marginBottom: 16 }}>
               {[
-                { label: 'Versiya', value: 'KetdikGo Haydovchi v1.0.0' },
-                { label: 'Qurilgan', value: 'Expo SDK 54' },
-                { label: 'Litsenziya', value: '© 2025 KetdikGo' },
+                { label: t('version'), value: 'KetdikGo Haydovchi v1.0.0' },
+                { label: t('built'), value: 'Expo SDK 54' },
+                { label: t('license'), value: '© 2025 KetdikGo' },
               ].map((item, i, arr) => (
                 <View key={i} style={[{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 }, i < arr.length - 1 && { borderBottomWidth: 1, borderBottomColor: BORDER }]}>
                   <Text style={{ color: GRAY1, fontSize: 14 }}>{item.label}</Text>
@@ -3517,28 +3977,28 @@ function DriverProfile({ user, earnings, onLogout, insets, token }) {
               activeOpacity={0.8}
               onPress={() => {
                 Alert.alert(
-                  'Ma\'lumotlarni tozalash',
-                  'Kesh ma\'lumotlari tozalanadi. Davom etasizmi?',
+                  t('clear_data'),
+                  t('clear_msg'),
                   [
-                    { text: 'Bekor qilish', style: 'cancel' },
+                    { text: t('cancel_btn'), style: 'cancel' },
                     {
-                      text: 'Tozalash', style: 'destructive', onPress: async () => {
+                      text: t('clear_do'), style: 'destructive', onPress: async () => {
                         try {
                           const savedToken = await AsyncStorage.getItem('token');
                           const savedUser = await AsyncStorage.getItem('user');
                           await AsyncStorage.clear();
                           if (savedToken) await AsyncStorage.setItem('token', savedToken);
                           if (savedUser) await AsyncStorage.setItem('user', savedUser);
-                          Alert.alert('Tayyor', 'Kesh tozalandi');
+                          Alert.alert(t('ready'), t('cache_cleared'));
                         } catch (e) {
-                          Alert.alert('Xatolik', 'Tozalash amalga oshmadi');
+                          Alert.alert(t('error'), t('clear_fail'));
                         }
                       }
                     },
                   ]
                 );
               }}>
-              <Text style={{ color: RED, fontSize: 15, fontWeight: '600' }}>Ma'lumotlarni tozalash</Text>
+              <Text style={{ color: RED, fontSize: 15, fontWeight: '600' }}>{t('clear_data')}</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
