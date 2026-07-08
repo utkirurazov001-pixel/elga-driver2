@@ -1280,7 +1280,9 @@ function AppInner() {
   // Sayohatni ulashish
   async function shareTrip() {
     if (!order?.share_token) { Alert.alert('Ulashib bo\'lmadi', 'Token mavjud emas'); return; }
-    const url = `${BASE}/api/orders/share/${order.share_token}`;
+    // D2: endi inson o'qiydigan jonli sahifa (backend /share/:token, PR #130) —
+    // avval xom JSON API havolasi ketardi, qabul qiluvchi matn ko'rardi.
+    const url = `${BASE}/share/${order.share_token}`;
     const msg = `Men KetdikGo taxi bilan sayohatdaman!\nKuzatish: ${url}`;
     try {
       await Linking.openURL(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(msg)}`);
