@@ -2925,7 +2925,8 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
 
 // ---- Safar yakuni: hisob-kitob + yo'lovchini baholash ----
 function TripComplete({ trip, insets, onRate, onDone }) {
-  const [stars, setStars] = useState(5);
+  // 0 = hali tanlanmagan — 5 yulduz oldindan bosilib turmasligi kerak (mijozdagi #78 bilan bir xil tuzatish)
+  const [stars, setStars] = useState(0);
   const [done, setDone] = useState(false);
   const gross = Number(trip.price || 0);
   const commission = Number(trip.commission || 0);
@@ -2933,7 +2934,8 @@ function TripComplete({ trip, insets, onRate, onDone }) {
   const top = (insets?.top || 0) + 40;
   const bottom = (insets?.bottom || 0) + 24;
   function finish() {
-    if (!done) { onRate(trip.id, stars); setDone(true); }
+    // Baho IXTIYORIY: yulduz tanlanmagan bo'lsa (stars=0) baho yuborilmaydi, avto-5 ketmasin
+    if (!done && stars > 0) { onRate(trip.id, stars); setDone(true); }
     onDone();
   }
   return (
