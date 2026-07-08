@@ -589,6 +589,12 @@ function AppInner() {
   const [estLoading, setEstLoading] = useState(false);
   const estCacheKey = useRef(null);
   const [promoCode, setPromoCode] = useState(''); // Q3: promo-kod (ixtiyoriy)
+  // C1: rejalashtirilgan safar — tanlangan vaqt (Date) yoki null (hozir)
+  const [schedAt, setSchedAt] = useState(null);
+  const [schedModal, setSchedModal] = useState(false);
+  const [schedDay, setSchedDay] = useState(0);   // 0=bugun 1=ertaga 2=indin
+  const [schedHour, setSchedHour] = useState(8);
+  const [schedMin, setSchedMin] = useState(0);
   const [order, setOrder] = useState(null);
   const [driverLoc, setDriverLoc] = useState(null);
   // M-05: socket driver_location oxirgi kelgan vaqti. Socket jim bo'lsa (o'lik/yo'q),
@@ -1596,7 +1602,9 @@ function AppInner() {
         from, to: dest, car_class: carClass, payment_method: payMethod,
         ...(roadKm ? { road_km: roadKm } : {}),
         ...(promoCode.trim() ? { promo_code: promoCode.trim().toUpperCase() } : {}), // Q3
+        ...(schedAt ? { scheduled_at: schedAt.toISOString() } : {}), // C1
       }, token, 15000, { idempotencyKey: uuid(), retries: 2 });
+      setSchedAt(null); // C1: keyingi buyurtma yana 'hozir' bo'lib boshlansin
       const o = r.order || r;
       // T-16: yaratish vaqtini belgilaymiz — parallel ketayotgan eski "faol buyurtma
       // yo'q" javobi bu YANGI buyurtmani o'chirib yubormasin (#order-disappear race)
@@ -2269,7 +2277,17 @@ function AppInner() {
               )}
 
               {['searching', 'assigned'].includes(order.status) && (
-                <SearchingPulse />
+                schedFutureMs(order) ? (
+                  /* C1: vaqti hali kelmagan rejalashtirilgan buyurtma — radar emas,
+                     tinch kutish kartasi (haydovchi qidiruvi vaqtida o'zi boshlanadi) */
+                  <View style={{ backgroundColor: CARD2, borderRadius: 14, borderWidth: 1, borderColor: BORDER, padding: 16, marginHorizontal: 16, marginTop: 8, alignItems: 'center' }}>
+                    <Text style={{ color: YELLOW, fontSize: 17, fontWeight: '800' }}>⏰ Rejalashtirilgan</Text>
+                    <Text style={{ color: WHITE, fontSize: 14, marginTop: 4 }}>{fmtSched(new Date(schedFutureMs(order)))}</Text>
+                    <Text style={{ color: GRAY1, fontSize: 12, marginTop: 4, textAlign: 'center' }}>
+                      Vaqti kelganda haydovchi qidiruvi avtomatik boshlanadi va sizga xabar keladi
+                    </Text>
+                  </View>
+                ) : <SearchingPulse />
               )}
 
               {order.status === 'arrived' && <CustomerWaitTimer arrivedAt={order.arrived_at} cfg={liveWait} />}
@@ -2762,6 +2780,26 @@ function AppInner() {
                 })}
               </ScrollView>
 
+              {/* C1: qachon ketamiz — Hozir yoki rejalashtirilgan vaqt.
+                  Backend #129: scheduled_at kelajakda bo'lsa dispatcher vaqti
+                  kelguncha (10 daq oldin) haydovchi qidirmaydi. */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, borderRadius: 12, borderWidth: 1.5, paddingVertical: 9, alignItems: 'center',
+                    borderColor: !schedAt ? YELLOW : BORDER, backgroundColor: !schedAt ? '#1a1707' : CARD2 }}
+                  onPress={() => setSchedAt(null)}>
+                  <Text style={{ color: !schedAt ? YELLOW : GRAY1, fontSize: 13, fontWeight: '700' }}>⚡ Hozir</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1.4, borderRadius: 12, borderWidth: 1.5, paddingVertical: 9, alignItems: 'center',
+                    borderColor: schedAt ? YELLOW : BORDER, backgroundColor: schedAt ? '#1a1707' : CARD2 }}
+                  onPress={() => setSchedModal(true)}>
+                  <Text style={{ color: schedAt ? YELLOW : GRAY1, fontSize: 13, fontWeight: '700' }}>
+                    ⏰ {schedAt ? fmtSched(schedAt) : 'Keyinroq'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
               {/* Q3: promo-kod (ixtiyoriy) — backend estimate/buyurtmada qo'llaydi,
                   chegirma narxga darhol kiritiladi (promo_applied/promo_invalid). */}
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
@@ -3245,6 +3283,64 @@ function AppInner() {
       </Modal>
 
       {/* Cancel Modal */}
+      {/* C1: vaqt tanlash bottom-sheet — SOF JS chiplar (native picker YO'Q, OTA buzilmaydi) */}
+      <Modal visible={schedModal} transparent animationType="slide" onRequestClose={() => setSchedModal(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: CARD, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: insets.bottom + 18 }}>
+            <Text style={{ color: WHITE, fontSize: 16, fontWeight: '800', textAlign: 'center', marginBottom: 12 }}>⏰ Qachonga?</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              {['Bugun', 'Ertaga', 'Indin'].map((nm, i) => (
+                <TouchableOpacity key={nm} onPress={() => setSchedDay(i)}
+                  style={{ flex: 1, paddingVertical: 10, borderRadius: 11, alignItems: 'center', borderWidth: 1.5,
+                    borderColor: schedDay === i ? YELLOW : BORDER, backgroundColor: schedDay === i ? '#1a1707' : CARD2 }}>
+                  <Text style={{ color: schedDay === i ? YELLOW : WHITE, fontSize: 13, fontWeight: '700' }}>{nm}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={{ color: GRAY1, fontSize: 12, marginBottom: 6 }}>Soat</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+              {Array.from({ length: 17 }, (_, i) => i + 6).map((h) => (
+                <TouchableOpacity key={h} onPress={() => setSchedHour(h)}
+                  style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, marginRight: 8, borderWidth: 1.5,
+                    borderColor: schedHour === h ? YELLOW : BORDER, backgroundColor: schedHour === h ? '#1a1707' : CARD2 }}>
+                  <Text style={{ color: schedHour === h ? YELLOW : WHITE, fontSize: 14, fontWeight: '700' }}>{String(h).padStart(2, '0')}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <Text style={{ color: GRAY1, fontSize: 12, marginBottom: 6 }}>Daqiqa</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+              {[0, 15, 30, 45].map((m) => (
+                <TouchableOpacity key={m} onPress={() => setSchedMin(m)}
+                  style={{ flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center', borderWidth: 1.5,
+                    borderColor: schedMin === m ? YELLOW : BORDER, backgroundColor: schedMin === m ? '#1a1707' : CARD2 }}>
+                  <Text style={{ color: schedMin === m ? YELLOW : WHITE, fontSize: 14, fontWeight: '700' }}>:{String(m).padStart(2, '0')}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity style={{ flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER }}
+                onPress={() => setSchedModal(false)}>
+                <Text style={{ color: GRAY1, fontSize: 14, fontWeight: '600' }}>Bekor</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={{ flex: 1.5, paddingVertical: 13, borderRadius: 12, alignItems: 'center', backgroundColor: YELLOW }}
+                onPress={() => {
+                  const now = new Date();
+                  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + schedDay, schedHour, schedMin, 0);
+                  // Backend talabi (config SCHEDULE_MIN_MIN=15): kamida 15 daqiqa keyinga
+                  if (d.getTime() - now.getTime() < 15 * 60000) {
+                    Alert.alert('Vaqt juda yaqin', "Kamida 15 daqiqa keyinga tanlang. Undan yaqin bo'lsa — 'Hozir' bilan chaqiring.");
+                    return;
+                  }
+                  setSchedAt(d);
+                  setSchedModal(false);
+                }}>
+                <Text style={{ color: '#000', fontSize: 14, fontWeight: '800' }}>Tasdiqlash</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={cancelModal} transparent animationType="slide" onRequestClose={() => setCancelModal(false)}>
         <View style={s.modalOverlay}>
           <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
@@ -3393,6 +3489,21 @@ function AppInner() {
       </Modal>
     </View>
   );
+}
+
+// C1: buyurtma rejalashtirilgan va vaqti hali kelmaganmi? Kelajak bo'lsa ms qaytaradi.
+function schedFutureMs(order) {
+  if (!order || !order.scheduled_at || !['searching', 'assigned'].includes(order.status)) return 0;
+  const ms = Date.parse(String(order.scheduled_at).replace(' ', 'T') + (String(order.scheduled_at).includes('Z') || String(order.scheduled_at).includes('+') ? '' : 'Z'));
+  return Number.isFinite(ms) && ms > Date.now() ? ms : 0;
+}
+// C1: 'Bugun 08:15' / 'Ertaga 08:15' ko'rinishi
+function fmtSched(d) {
+  const now = new Date();
+  const day0 = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dd = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - day0) / 86400000);
+  const nm = dd === 0 ? 'Bugun' : dd === 1 ? 'Ertaga' : dd === 2 ? 'Indin' : `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+  return `${nm} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function statusText(status) {
