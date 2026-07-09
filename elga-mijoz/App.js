@@ -2218,10 +2218,18 @@ function AppInner({ onBootDone }) {
   }
 
   // ---- Xarita hodisalari ----
-  // Xaritaga joriy ma'lumotni yuborish (qayta yuklamasdan)
+  // Xaritaga joriy ma'lumotni yuborish (qayta yuklamasdan).
+  // FREEZE tuzatish: har poll/socket'da (5s) bir XIL ma'lumat qayta yuborilib,
+  // injectJavaScript "floodi" JS-thread'ni bezovta qilardi. Endi oxirgi yuborilgan
+  // JSON bilan solishtiramiz — o'zgarmagan bo'lsa qayta yubormaymiz (hech qanday
+  // real yangilanish yo'qolmaydi, faqat ortiqcha bir xil push'lar to'xtaydi).
+  const lastMapJsonRef = useRef('');
   function pushMap() {
     if (!webviewRef.current) return;
-    webviewRef.current.injectJavaScript(`window.updateMap(${JSON.stringify(mapDataRef.current)});true;`);
+    const json = JSON.stringify(mapDataRef.current);
+    if (json === lastMapJsonRef.current) return;
+    lastMapJsonRef.current = json;
+    webviewRef.current.injectJavaScript(`window.updateMap(${json});true;`);
   }
 
   // Google Maps'ni yoqish: kalitni backenddan olamiz (/api/loc/mapkey → google) va

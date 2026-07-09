@@ -1636,6 +1636,7 @@ function AppInner({ onBootDone }) {
   const lastGpsRef = useRef(0);      // oxirgi GPS vaqti ("arvoh" aniqlash uchun)
   const lastUiLocRef = useRef(null); // state'ga (xaritaga) oxirgi yuborilgan joylashuv — re-render throttle
   const lastUiAtRef = useRef(0);     // state oxirgi yangilangan vaqt
+  const lastLocSaveRef = useRef(0);  // last_loc disk yozuvi throttle (freeze — I/O bosimini kamaytirish)
   const orderRef = useRef(null);     // joriy buyurtma (GPS callback stale closure'siz o'qishi uchun)
   // GPS callback'i stale closure'siz joriy buyurtmani o'qisin (har renderda yangilanadi).
   // MUHIM: bu orderRef E'LON QILINGANDAN KEYIN turishi shart — aks holda Hermes release'da
@@ -2342,8 +2343,13 @@ function AppInner({ onBootDone }) {
             setMyLoc(loc);
           }
 
-          // Oxirgi joylashuvni saqlaymiz — ilova qayta ochilganda darrov ko'rsatiladi
-          AsyncStorage.setItem('last_loc', JSON.stringify(loc)).catch(() => {});
+          // Oxirgi joylashuvni saqlaymiz — ilova qayta ochilganda darrov ko'rsatiladi.
+          // FREEZE tuzatish: ilgari HAR GPS fix'da disk yozuvi (I/O bosimi) bo'lardi;
+          // endi 10s'da bir marta — qayta ochishda baribir yaqin joy ko'rsatiladi.
+          if (now - (lastLocSaveRef.current || 0) > 10000) {
+            lastLocSaveRef.current = now;
+            AsyncStorage.setItem('last_loc', JSON.stringify(loc)).catch(() => {});
+          }
 
           // Adaptiv socket emit: faol+online ~4s, idle ~20s, zaif tarmoq ~15s.
           // (Server baribir sekundiga 1 tagacha cheklaydi.)
@@ -3427,15 +3433,22 @@ function WaitTimer({ arrivedAt }) {
 // ---- Yangi buyurtma countdown (15s) ----
 function CountdownBar({ duration = 30000 }) {
   const anim = useRef(new Animated.Value(1)).current;
+  const [w, setW] = useState(0);
   useEffect(() => {
     // audit-fix: TTL serverdan keladi (offer_ttl_ms). Statik 15s progress
     // real 30s taklif vaqtiga mos kelmay, chiziq yarim yo'lda to'xtardi.
     anim.setValue(1);
-    Animated.timing(anim, { toValue: 0, duration, useNativeDriver: false }).start();
+    // FREEZE tuzatish: ilgari `width` (foiz) useNativeDriver:false bilan 30 soniya
+    // JS-thread'da layout hisoblanib, offer paytida "Qabul/Rad" tugmasini bloklardi.
+    // Endi scaleX (transform) + native driver — animatsiya UI thread'da, JS bo'sh qoladi.
+    Animated.timing(anim, { toValue: 0, duration, useNativeDriver: true }).start();
   }, [duration]);
+  // Chapga ankorlangan qisqarish: anim 1→0 da chiziq o'ngdan chapga qisqaradi.
   return (
-    <View style={{ height: 4, backgroundColor: BORDER, borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
-      <Animated.View style={{ height: 4, backgroundColor: YELLOW, borderRadius: 4, width: anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }} />
+    <View onLayout={(e) => { const nw = e.nativeEvent.layout.width; if (nw && nw !== w) setW(nw); }}
+      style={{ height: 4, backgroundColor: BORDER, borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
+      <Animated.View style={{ height: 4, width: '100%', backgroundColor: YELLOW, borderRadius: 4,
+        transform: [{ translateX: Animated.multiply(Animated.subtract(anim, 1), w / 2) }, { scaleX: anim }] }} />
     </View>
   );
 }
