@@ -27,7 +27,7 @@ window.__setDbg=function(t){_dbg(t);};
 try{var _ce=console&&console.error?console.error.bind(console):function(){};if(console)console.error=function(){try{var m=Array.prototype.join.call(arguments,' ');if(/Google Maps|MapError|BillingNotEnabled|ApiNotActivated|RefererNotAllowed|InvalidKey|ExpiredKey/i.test(m)){_dbg('Google XATO: '+String(m).slice(0,160));window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'gmapError',msg:String(m).slice(0,600)}));}}catch(e){}return _ce.apply(console,arguments);};}catch(e){}
 // ── Zaxira: Leaflet + OpenStreetMap ──
 function colorIcon(c){return L.icon({iconUrl:'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-'+c+'.png',shadowUrl:'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',iconSize:[25,41],iconAnchor:[12,41],popupAnchor:[1,-34],shadowSize:[41,41]});}
-var blueIcon=colorIcon('blue'),redIcon=colorIcon('red'),yellowIcon=colorIcon('gold');
+var blueIcon=colorIcon('blue'),greenIcon=colorIcon('green'),redIcon=colorIcon('red'),yellowIcon=colorIcon('gold');
 var carIcon=L.divIcon({className:'',html:'<div style="font-size:26px;line-height:26px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))">🚕</div>',iconSize:[26,26],iconAnchor:[13,13]});
 var map=L.map('map',{zoomControl:false});
 L.control.zoom({position:'topright'}).addTo(map);
@@ -47,7 +47,7 @@ function postPickupDrag(e){var ll=e.target.getLatLng();window.ReactNativeWebView
 function leafletUpdate(d){
   try{
     if(d.lat!=null){
-      if(!pickupMarker){pickupMarker=L.marker([d.lat,d.lng],{draggable:!!d.pickupMode,icon:blueIcon}).addTo(map).bindPopup('Olib ketish'); if(d.pickupMode)pickupMarker.on('dragend',postPickupDrag);}
+      if(!pickupMarker){pickupMarker=L.marker([d.lat,d.lng],{draggable:!!d.pickupMode,icon:greenIcon}).addTo(map).bindPopup('Olib ketish'); if(d.pickupMode)pickupMarker.on('dragend',postPickupDrag);}
       else{pickupMarker.setLatLng([d.lat,d.lng]); if(pickupMarker.dragging){d.pickupMode?pickupMarker.dragging.enable():pickupMarker.dragging.disable();}}
     }
     if(d.destLat!=null){ if(!destMarker){destMarker=L.marker([d.destLat,d.destLng],{icon:redIcon}).addTo(map).bindPopup('Manzil');}else{destMarker.setLatLng([d.destLat,d.destLng]);} } else if(destMarker){map.removeLayer(destMarker);destMarker=null;}
@@ -75,7 +75,7 @@ function googleUpdate(d){
   if(!gReady||!gmap)return;
   try{
     if(d.lat!=null){
-      if(!gPickup){ gPickup=new google.maps.Marker({position:{lat:d.lat,lng:d.lng},map:gmap,draggable:!!d.pickupMode,icon:gIcon('blue'),title:'Olib ketish'}); gPickup.addListener('dragend',function(e){window.ReactNativeWebView.postMessage(JSON.stringify({type:'pickupDrag',lat:e.latLng.lat(),lng:e.latLng.lng()}));}); }
+      if(!gPickup){ gPickup=new google.maps.Marker({position:{lat:d.lat,lng:d.lng},map:gmap,draggable:!!d.pickupMode,icon:gIcon('green'),title:'Olib ketish'}); gPickup.addListener('dragend',function(e){window.ReactNativeWebView.postMessage(JSON.stringify({type:'pickupDrag',lat:e.latLng.lat(),lng:e.latLng.lng()}));}); }
       else{ gPickup.setPosition({lat:d.lat,lng:d.lng}); gPickup.setDraggable(!!d.pickupMode); }
     }
     if(d.destLat!=null){ if(!gDest){gDest=new google.maps.Marker({position:{lat:d.destLat,lng:d.destLng},map:gmap,icon:gIcon('red'),title:'Manzil'});}else{gDest.setPosition({lat:d.destLat,lng:d.destLng});} } else if(gDest){gDest.setMap(null);gDest=null;}

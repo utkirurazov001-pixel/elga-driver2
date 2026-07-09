@@ -2991,7 +2991,7 @@ function AppInner({ onBootDone }) {
               <View style={{
                 position: 'absolute', top: insets.top + (netOnline ? 10 : 42), left: 12,
                 backgroundColor: 'rgba(21,23,28,0.85)', borderRadius: 12,
-                paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: '#333',
+                paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: '#262A31',
               }}>
                 <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700' }}>
                   🧭 {routeInfo.km} km · ~{routeInfo.min} {t('min_short')}
@@ -3009,7 +3009,7 @@ function AppInner({ onBootDone }) {
                 position: 'absolute', left: 12, maxWidth: '62%',
                 top: insets.top + (netOnline ? 10 : 42) + (routeInfo ? 52 : 0),
                 backgroundColor: 'rgba(21,23,28,0.85)', borderRadius: 10,
-                paddingVertical: 5, paddingHorizontal: 9, borderWidth: 1, borderColor: '#333',
+                paddingVertical: 5, paddingHorizontal: 9, borderWidth: 1, borderColor: '#262A31',
               }}>
                 <Text numberOfLines={1} style={{ color: WHITE, fontSize: 11.5 }}>
                   🏁 {order.to_address || dest?.address}
@@ -4846,7 +4846,7 @@ function PressableScale({ children, onPress, disabled, style, scaleTo = 0.96, ..
 const BG = '#0A0A0A';
 const CARD = '#141414';
 const CARD2 = '#1E1E1E';
-const BORDER = '#282828';
+const BORDER = '#262A31';
 const YELLOW = '#FFCC00'; // KetdikGo brend sarig'i (butun ilova — ko'k olib tashlandi)
 const GREEN = '#22C55E';
 const RED = '#FF453A';
