@@ -3999,7 +3999,7 @@ function AppInner({ onBootDone }) {
             </View>
 
             {balance && (
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                 {!(HIDE_BALANCE_IF_NONPOSITIVE && Number(balance.balance) <= 0) && (
                   <View style={[s.statCard, { flex: 1 }]}>
                     <Ionicons name="wallet" size={16} color={GRAY1} style={{ marginBottom: 6 }} />
@@ -4044,7 +4044,7 @@ function AppInner({ onBootDone }) {
               </TouchableOpacity>
             )}
 
-            <View style={[s.menuCard, { marginTop: 16 }]}>
+            <View style={[s.menuCard, { marginTop: 12 }]}>
               {[
                 // Y1: avval Alert.alert (o'lik ro'yxat) edi — endi haqiqiy bottom-sheet ochiladi
                 { icon: 'heart', label: t('fav_places'), value: favorites.length > 0 ? `${favorites.length}` : null, onPress: () => { setFavAddMode(false); setFavPickPlace(null); setFavNewName(''); setFavSheet(true); } },

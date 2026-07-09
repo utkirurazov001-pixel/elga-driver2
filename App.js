@@ -2264,6 +2264,15 @@ function AppInner({ onBootDone }) {
       setEarnings(r);
     } catch (e) {}
   }
+  // Daromad tabида turганда AVTO-yangilanish: ilgari faqat qo'lда tortganда (pull)
+  // yangilanardi. Endi tab ochilганда va har 20s da o'zi yangilaydi (safar
+  // tugаganda raqamlar avtomatik yangilanadi — qo'lда surish shart emas).
+  useEffect(() => {
+    if (tab !== 'earnings' || !token) return;
+    loadEarnings();
+    const iv = setInterval(loadEarnings, 20000);
+    return () => clearInterval(iv);
+  }, [tab, token]);
 
   async function loadTrips() {
     try {
@@ -3875,15 +3884,18 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
         <ActivityIndicator color={YELLOW} style={{ marginTop: 40 }} />
       ) : (
         <>
-          {/* Balans kartasi */}
+          {/* Balans kartasi — BUGUNGI daromad yetakchi (haydovchi eng ko'p shuni qaraydi),
+              hafta + jami ikkilamchi qatorda. (Ixcham: alohida "Bugun karta" olib tashlandi.) */}
           <View style={[s.balanceCard, { marginTop: 20 }]}>
-            <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '500', letterSpacing: 0.3 }}>{t('total_income')}</Text>
-            <Text style={{ color: WHITE, fontSize: 36, fontWeight: '800', marginTop: 6, lineHeight: 40 }}>
-              {fmt(totalEarned)} <Text style={{ color: GRAY1, fontSize: 18, fontWeight: '500' }}>{t('som')}</Text>
+            <Text style={{ color: GRAY1, fontSize: 13, fontWeight: '600', letterSpacing: 0.3 }}>{t('today').toUpperCase()} · {t('your_income')}</Text>
+            <Text style={{ color: YELLOW, fontSize: 38, fontWeight: '800', marginTop: 6, lineHeight: 42 }}>
+              {fmt(earnings.today?.earned)} <Text style={{ color: GRAY1, fontSize: 18, fontWeight: '500' }}>{t('som')}</Text>
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: GREEN }} />
-              <Text style={{ color: GRAY1, fontSize: 13 }}>{t('this_week')}: {fmt(weekEarned)} {t('som')}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: GREEN }} />
+              <Text style={{ color: GRAY1, fontSize: 13 }}>{t('this_week')}: {fmt(weekEarned)}</Text>
+              <Text style={{ color: GRAY2, fontSize: 13, marginHorizontal: 2 }}>·</Text>
+              <Text style={{ color: GRAY1, fontSize: 13 }}>{t('total_income')}: {fmt(totalEarned)}</Text>
             </View>
             {/* UI-B1: yagona Btn tizimi — primary (ekrandagi yagona primary) */}
             <Btn kind="primary" icon="arrow-up-circle" title={t('withdraw')}
@@ -3977,22 +3989,8 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
             </View>
           )}
 
-          {/* Bugun karta */}
-          <View style={s.earnDayCard}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>{t('today').toUpperCase()}</Text>
-              <Text style={{ color: YELLOW, fontSize: 22, fontWeight: '800', marginTop: 4 }}>{fmt(earnings.today?.earned)} {t('som')}</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ color: GRAY1, fontSize: 12, fontWeight: '500' }}>{t('trips').toUpperCase()}</Text>
-              <Text style={{ color: WHITE, fontSize: 22, fontWeight: '800', marginTop: 4 }}>{earnings.today?.trips || 0}</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity style={[s.btn, { marginTop: 8 }]} onPress={onRefresh} activeOpacity={0.85}>
-            <Ionicons name="refresh" size={18} color="#000" style={{ marginRight: 8 }} />
-            <Text style={s.btnTxt}>{t('refresh')}</Text>
-          </TouchableOpacity>
+          {/* Ixcham: "Bugun karta" (yuqoridagi balans kartasига ko'chdi) va qo'lда
+              "Yangilash" tugmasi olib tashlandi — daromad endi avtomatik yangilanadi. */}
         </>
       )}
     </ScrollView>
