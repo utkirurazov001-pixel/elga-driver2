@@ -1286,7 +1286,7 @@ function AiChatModal({ visible, onClose, token, insets }) {
   }
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: BG }}>
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: BG }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={{ paddingTop: (insets?.top || 0) + 12, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: BORDER, flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity onPress={onClose} style={{ marginRight: 12 }}>
             <Ionicons name="arrow-back" size={24} color={WHITE} />
@@ -1324,7 +1324,7 @@ function AiChatModal({ visible, onClose, token, insets }) {
             <Ionicons name="send" size={18} color="#000" />
           </TouchableOpacity>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -3825,7 +3825,7 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
 
           {/* Click topup modal */}
           <Modal visible={topupModal} transparent animationType="slide" onRequestClose={() => setTopupModal(false)}>
-            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}>
+            <KeyboardAvoidingView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
               <View style={{ backgroundColor: CARD, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: (insets?.bottom || 0) + 24 }}>
                 <Text style={{ color: WHITE, fontSize: 20, fontWeight: '700', textAlign: 'center', marginBottom: 6 }}>{t('topup_title')}</Text>
                 <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginBottom: 20 }}>{t('topup_sub')}</Text>
@@ -3858,7 +3858,7 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
                   <Text style={{ color: GRAY1, fontSize: 15 }}>{t('cancel_btn')}</Text>
                 </TouchableOpacity>
               </View>
-            </View>
+            </KeyboardAvoidingView>
           </Modal>
 
           {/* 4-stat grid */}
@@ -4231,7 +4231,7 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
 
       {/* ===== A. Avtomobil ma'lumotlari Modal ===== */}
       <Modal visible={carModal} animationType="slide" onRequestClose={() => setCarModal(false)}>
-        <View style={{ flex: 1, backgroundColor: BG }}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: BG }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={{ paddingTop: (insets?.top || 0) + 16, paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: BORDER, flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity onPress={() => setCarModal(false)} style={{ marginRight: 12 }}>
               <Ionicons name="arrow-back" size={24} color={WHITE} />
@@ -4292,12 +4292,12 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
                 : <Text style={s.btnTxt}>{t('save')}</Text>}
             </TouchableOpacity>
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ===== B. To'lov va karta Modal ===== */}
       <Modal visible={cardModal} animationType="slide" onRequestClose={() => setCardModal(false)}>
-        <View style={{ flex: 1, backgroundColor: BG }}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: BG }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={{ paddingTop: (insets?.top || 0) + 16, paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: BORDER, flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity onPress={() => setCardModal(false)} style={{ marginRight: 12 }}>
               <Ionicons name="arrow-back" size={24} color={WHITE} />
@@ -4336,12 +4336,12 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
                 : <Text style={s.btnTxt}>{t('save')}</Text>}
             </TouchableOpacity>
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ===== C. Yordam markazi Modal ===== */}
       <Modal visible={helpModal} animationType="slide" onRequestClose={() => setHelpModal(false)}>
-        <View style={{ flex: 1, backgroundColor: BG }}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: BG }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={{ paddingTop: (insets?.top || 0) + 16, paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: BORDER, flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity onPress={() => setHelpModal(false)} style={{ marginRight: 12 }}>
               <Ionicons name="arrow-back" size={24} color={WHITE} />
@@ -4419,7 +4419,7 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
               ))}
             </View>
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ===== D. Sozlamalar Modal ===== */}
