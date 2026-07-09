@@ -33,6 +33,7 @@
     "android": {
       "package": "uz.ketdik.mijoz",
       "versionCode": 3,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFCC00"
