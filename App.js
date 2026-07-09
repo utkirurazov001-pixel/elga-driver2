@@ -276,6 +276,9 @@ const L = {
     total_income: 'JAMI DAROMAD',
     this_week: 'Bu hafta',
     withdraw: 'YECHIB OLISH',
+    daily_quests: 'Kunlik kvestlar',
+    quest_claimed: 'olindi',
+    quest_left: 'ta qoldi',
     withdraw_title: 'Yechib olish',
     withdraw_soon: "Ushbu funksiya tez orada ishga tushadi.\nHozircha admin bilan bog'laning.",
     balance_lbl: 'HISOB BALANSI',
@@ -506,6 +509,9 @@ const L = {
     total_income: 'ОБЩИЙ ДОХОД',
     this_week: 'За эту неделю',
     withdraw: 'ВЫВЕСТИ',
+    daily_quests: 'Ежедневные квесты',
+    quest_claimed: 'получено',
+    quest_left: 'осталось',
     withdraw_title: 'Вывод средств',
     withdraw_soon: 'Эта функция скоро заработает.\nПока свяжитесь с администратором.',
     balance_lbl: 'БАЛАНС СЧЁТА',
@@ -3852,6 +3858,7 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
   const [topupAmount, setTopupAmount] = useState('');
   const [topupLoading, setTopupLoading] = useState(false);
   const [driverBalance, setDriverBalance] = useState(null);
+  const [quests, setQuests] = useState(null); // kunlik kvestlar (progress)
 
   // Balansni yuklaymiz
   React.useEffect(() => {
@@ -3860,6 +3867,15 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
         .then(r => setDriverBalance(r?.balance ?? null))
         .catch(() => {});
     }
+  }, [token]);
+
+  // Kunlik kvestlar — tab ochilganda va har 20s (progress avtomatik yangilanadi)
+  React.useEffect(() => {
+    if (!token) return;
+    const load = () => api('/api/me/quests', 'GET', null, token).then(setQuests).catch(() => {});
+    load();
+    const iv = setInterval(load, 20000);
+    return () => clearInterval(iv);
   }, [token]);
 
   async function doTopup() {
@@ -3904,6 +3920,34 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
               onPress={() => showConfirm({ title: t('withdraw_title'), message: t('withdraw_soon'), confirmText: t('ready') })}
               style={{ marginTop: 16 }} />
           </View>
+
+          {/* Kunlik kvestlar — bugun N safar bajarsa bonus. Haydovchini onlayn ushlaydi. */}
+          {quests?.quests?.length > 0 && (
+            <View style={{ backgroundColor: CARD, borderRadius: 16, padding: 16, marginTop: 14, borderWidth: 1, borderColor: BORDER }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <Ionicons name="trophy" size={18} color={YELLOW} />
+                <Text style={{ color: WHITE, fontSize: 15, fontWeight: '700' }}>{t('daily_quests')}</Text>
+              </View>
+              {quests.quests.map((q) => {
+                const pct = Math.min(100, Math.round((q.progress / q.target) * 100));
+                const left = Math.max(0, q.target - q.progress);
+                return (
+                  <View key={q.id} style={{ marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={{ color: q.claimed ? GREEN : WHITE, fontSize: 13, fontWeight: '600' }}>{q.claimed ? '✓ ' : ''}{q.label}</Text>
+                      <Text style={{ color: YELLOW, fontSize: 13, fontWeight: '700' }}>+{fmt(q.reward)}</Text>
+                    </View>
+                    <View style={{ height: 6, backgroundColor: CARD2, borderRadius: 3, overflow: 'hidden' }}>
+                      <View style={{ height: 6, width: pct + '%', backgroundColor: q.claimed ? GREEN : YELLOW, borderRadius: 3 }} />
+                    </View>
+                    <Text style={{ color: GRAY1, fontSize: 11, marginTop: 4 }}>
+                      {q.progress}/{q.target} {t('trips').toLowerCase()}{q.claimed ? ` · ${t('quest_claimed')}` : (left > 0 ? ` · ${left} ${t('quest_left')}` : '')}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          )}
 
           {/* Hisob to'ldirish (Click) */}
           <View style={{ backgroundColor: CARD, borderRadius: 16, padding: 16, marginTop: 14, borderWidth: 1, borderColor: BORDER }}>
