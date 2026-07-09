@@ -118,6 +118,7 @@ const L = {
   uz: {
     error: 'Xato',
     saved_ok: 'Saqlandi ✓',
+    ready: 'Tushunarli',
     close: 'Yopish',
     cancel_btn: 'Bekor qilish',
     cancel_short: 'Bekor',
@@ -273,7 +274,7 @@ const L = {
     speak_longer: 'Manzilni biroz uzunroq gapiring',
     rec_fail: "Ovoz yozib bo'lmadi: ",
     loc_lbl: 'Joylashuv',
-    pickup_not_found: 'Olib ketish joyi aniqlanmadi',
+    pickup_not_found: "Olib ketish joyi aniqlanmadi. GPS'ni yoqing yoki manzilni tanlang.",
     sos_title: '🆘 Favqulodda yordam',
     fire_lbl: "Yong'in",
     police_lbl: 'Militsiya',
@@ -314,6 +315,10 @@ const L = {
     your_trips: 'Sayohatlaringiz',
     history: 'Tarix',
     no_trips_yet: "Hali safar yo'q",
+    no_trips_sub: 'Birinchi buyurtmangizni bering — safarlaringiz shu yerda ko\'rinadi.',
+    order_now: 'Buyurtma berish',
+    no_fav_yet: "Sevimli manzillar yo'q",
+    no_fav_sub: 'Tez-tez boradigan joylaringizni saqlang — keyin bir bosishda tanlaysiz.',
     completed_lbl: 'Yakunlangan',
     cancelled_lbl: 'Bekor qilingan',
     repeat: '↻ Takrorlash',
@@ -392,6 +397,7 @@ const L = {
   ru: {
     error: 'Ошибка',
     saved_ok: 'Сохранено ✓',
+    ready: 'Понятно',
     close: 'Закрыть',
     cancel_btn: 'Отмена',
     cancel_short: 'Отмена',
@@ -547,7 +553,7 @@ const L = {
     speak_longer: 'Назовите адрес чуть подробнее',
     rec_fail: 'Не удалось записать: ',
     loc_lbl: 'Геолокация',
-    pickup_not_found: 'Не удалось определить точку подачи',
+    pickup_not_found: 'Не удалось определить точку подачи. Включите GPS или выберите адрес.',
     sos_title: '🆘 Экстренная помощь',
     fire_lbl: 'Пожарная служба',
     police_lbl: 'Полиция',
@@ -588,6 +594,10 @@ const L = {
     your_trips: 'Ваши поездки',
     history: 'История',
     no_trips_yet: 'Поездок пока нет',
+    no_trips_sub: 'Сделайте первый заказ — поездки появятся здесь.',
+    order_now: 'Заказать',
+    no_fav_yet: 'Нет избранных адресов',
+    no_fav_sub: 'Сохраните часто посещаемые места — потом выберете в одно нажатие.',
     completed_lbl: 'Завершена',
     cancelled_lbl: 'Отменена',
     repeat: '↻ Повторить',
@@ -1085,6 +1095,9 @@ export default function App() {
         <AppInner onBootDone={() => setBootDone(true)} />
       </ErrorBoundary>
       {bootDone && !splashDone && <BrandSplash onDone={() => setSplashDone(true)} />}
+      {/* UI-B3: brend xabar tizimi — butun ilova ustida, bir marta */}
+      <BrandToast />
+      <BrandModal />
     </SafeAreaProvider>
   );
 }
@@ -1907,7 +1920,7 @@ function AppInner({ onBootDone }) {
   }
 
   async function addFavorite(place) {
-    try { await api('/api/me/favorites', 'POST', { name: place.address, address: place.address, lat: place.lat, lng: place.lng }, token); loadFavorites(); Alert.alert(t('saved_ok'), place.address); } catch (e) { Alert.alert(t('error'), e.message); }
+    try { await api('/api/me/favorites', 'POST', { name: place.address, address: place.address, lat: place.lat, lng: place.lng }, token); loadFavorites(); toast(t('saved_ok'), 'success'); } catch (e) { toast(e.message || t('error'), 'error'); }
   }
 
   async function removeFavorite(id) {
@@ -1923,7 +1936,7 @@ function AppInner({ onBootDone }) {
       await api('/api/me/favorites', 'POST', { name: nm, address: p.address, lat: p.lat, lng: p.lng }, token);
       setFavAddMode(false); setFavPickPlace(null); setFavNewName('');
       loadFavorites();
-    } catch (e) { Alert.alert(t('error'), e.message); }
+    } catch (e) { toast(e.message || t('error'), 'error'); }
   }
 
   function startPinHalo() {
@@ -2084,7 +2097,7 @@ function AppInner({ onBootDone }) {
 
   // Sayohatni ulashish
   async function shareTrip() {
-    if (!order?.share_token) { Alert.alert(t('share_fail_t'), t('share_fail_sub')); return; }
+    if (!order?.share_token) { toast(t('share_fail_sub'), 'error'); return; }
     // D2: endi inson o'qiydigan jonli sahifa (backend /share/:token, PR #130) —
     // avval xom JSON API havolasi ketardi, qabul qiluvchi matn ko'rardi.
     const url = `${BASE}/share/${order.share_token}`;
@@ -2092,7 +2105,7 @@ function AppInner({ onBootDone }) {
     try {
       await Linking.openURL(`https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(msg)}`);
     } catch (_) {
-      Alert.alert(t('link_lbl'), url, [{ text: t('copy_lbl'), onPress: () => Linking.openURL(`https://t.me/share/url?url=${encodeURIComponent(url)}`) }]);
+      showConfirm({ title: t('link_lbl'), message: url, confirmText: t('copy_lbl'), onConfirm: () => Linking.openURL(`https://t.me/share/url?url=${encodeURIComponent(url)}`) });
     }
   }
 
@@ -2297,10 +2310,10 @@ function AppInner({ onBootDone }) {
         setDest({ lat: place.lat, lng: place.lng, address: place.address || place.name });
       }
       setChangeDestModal(false); setCdQ(''); setCdResults([]);
-      Alert.alert(t('dest_changed'), r.recalculated
+      toast(r.recalculated
         ? `${t('new_price')} ${fmt(r.order?.price || 0)} ${t('som')}`
-        : t('dest_updated'));
-    } catch (e) { Alert.alert(t('error'), e.message); }
+        : t('dest_updated'), 'success');
+    } catch (e) { toast(e.message || t('error'), 'error'); }
     setLoading(false);
   }
 
@@ -2320,7 +2333,7 @@ function AppInner({ onBootDone }) {
       await api('/api/me/favorites', 'POST', { name: nm, address: place.address || nm, lat: place.lat, lng: place.lng }, token);
       loadFavorites();
     } catch (_) {}
-    Alert.alert(type === 'home' ? t('home_saved') : t('work_saved'), place.address);
+    toast(type === 'home' ? t('home_saved') : t('work_saved'), 'success');
   }
 
   // ---- P1 (A-1): HAQIQIY YO'L masofasi — narx to'g'ri chiziq bo'yicha emas ----
@@ -2432,9 +2445,9 @@ function AppInner({ onBootDone }) {
       if (e?.status === 409) {
         const opened = await openActiveOrder(e);
         if (opened) notify(t('active_order_t'), t('active_order_opened'));
-        else Alert.alert(t('active_order_t'), e.message || t('active_order_exists'));
+        else toast(e.message || t('active_order_exists'), 'error');
       } else {
-        Alert.alert(t('error'), e.message);
+        toast(e.message || t('error'), 'error');
       }
     }
     creatingOrderRef.current = false;
@@ -2445,7 +2458,7 @@ function AppInner({ onBootDone }) {
   // Mijoz manzilni ovozda aytadi → hisoblagich (manzilsiz) buyurtma yaratiladi,
   // haydovchi ovozni eshitadi. Narx safar oxirida km+vaqt bo'yicha.
   function openVoiceOrder() {
-    if (order) { Alert.alert(t('active_order_t'), t('finish_current_first')); return; }
+    if (order) { toast(t('finish_current_first'), 'info'); return; }
     setVoiceSec(0); setRecording(false); setVoiceParsing(false); setVoiceClarify(''); setVoiceHeard(''); setVoiceModal(true);
   }
   function closeVoiceOrder() {
@@ -2458,7 +2471,7 @@ function AppInner({ onBootDone }) {
     if (recordingRef.current) return;
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
-      if (!perm.granted) { Alert.alert(t('mic_lbl'), t('mic_perm')); return; }
+      if (!perm.granted) { toast(t('mic_perm'), 'error'); return; }
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();
@@ -2468,7 +2481,7 @@ function AppInner({ onBootDone }) {
         if (v >= 60) { stopVoiceRecording(); return v; } // 60s cheklov
         return v + 1;
       }), 1000);
-    } catch (e) { Alert.alert(t('error'), t('rec_fail') + e.message); }
+    } catch (e) { toast(t('rec_fail') + e.message, 'error'); }
   }
   async function stopVoiceRecording() {
     if (voiceTimer.current) { clearInterval(voiceTimer.current); voiceTimer.current = null; }
@@ -2478,12 +2491,12 @@ function AppInner({ onBootDone }) {
     try {
       await audioRecorder.stop();
       const uri = audioRecorder.uri;
-      if (!uri || voiceSec < 1) { Alert.alert(t('too_short'), t('speak_longer')); return; }
+      if (!uri || voiceSec < 1) { toast(t('speak_longer'), 'error'); return; }
       // Avval AI tahlil (nutq -> manzil avto-to'ldirish). Endpoint yo'q/xato bo'lsa
       // eski oqimga qaytamiz (haydovchi ovozni eshitadi) — nol regressiya.
       const handled = await parseVoiceAndFill(uri);
       if (!handled) await sendVoiceOrder(uri);
-    } catch (e) { Alert.alert(t('error'), e.message); }
+    } catch (e) { toast(e.message || t('error'), 'error'); }
   }
   // Lokal audio faylni base64 data-URL ga aylantiradi (backend order_voice formati)
   async function fileToDataUrl(uri) {
@@ -2498,7 +2511,7 @@ function AppInner({ onBootDone }) {
   }
   async function sendVoiceOrder(uri) {
     const from = pickup || myLoc;
-    if (!from) { Alert.alert(t('loc_lbl'), t('pickup_not_found')); return; }
+    if (!from) { toast(t('pickup_not_found'), 'error'); return; }
     if (creatingOrderRef.current) return; // ikki marta yuborilmasin
     creatingOrderRef.current = true;
     setLoading(true);
@@ -2518,9 +2531,9 @@ function AppInner({ onBootDone }) {
         setVoiceModal(false);
         const opened = await openActiveOrder(e);
         if (opened) notify(t('active_order_t'), t('active_order_opened'));
-        else Alert.alert(t('active_order_t'), e.message || t('active_order_exists'));
+        else toast(e.message || t('active_order_exists'), 'error');
       } else {
-        Alert.alert(t('error'), e.message);
+        toast(e.message || t('error'), 'error');
       }
     }
     creatingOrderRef.current = false;
@@ -2600,7 +2613,7 @@ function AppInner({ onBootDone }) {
     try {
       const r = await api('/api/pay/create', 'POST', { order_id: orderId, provider }, token);
       if (r.url) Linking.openURL(r.url);
-    } catch (e) { Alert.alert(t('payment_lbl'), t('pay_link_fail')); }
+    } catch (e) { toast(t('pay_link_fail'), 'error'); }
   }
 
   // ---- Bekor qilish ----
@@ -2609,9 +2622,9 @@ function AppInner({ onBootDone }) {
     setLoading(true);
     try {
       const r = await api(`/api/orders/${order.id}/cancel`, 'POST', { reason }, token);
-      if (r.cancel_fee > 0) Alert.alert(t('cancelled_t'), `${t('fine_lbl')} ${fmt(r.cancel_fee)} ${t('som')} ${t('driver_had_arrived')}`);
+      if (r.cancel_fee > 0) showConfirm({ title: t('cancelled_t'), message: `${t('fine_lbl')} ${fmt(r.cancel_fee)} ${t('som')} ${t('driver_had_arrived')}`, confirmText: t('ready') });
       resetOrder();
-    } catch (e) { Alert.alert(t('error'), e.message); }
+    } catch (e) { toast(e.message || t('error'), 'error'); }
     setCustomReason('');
     setLoading(false);
   }
@@ -2619,7 +2632,7 @@ function AppInner({ onBootDone }) {
   // ---- Baholash + tip ----
   async function submitRating() {
     // D4: baho ONGLI tanlangan bo'lsin — yulduz bosilmagan bo'lsa yubormaymiz
-    if (!stars) { Alert.alert(t('rate_first_t'), t('rate_first_msg')); return; }
+    if (!stars) { toast(t('rate_first_msg'), 'error'); return; }
     setLoading(true);
     try {
       await api(`/api/me/rate/${rateOrderId}`, 'POST', { stars }, token);
@@ -2634,14 +2647,13 @@ function AppInner({ onBootDone }) {
         const asked = await AsyncStorage.getItem('rate_nudge_done');
         if (!asked) {
           await AsyncStorage.setItem('rate_nudge_done', '1');
-          Alert.alert(
-            t('thanks_t'),
-            t('play_nudge'),
-            [
-              { text: t('later_btn'), style: 'cancel' },
-              { text: t('rate_star_btn'), onPress: () => Linking.openURL('market://details?id=uz.ketdik.mijoz').catch(() => Linking.openURL('https://play.google.com/store/apps/details?id=uz.ketdik.mijoz')) },
-            ]
-          );
+          showConfirm({
+            title: t('thanks_t'),
+            message: t('play_nudge'),
+            confirmText: t('rate_star_btn'),
+            cancelText: t('later_btn'),
+            onConfirm: () => Linking.openURL('market://details?id=uz.ketdik.mijoz').catch(() => Linking.openURL('https://play.google.com/store/apps/details?id=uz.ketdik.mijoz')),
+          });
         }
       } catch (_) {}
     }
@@ -2661,10 +2673,14 @@ function AppInner({ onBootDone }) {
     resetOrder(); setTab('order');
   }
   function confirmLogout() {
-    Alert.alert(t('logout'), t('logout_confirm'), [
-      { text: t('cancel_btn'), style: 'cancel' },
-      { text: t('logout'), style: 'destructive', onPress: doLogout },
-    ]);
+    showConfirm({
+      title: t('logout'),
+      message: t('logout_confirm'),
+      confirmText: t('logout'),
+      cancelText: t('cancel_btn'),
+      danger: true,
+      onConfirm: doLogout,
+    });
   }
 
   // T-06: token "rolling" yangilash. Ilova ochilganда saqlangan token bilan chaqiriladi;
@@ -2693,9 +2709,9 @@ function AppInner({ onBootDone }) {
   async function claimCashback() {
     try {
       const r = await api('/api/me/claim-cashback', 'POST', {}, token);
-      Alert.alert(t('cashback_t'), `${fmt(r.claimed)} ${t('som')} ${t('added_to_balance')}`);
+      toast(`${fmt(r.claimed)} ${t('som')} ${t('added_to_balance')}`, 'success');
       loadBalance();
-    } catch (e) { Alert.alert(t('error'), e.message); }
+    } catch (e) { toast(e.message || t('error'), 'error'); }
   }
   async function sendChat() {
     const text = chatInput.trim();
@@ -2762,13 +2778,13 @@ function AppInner({ onBootDone }) {
           style={s.ctaBtn}
           onPress={isSetup
             ? async () => {
-                if (pinInput.length !== 4) { Alert.alert(t('error'), t('pin_4digits')); return; }
+                if (pinInput.length !== 4) { toast(t('pin_4digits'), 'error'); return; }
                 await AsyncStorage.setItem('pin', pinInput);
                 setStoredPin(pinInput); setPinInput(''); setPinStep(null);
               }
             : () => {
                 if (pinInput === storedPin) { setPinStep(null); setPinInput(''); }
-                else { Alert.alert(t('error'), t('pin_wrong')); setPinInput(''); }
+                else { toast(t('pin_wrong'), 'error'); setPinInput(''); }
               }
           }
         >
@@ -2812,10 +2828,10 @@ function AppInner({ onBootDone }) {
               onChangeText={setPhone}
             />
             <PressableScale style={s.ctaBtn} onPress={async () => {
-              if (phone.replace(/\D/g, '').length < 9) { Alert.alert(t('error'), t('enter_valid_phone')); return; }
+              if (phone.replace(/\D/g, '').length < 9) { toast(t('enter_valid_phone'), 'error'); return; }
               setLoading(true);
-              try { await api('/api/auth/send-code', 'POST', { phone }); setStep('code'); Alert.alert(t('sent'), t('sms_sent')); }
-              catch (e) { Alert.alert(t('error'), e.message); }
+              try { await api('/api/auth/send-code', 'POST', { phone }); setStep('code'); toast(t('sms_sent'), 'success'); }
+              catch (e) { toast(e.message || t('error'), 'error'); }
               setLoading(false);
             }} disabled={loading}>
               {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>{t('get_sms_code')}</Text>}
@@ -2834,7 +2850,7 @@ function AppInner({ onBootDone }) {
               onChangeText={setCode}
             />
             <PressableScale style={s.ctaBtn} onPress={async () => {
-              if (code.length < 4) { Alert.alert(t('error'), t('enter_code')); return; }
+              if (code.length < 4) { toast(t('enter_code'), 'error'); return; }
               setLoading(true);
               try {
                 const r = await api('/api/auth/verify', 'POST', { phone, code });
@@ -2845,7 +2861,7 @@ function AppInner({ onBootDone }) {
                 // Token saqlandi; keyingi ochilishlarda avtomatik kiriladi.
               } catch (e) {
                 if (e.data?.new_user && e.data?.reg_token) { setRegToken(e.data.reg_token); setStep('name'); }
-                else { Alert.alert(t('error'), e.message); }
+                else { toast(e.message || t('error'), 'error'); }
               }
               setLoading(false);
             }} disabled={loading}>
@@ -2878,7 +2894,7 @@ function AppInner({ onBootDone }) {
               onChangeText={setRefCode}
             />
             <PressableScale style={s.ctaBtn} onPress={async () => {
-              if (name.trim().length < 2) { Alert.alert(t('error'), t('enter_name')); return; }
+              if (name.trim().length < 2) { toast(t('enter_name'), 'error'); return; }
               setLoading(true);
               try {
                 const r = await api('/api/auth/verify', 'POST', { phone, code, name: name.trim(), role: 'customer', reg_token: regToken, ...(refCode.trim() ? { referral_code: refCode.trim().toUpperCase() } : {}) });
@@ -2887,7 +2903,7 @@ function AppInner({ onBootDone }) {
                 setToken(r.token); setUser(r.user);
                 // T-06: PIN/parol so'ralmaydi — bir marta SMS bilan kirish yetarli.
                 // Token saqlandi; keyingi ochilishlarda avtomatik kiriladi.
-              } catch (e) { Alert.alert(t('error'), e.message); }
+              } catch (e) { toast(e.message || t('error'), 'error'); }
               setLoading(false);
             }} disabled={loading}>
               {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>{t('continue_up')}</Text>}
@@ -3416,7 +3432,7 @@ function AppInner({ onBootDone }) {
                     <View style={s.listSection}>
                       <Text style={s.listSectionTitle}>{t('saved_sec')}</Text>
                       <TouchableOpacity style={s.placeRow}
-                        onPress={() => homePlace ? pickDest(homePlace) : Alert.alert(t('home_addr'), t('long_press_save'))}
+                        onPress={() => homePlace ? pickDest(homePlace) : toast(t('long_press_save'), 'info')}
                         onLongPress={() => pickup ? saveHomeWork('home', pickup) : null}>
                         <View style={s.placeIconCircle}><Ionicons name="home" size={18} color={YELLOW} /></View>
                         <View style={{ flex: 1 }}>
@@ -3426,7 +3442,7 @@ function AppInner({ onBootDone }) {
                       </TouchableOpacity>
                       <View style={s.placeSep} />
                       <TouchableOpacity style={s.placeRow}
-                        onPress={() => workPlace ? pickDest(workPlace) : Alert.alert(t('work_addr'), t('long_press_save'))}
+                        onPress={() => workPlace ? pickDest(workPlace) : toast(t('long_press_save'), 'info')}
                         onLongPress={() => pickup ? saveHomeWork('work', pickup) : null}>
                         <View style={s.placeIconCircle}><Ionicons name="briefcase" size={18} color={YELLOW} /></View>
                         <View style={{ flex: 1 }}>
@@ -3463,7 +3479,7 @@ function AppInner({ onBootDone }) {
                         <View key={i}>
                           <TouchableOpacity style={s.placeRow} activeOpacity={0.7}
                             onPress={() => pickDest(p)}
-                            onLongPress={() => Alert.alert(t('add_favorite_q'), p.address, [{ text: t('yes'), onPress: () => addFavorite(p) }, { text: t('no'), style: 'cancel' }])}>
+                            onLongPress={() => showConfirm({ title: t('add_favorite_q'), message: p.address, confirmText: t('yes'), cancelText: t('no'), onConfirm: () => addFavorite(p) })}>
                             <View style={s.placeIconCircle}><Ionicons name="time" size={18} color={GRAY1} /></View>
                             <View style={{ flex: 1 }}>
                               <Text style={s.placeName} numberOfLines={1}>{p.address}</Text>
@@ -3769,7 +3785,9 @@ function AppInner({ onBootDone }) {
             ListEmptyComponent={
               <View style={s.emptyState}>
                 <Text style={{ fontSize: 48 }}>🚕</Text>
-                <Text style={{ color: GRAY1, fontSize: 15, marginTop: 12 }}>{t('no_trips_yet')}</Text>
+                <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700', marginTop: 12 }}>{t('no_trips_yet')}</Text>
+                <Text style={{ color: GRAY1, fontSize: 14, marginTop: 6, textAlign: 'center', lineHeight: 20, paddingHorizontal: 24 }}>{t('no_trips_sub')}</Text>
+                <Btn kind="primary" title={t('order_now')} icon="car" onPress={() => setTab('order')} style={{ marginTop: 20, paddingHorizontal: 28 }} />
               </View>
             }
             renderItem={({ item: row }) => {
@@ -4318,7 +4336,7 @@ function AppInner({ onBootDone }) {
                   const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + schedDay, schedHour, schedMin, 0);
                   // Backend talabi (config SCHEDULE_MIN_MIN=15): kamida 15 daqiqa keyinga
                   if (d.getTime() - now.getTime() < 15 * 60000) {
-                    Alert.alert(t('time_too_close'), t('time_too_close_msg'));
+                    toast(t('time_too_close_msg'), 'error');
                     return;
                   }
                   setSchedAt(d);
@@ -4380,7 +4398,11 @@ function AppInner({ onBootDone }) {
               {!favAddMode ? (
                 <>
                   {favorites.length === 0 && (
-                    <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginVertical: 20 }}>{t('none_yet')}</Text>
+                    <View style={{ alignItems: 'center', marginVertical: 22, paddingHorizontal: 20 }}>
+                      <Ionicons name="heart-outline" size={40} color={GRAY2} />
+                      <Text style={{ color: WHITE, fontSize: 15, fontWeight: '700', marginTop: 10 }}>{t('no_fav_yet')}</Text>
+                      <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginTop: 6, lineHeight: 19 }}>{t('no_fav_sub')}</Text>
+                    </View>
                   )}
                   {favorites.map((f, i) => (
                     <View key={f.id ?? i}>
@@ -4830,6 +4852,88 @@ const RED = '#FF453A';
 const WHITE = '#FFFFFF';
 const GRAY1 = '#8E8E93';
 const GRAY2 = '#48484A';
+
+// ============================================================
+//  UI-B3: BREND XABAR TIZIMI — TOAST + CONFIRM/INFO MODAL
+//  Tizim Alert.alert'lari o'rniga yagona brend ko'rinishi. Modul darajasidagi
+//  bus'lar — ilovaning istalgan joyidan (komponent ichi yoki tashqarisi) chaqirsa
+//  bo'ladi. <BrandToast/> va <BrandModal/> App root'da bir marta ulanadi.
+//  Matnlar L lug'atida (uz/ru) — alohida strings.js YO'Q.
+// ============================================================
+const ToastBus = { fn: null, show(msg, kind) { this.fn && this.fn(msg, kind); } };
+function toast(msg, kind = 'info') { ToastBus.show(msg, kind); } // kind: 'info'|'success'|'error'
+const ModalBus = { fn: null, show(opts) { this.fn && this.fn(opts); } };
+// opts: { title, message, confirmText, cancelText, onConfirm, onCancel, danger }
+function showConfirm(opts) { ModalBus.show(opts); }
+
+// Qisqa bildirishnoma (2.5s) — pastdan suzib chiqadi, o'zi yo'qoladi.
+function BrandToast() {
+  const insets = useSafeAreaInsets();
+  const [state, setState] = useState(null); // { msg, kind }
+  const anim = useRef(new Animated.Value(0)).current;
+  const hideTimer = useRef(null);
+  useEffect(() => {
+    ToastBus.fn = (msg, kind = 'info') => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      setState({ msg: String(msg == null ? '' : msg), kind });
+      anim.setValue(0);
+      Animated.timing(anim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+      hideTimer.current = setTimeout(() => {
+        Animated.timing(anim, { toValue: 0, duration: 200, useNativeDriver: true })
+          .start(() => setState(null));
+      }, 2500);
+    };
+    return () => { ToastBus.fn = null; if (hideTimer.current) clearTimeout(hideTimer.current); };
+  }, []);
+  if (!state) return null;
+  const edge = state.kind === 'success' ? GREEN : state.kind === 'error' ? RED : YELLOW;
+  const ic = state.kind === 'success' ? 'checkmark-circle' : state.kind === 'error' ? 'alert-circle' : 'information-circle';
+  return (
+    <Animated.View pointerEvents="none" style={{
+      position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 84, zIndex: 99999,
+      opacity: anim,
+      transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+    }}>
+      <View style={{
+        backgroundColor: '#1E1E1E', borderRadius: 14, borderLeftWidth: 4, borderLeftColor: edge,
+        paddingVertical: 13, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center',
+        shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8,
+      }}>
+        <Ionicons name={ic} size={20} color={edge} style={{ marginRight: 10 }} />
+        <Text style={[{ color: '#FFFFFF', fontSize: 14.5, fontWeight: '700', flex: 1 }, mfont('700')]}>{state.msg}</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+// Tasdiq / ma'lumot modali — Btn tugmalar, orqafon bosilsa yopiladi.
+function BrandModal() {
+  const [modal, setModal] = useState(null);
+  useEffect(() => { ModalBus.fn = setModal; return () => { ModalBus.fn = null; }; }, []);
+  const cur = modal;
+  const doCancel = () => { setModal(null); cur && cur.onCancel && cur.onCancel(); };
+  const doConfirm = () => { setModal(null); cur && cur.onConfirm && cur.onConfirm(); };
+  return (
+    <Modal visible={!!modal} transparent animationType="fade" onRequestClose={doCancel}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <TouchableOpacity activeOpacity={1} onPress={doCancel}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }} />
+        {cur ? (
+          <View style={{ width: '100%', maxWidth: 420, backgroundColor: '#15171c', borderRadius: 16, borderWidth: 1, borderColor: '#262A31', padding: 22 }}>
+            {cur.title ? <Text style={[{ color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginBottom: cur.message ? 8 : 18 }, mfont('800')]}>{cur.title}</Text> : null}
+            {cur.message ? <Text style={[{ color: '#8A8F98', fontSize: 15, lineHeight: 21, marginBottom: 20 }, mfont('600')]}>{cur.message}</Text> : null}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {cur.cancelText ? (
+                <Btn kind="ghost" title={cur.cancelText} onPress={doCancel} style={{ flex: 1, borderWidth: 1.5, borderColor: '#262A31' }} />
+              ) : null}
+              <Btn kind={cur.danger ? 'danger' : 'primary'} title={cur.confirmText || t('ready')} onPress={doConfirm} style={{ flex: 1 }} />
+            </View>
+          </View>
+        ) : null}
+      </View>
+    </Modal>
+  );
+}
 
 // X4: safar chati — soat (HH:MM) formatlash. ts ixtiyoriy; bo'lmasa kelgan vaqt.
 function fmtClock(ms) {

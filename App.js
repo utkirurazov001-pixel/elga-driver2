@@ -195,7 +195,7 @@ const L = {
     offline: 'Oflayn',
     go_online: "ONLAYN BO'LISH",
     go_offline: "Oflayn bo'lish",
-    online_fail: "Onlayn chiqib bo'lmadi",
+    online_fail: "Onlayn chiqib bo'lmadi. Internet va joylashuvni tekshiring.",
     syncing: 'Sinxronlanmoqda…',
     no_internet: "Internet yo'q. Qayta ulanish kutilmoqda…",
     gps_stale: "GPS signal yo'q — joylashuv yangilanmayapti",
@@ -283,7 +283,7 @@ const L = {
     amount_ph: 'Masalan: 50000',
     pay_click: "Click orqali to'lash",
     min_amount: "Eng kam 5 000 so'm kiriting",
-    topup_fail: "To'ldirish imkoni yo'q",
+    topup_fail: "To'ldirish imkoni yo'q. Keyinroq urinib ko'ring.",
     today_trips: 'Bugungi safarlar',
     week_trips: 'Haftalik safarlar',
     accept_rate: 'Qabul foizi',
@@ -296,6 +296,7 @@ const L = {
     continue_btn: 'DAVOM ETISH',
     completed_trips: 'Yakunlangan safarlar',
     no_trips: "Hozircha safarlar yo'q",
+    no_trips_sub: "Onlayn bo'ling — buyurtmalarni qabul qilib boshlang, safarlar shu yerda ko'rinadi.",
     today: 'Bugun',
     yesterday: 'Kecha',
     cancelled_short: 'Bekor',
@@ -319,7 +320,7 @@ const L = {
     baggage: '🧳 Bagaj / katta yuk',
     car_saved: "Avtomobil ma'lumotlari yangilandi",
     card_saved: "Karta ma'lumotlari yangilandi",
-    save_fail: "Saqlab bo'lmadi",
+    save_fail: "Saqlab bo'lmadi. Internetni tekshiring.",
     card_hint: "Keshbek hisobiga o'tkazish va bonus olish uchun karta qo'shing",
     cash_always: "Naqd pul to'lovi har doim mavjud",
     call_operator: "Operator bilan bog'lanish",
@@ -348,14 +349,14 @@ const L = {
     clear_msg: "Kesh ma'lumotlari tozalanadi. Davom etasizmi?",
     clear_do: 'Tozalash',
     cache_cleared: 'Kesh tozalandi',
-    clear_fail: 'Tozalash amalga oshmadi',
+    clear_fail: "Tozalash amalga oshmadi. Qaytadan urinib ko'ring.",
     language: 'TIL',
     order_cancelled_msg: 'Buyurtma bekor qilindi',
     offline_mode: 'Oflayn rejim',
     offline_saved: "Internet yo'q. Amal saqlandi — internet qaytganda avtomatik yuboriladi.",
     no_phone: "Telefon yo'q",
     no_phone_msg: 'Mijoz telefoni mavjud emas',
-    call_fail: "Qo'ng'iroq ochilmadi",
+    call_fail: "Qo'ng'iroq ochilmadi. Telefon ilovasini tekshiring.",
   },
   ru: {
     error: 'Ошибка',
@@ -421,7 +422,7 @@ const L = {
     offline: 'Офлайн',
     go_online: 'ВЫЙТИ НА ЛИНИЮ',
     go_offline: 'Уйти с линии',
-    online_fail: 'Не удалось выйти на линию',
+    online_fail: 'Не удалось выйти на линию. Проверьте интернет и геолокацию.',
     syncing: 'Синхронизация…',
     no_internet: 'Нет интернета. Ожидание переподключения…',
     gps_stale: 'Нет сигнала GPS — местоположение не обновляется',
@@ -509,7 +510,7 @@ const L = {
     amount_ph: 'Например: 50000',
     pay_click: 'Оплатить через Click',
     min_amount: 'Минимум 5 000 сум',
-    topup_fail: 'Пополнение недоступно',
+    topup_fail: 'Пополнение недоступно. Попробуйте позже.',
     today_trips: 'Поездок сегодня',
     week_trips: 'Поездок за неделю',
     accept_rate: 'Процент принятия',
@@ -522,6 +523,7 @@ const L = {
     continue_btn: 'ПРОДОЛЖИТЬ',
     completed_trips: 'Завершённые поездки',
     no_trips: 'Пока нет поездок',
+    no_trips_sub: 'Выйдите онлайн — начните принимать заказы, поездки появятся здесь.',
     today: 'Сегодня',
     yesterday: 'Вчера',
     cancelled_short: 'Отмена',
@@ -545,7 +547,7 @@ const L = {
     baggage: '🧳 Багаж / крупный груз',
     car_saved: 'Данные автомобиля обновлены',
     card_saved: 'Данные карты обновлены',
-    save_fail: 'Не удалось сохранить',
+    save_fail: 'Не удалось сохранить. Проверьте интернет.',
     card_hint: 'Добавьте карту для кешбэка и бонусов',
     cash_always: 'Оплата наличными доступна всегда',
     call_operator: 'Связаться с оператором',
@@ -574,14 +576,14 @@ const L = {
     clear_msg: 'Кеш будет очищен. Продолжить?',
     clear_do: 'Очистить',
     cache_cleared: 'Кеш очищен',
-    clear_fail: 'Не удалось очистить',
+    clear_fail: 'Не удалось очистить. Попробуйте снова.',
     language: 'ЯЗЫК',
     order_cancelled_msg: 'Заказ отменён',
     offline_mode: 'Офлайн-режим',
     offline_saved: 'Нет интернета. Действие сохранено — отправится автоматически при подключении.',
     no_phone: 'Нет телефона',
     no_phone_msg: 'Телефон клиента недоступен',
-    call_fail: 'Не удалось позвонить',
+    call_fail: 'Не удалось позвонить. Проверьте приложение телефона.',
   },
 };
 let LANG = 'uz';
@@ -620,6 +622,88 @@ const RED = '#FF453A';
 const WHITE = '#FFFFFF';
 const GRAY1 = '#8E8E93';
 const GRAY2 = '#48484A';
+
+// ============================================================
+//  UI-B3: BREND XABAR TIZIMI — TOAST + CONFIRM/INFO MODAL
+//  Tizim Alert.alert'lari o'rniga yagona brend ko'rinishi. Modul darajasidagi
+//  bus'lar — ilovaning istalgan joyidan (komponent ichi yoki tashqarisi) chaqirsa
+//  bo'ladi. <BrandToast/> va <BrandModal/> App root'da bir marta ulanadi.
+//  Matnlar L lug'atida (uz/ru) — alohida strings.js YO'Q.
+// ============================================================
+const ToastBus = { fn: null, show(msg, kind) { this.fn && this.fn(msg, kind); } };
+function toast(msg, kind = 'info') { ToastBus.show(msg, kind); } // kind: 'info'|'success'|'error'
+const ModalBus = { fn: null, show(opts) { this.fn && this.fn(opts); } };
+// opts: { title, message, confirmText, cancelText, onConfirm, onCancel, danger }
+function showConfirm(opts) { ModalBus.show(opts); }
+
+// Qisqa bildirishnoma (2.5s) — pastdan suzib chiqadi, o'zi yo'qoladi.
+function BrandToast() {
+  const insets = useSafeAreaInsets();
+  const [state, setState] = useState(null); // { msg, kind }
+  const anim = useRef(new Animated.Value(0)).current;
+  const hideTimer = useRef(null);
+  useEffect(() => {
+    ToastBus.fn = (msg, kind = 'info') => {
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+      setState({ msg: String(msg == null ? '' : msg), kind });
+      anim.setValue(0);
+      Animated.timing(anim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+      hideTimer.current = setTimeout(() => {
+        Animated.timing(anim, { toValue: 0, duration: 200, useNativeDriver: true })
+          .start(() => setState(null));
+      }, 2500);
+    };
+    return () => { ToastBus.fn = null; if (hideTimer.current) clearTimeout(hideTimer.current); };
+  }, []);
+  if (!state) return null;
+  const edge = state.kind === 'success' ? GREEN : state.kind === 'error' ? RED : YELLOW;
+  const ic = state.kind === 'success' ? 'checkmark-circle' : state.kind === 'error' ? 'alert-circle' : 'information-circle';
+  return (
+    <Animated.View pointerEvents="none" style={{
+      position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 84, zIndex: 99999,
+      opacity: anim,
+      transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+    }}>
+      <View style={{
+        backgroundColor: '#1E1E1E', borderRadius: 14, borderLeftWidth: 4, borderLeftColor: edge,
+        paddingVertical: 13, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center',
+        shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8,
+      }}>
+        <Ionicons name={ic} size={20} color={edge} style={{ marginRight: 10 }} />
+        <Text style={[{ color: '#FFFFFF', fontSize: 14.5, fontWeight: '700', flex: 1 }, mfont('700')]}>{state.msg}</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
+// Tasdiq / ma'lumot modali — Btn tugmalar, orqafon bosilsa yopiladi.
+function BrandModal() {
+  const [modal, setModal] = useState(null);
+  useEffect(() => { ModalBus.fn = setModal; return () => { ModalBus.fn = null; }; }, []);
+  const cur = modal;
+  const doCancel = () => { setModal(null); cur && cur.onCancel && cur.onCancel(); };
+  const doConfirm = () => { setModal(null); cur && cur.onConfirm && cur.onConfirm(); };
+  return (
+    <Modal visible={!!modal} transparent animationType="fade" onRequestClose={doCancel}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <TouchableOpacity activeOpacity={1} onPress={doCancel}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)' }} />
+        {cur ? (
+          <View style={{ width: '100%', maxWidth: 420, backgroundColor: '#15171c', borderRadius: 16, borderWidth: 1, borderColor: '#262A31', padding: 22 }}>
+            {cur.title ? <Text style={[{ color: '#FFFFFF', fontSize: 18, fontWeight: '800', marginBottom: cur.message ? 8 : 18 }, mfont('800')]}>{cur.title}</Text> : null}
+            {cur.message ? <Text style={[{ color: '#8A8F98', fontSize: 15, lineHeight: 21, marginBottom: 20 }, mfont('600')]}>{cur.message}</Text> : null}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              {cur.cancelText ? (
+                <Btn kind="ghost" title={cur.cancelText} onPress={doCancel} style={{ flex: 1, borderWidth: 1.5, borderColor: '#262A31' }} />
+              ) : null}
+              <Btn kind={cur.danger ? 'danger' : 'primary'} title={cur.confirmText || t('ready')} onPress={doConfirm} style={{ flex: 1 }} />
+            </View>
+          </View>
+        ) : null}
+      </View>
+    </Modal>
+  );
+}
 
 // X4: safar chati — soat (HH:MM) formatlash. Xabar obyektidagi ts ixtiyoriy;
 // bo'lmasa render paytida kelgan vaqt (Date.now()) ishlatiladi.
@@ -1112,6 +1196,9 @@ export default function App() {
         <AppInner onBootDone={() => setBootDone(true)} />
       </ErrorBoundary>
       {bootDone && !splashDone && <BrandSplash onDone={() => setSplashDone(true)} />}
+      {/* UI-B3: brend xabar tizimi — butun ilova ustida, bir marta */}
+      <BrandToast />
+      <BrandModal />
     </SafeAreaProvider>
   );
 }
@@ -2322,36 +2409,38 @@ function AppInner({ onBootDone }) {
 
   // ---- Mustaqil taksometr ----
   function startSoloMeter() {
-    if (!myLoc) { Alert.alert('GPS', t('wait_gps')); return; }
+    if (!myLoc) { toast(t('wait_gps'), 'error'); return; }
     setSoloMeter({ startMs: Date.now(), km: 0, prevLoc: myLoc });
-    if (!online) Alert.alert(t('note'), t('solo_need_online'));
+    if (!online) toast(t('solo_need_online'), 'info');
   }
   function stopSoloMeter() {
     const m = soloMeter;
     if (!m) return;
     const mins = Math.round((Date.now() - m.startMs) / 60000);
     const fare = Math.round((5000 + (m.km || 0) * 2800) / 500) * 500;
-    Alert.alert(
-      '🚕 ' + t('trip_done'),
-      `${t('distance')}: ${(m.km || 0).toFixed(2)} ${t('km')}\n${t('time')}: ${mins} ${t('min_full')}\n${t('price')}: ${fare.toLocaleString('ru-RU')} ${t('som')}`,
-      [{ text: t('close'), onPress: () => setSoloMeter(null) }]
-    );
+    showConfirm({
+      title: '🚕 ' + t('trip_done'),
+      message: `${t('distance')}: ${(m.km || 0).toFixed(2)} ${t('km')}\n${t('time')}: ${mins} ${t('min_full')}\n${t('price')}: ${fare.toLocaleString('ru-RU')} ${t('som')}`,
+      confirmText: t('close'),
+      onConfirm: () => setSoloMeter(null),
+      onCancel: () => setSoloMeter(null),
+    });
   }
 
   // ---- LOGIN ----
   async function sendCode() {
-    if (phone.replace(/\D/g, '').length < 9) { Alert.alert(t('error'), t('enter_valid_phone')); return; }
+    if (phone.replace(/\D/g, '').length < 9) { toast(t('enter_valid_phone'), 'error'); return; }
     setLoading(true);
     try {
       await api('/api/auth/send-code', 'POST', { phone });
       setStep('code');
-      Alert.alert(t('sent'), t('sms_sent'));
-    } catch (e) { Alert.alert(t('error'), e.message); }
+      toast(t('sms_sent'), 'success');
+    } catch (e) { toast(e.message || t('error'), 'error'); }
     setLoading(false);
   }
 
   async function verifyCode() {
-    if (code.length < 4) { Alert.alert(t('error'), t('enter_code')); return; }
+    if (code.length < 4) { toast(t('enter_code'), 'error'); return; }
     setLoading(true);
     try {
       const r = await api('/api/auth/verify', 'POST', { phone, code });
@@ -2359,15 +2448,15 @@ function AppInner({ onBootDone }) {
     } catch (e) {
       if (e.data?.new_user && e.data?.reg_token) {
         setRegToken(e.data.reg_token); setStep('register');
-      } else { Alert.alert(t('error'), e.message); }
+      } else { toast(e.message || t('error'), 'error'); }
     }
     setLoading(false);
   }
 
   async function register() {
-    if (name.trim().length < 2) { Alert.alert(t('error'), t('enter_name')); return; }
-    if (carModel.trim().length < 2) { Alert.alert(t('error'), t('enter_car')); return; }
-    if (carNumber.trim().length < 3) { Alert.alert(t('error'), t('enter_plate')); return; }
+    if (name.trim().length < 2) { toast(t('enter_name'), 'error'); return; }
+    if (carModel.trim().length < 2) { toast(t('enter_car'), 'error'); return; }
+    if (carNumber.trim().length < 3) { toast(t('enter_plate'), 'error'); return; }
     setLoading(true);
     try {
       const r = await api('/api/auth/verify', 'POST', {
@@ -2376,8 +2465,8 @@ function AppInner({ onBootDone }) {
         offer_accepted: true, reg_token: regToken,
       });
       await saveAuth(r);
-      Alert.alert(t('congrats'), t('registered_msg'));
-    } catch (e) { Alert.alert(t('error'), e.message); }
+      showConfirm({ title: t('congrats'), message: t('registered_msg'), confirmText: t('ready') });
+    } catch (e) { toast(e.message || t('error'), 'error'); }
     setLoading(false);
   }
 
@@ -2422,7 +2511,7 @@ function AppInner({ onBootDone }) {
 
   // ---- PIN ----
   async function savePin() {
-    if (pinInput.length !== 4) { Alert.alert(t('error'), t('pin_4digits')); return; }
+    if (pinInput.length !== 4) { toast(t('pin_4digits'), 'error'); return; }
     await AsyncStorage.setItem('pin', pinInput);
     setStoredPin(pinInput);
     setPinInput('');
@@ -2434,7 +2523,7 @@ function AppInner({ onBootDone }) {
       setPinStep(null);
       setPinInput('');
     } else {
-      Alert.alert(t('error'), t('pin_wrong'));
+      toast(t('pin_wrong'), 'error');
       setPinInput('');
     }
   }
@@ -2494,7 +2583,7 @@ function AppInner({ onBootDone }) {
         hidePersistentNotif();
       }
     } catch (e) {
-      Alert.alert(t('online_fail'), e.message);
+      toast(e.message || t('online_fail'), 'error');
     }
     setLoading(false);
   }
@@ -2636,12 +2725,12 @@ function AppInner({ onBootDone }) {
         } else {
           setOrder((p) => (p ? { ...p, status: statusAfter(action) } : p));
         }
-        Alert.alert(t('offline_mode'), t('offline_saved'));
+        toast(t('offline_saved'), 'info');
       } else if (e && e.status === 409) {
         // Server: holat allaqachon o'zgargan (amal qo'llangan) — joriy holatni tiklaymiz
         resumeActiveOrder();
       } else {
-        Alert.alert(t('error'), e.message);
+        toast(e.message || t('error'), 'error');
       }
     }
     setLoading(false);
@@ -2702,10 +2791,10 @@ function AppInner({ onBootDone }) {
 
   // ---- Mijozga qo'ng'iroq qilish ----
   function callCustomer(phone) {
-    if (!phone) return Alert.alert(t('no_phone'), t('no_phone_msg'));
+    if (!phone) return toast(t('no_phone_msg'), 'error');
     const d = String(phone).replace(/\D/g, '');
     const tel = d.startsWith('998') ? '+' + d : (d.length === 9 ? '+998' + d : '+' + d);
-    Linking.openURL('tel:' + tel).catch(() => Alert.alert(t('error'), t('call_fail')));
+    Linking.openURL('tel:' + tel).catch(() => toast(t('call_fail'), 'error'));
   }
 
   // ---- Navigatsiya (tashqi xarita ilovasi) ----
@@ -3326,14 +3415,14 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
   // accepted'da backend buyurtmani boshqa haydovchiga qaytaradi (requeue),
   // arrived'da bekor qilinadi; ikkala holatda ham mijozga xabar boradi.
   function confirmCancelTrip() {
-    Alert.alert(
-      t('cancel_trip'),
-      t('cancel_trip_msg'),
-      [
-        { text: t('no'), style: 'cancel' },
-        { text: t('yes_cancel'), style: 'destructive', onPress: () => onAction('cancel') },
-      ]
-    );
+    showConfirm({
+      title: t('cancel_trip'),
+      message: t('cancel_trip_msg'),
+      confirmText: t('yes_cancel'),
+      cancelText: t('no'),
+      danger: true,
+      onConfirm: () => onAction('cancel'),
+    });
   }
   const st = order.status;
   const isNew = st === 'searching' || st === 'assigned';
@@ -3679,7 +3768,7 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
 
   async function doTopup() {
     const amount = parseInt(String(topupAmount).replace(/\D/g, ''), 10);
-    if (!amount || amount < 5000) { Alert.alert(t('error'), t('min_amount')); return; }
+    if (!amount || amount < 5000) { toast(t('min_amount'), 'error'); return; }
     setTopupLoading(true);
     try {
       const r = await api('/api/me/topup-create', 'POST', { amount }, token);
@@ -3687,7 +3776,7 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
       setTopupAmount('');
       await Linking.openURL(r.url);
     } catch (e) {
-      Alert.alert(t('error'), e.message || t('topup_fail'));
+      toast(e.message || t('topup_fail'), 'error');
     }
     setTopupLoading(false);
   }
@@ -3713,7 +3802,7 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
             </View>
             {/* UI-B1: yagona Btn tizimi — primary (ekrandagi yagona primary) */}
             <Btn kind="primary" icon="arrow-up-circle" title={t('withdraw')}
-              onPress={() => Alert.alert(t('withdraw_title'), t('withdraw_soon'))}
+              onPress={() => showConfirm({ title: t('withdraw_title'), message: t('withdraw_soon'), confirmText: t('ready') })}
               style={{ marginTop: 16 }} />
           </View>
 
@@ -3911,9 +4000,11 @@ const DriverHistory = React.memo(function DriverHistory({ trips, insets, lang })
       {trips === null ? (
         <ActivityIndicator color={YELLOW} style={{ marginTop: 30 }} />
       ) : trips.length === 0 ? (
-        <View style={{ alignItems: 'center', marginTop: 60 }}>
+        <View style={{ alignItems: 'center', marginTop: 60, paddingHorizontal: 24 }}>
           <Ionicons name="time-outline" size={48} color={GRAY2} />
-          <Text style={{ color: GRAY1, fontSize: 15, marginTop: 12 }}>{t('no_trips')}</Text>
+          <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700', marginTop: 12 }}>{t('no_trips')}</Text>
+          <Text style={{ color: GRAY1, fontSize: 14, marginTop: 6, textAlign: 'center', lineHeight: 20 }}>{t('no_trips_sub')}</Text>
+          <Btn kind="primary" title={t('go_online')} icon="flash" onPress={() => setTab('home')} style={{ marginTop: 20, paddingHorizontal: 28 }} />
         </View>
       ) : Object.keys(groups).map((day) => (
         <View key={day} style={{ marginTop: 18 }}>
@@ -4030,10 +4121,10 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
     setSavingCar(true);
     try {
       await api('/api/me/profile', 'PATCH', { car_model: editCar, car_number: editPlate, car_color: editColor, has_ac: editAc, has_baggage: editBaggage }, token);
-      Alert.alert(t('saved'), t('car_saved'));
+      toast(t('car_saved'), 'success');
       setCarModal(false);
     } catch (e) {
-      Alert.alert(t('error'), e.message || t('save_fail'));
+      toast(e.message || t('save_fail'), 'error');
     } finally {
       setSavingCar(false);
     }
@@ -4043,10 +4134,10 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
     setSavingCard(true);
     try {
       await api('/api/me/profile', 'PATCH', { bank_card: editCard.replace(/\s/g, '') }, token);
-      Alert.alert(t('saved'), t('card_saved'));
+      toast(t('card_saved'), 'success');
       setCardModal(false);
     } catch (e) {
-      Alert.alert(t('error'), e.message || t('save_fail'));
+      toast(e.message || t('save_fail'), 'error');
     } finally {
       setSavingCard(false);
     }
@@ -4390,27 +4481,25 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
               style={{ borderWidth: 1, borderColor: RED, borderRadius: 14, paddingVertical: 14, alignItems: 'center' }}
               activeOpacity={0.8}
               onPress={() => {
-                Alert.alert(
-                  t('clear_data'),
-                  t('clear_msg'),
-                  [
-                    { text: t('cancel_btn'), style: 'cancel' },
-                    {
-                      text: t('clear_do'), style: 'destructive', onPress: async () => {
-                        try {
-                          const savedToken = await AsyncStorage.getItem('token');
-                          const savedUser = await AsyncStorage.getItem('user');
-                          await AsyncStorage.clear();
-                          if (savedToken) await AsyncStorage.setItem('token', savedToken);
-                          if (savedUser) await AsyncStorage.setItem('user', savedUser);
-                          Alert.alert(t('ready'), t('cache_cleared'));
-                        } catch (e) {
-                          Alert.alert(t('error'), t('clear_fail'));
-                        }
-                      }
-                    },
-                  ]
-                );
+                showConfirm({
+                  title: t('clear_data'),
+                  message: t('clear_msg'),
+                  confirmText: t('clear_do'),
+                  cancelText: t('cancel_btn'),
+                  danger: true,
+                  onConfirm: async () => {
+                    try {
+                      const savedToken = await AsyncStorage.getItem('token');
+                      const savedUser = await AsyncStorage.getItem('user');
+                      await AsyncStorage.clear();
+                      if (savedToken) await AsyncStorage.setItem('token', savedToken);
+                      if (savedUser) await AsyncStorage.setItem('user', savedUser);
+                      toast(t('cache_cleared'), 'success');
+                    } catch (e) {
+                      toast(t('clear_fail'), 'error');
+                    }
+                  },
+                });
               }}>
               <Text style={{ color: RED, fontSize: 15, fontWeight: '600' }}>{t('clear_data')}</Text>
             </TouchableOpacity>
