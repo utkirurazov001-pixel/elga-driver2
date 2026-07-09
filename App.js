@@ -21,7 +21,9 @@ import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 // Ovozli buyurtma base64'ini vaqtinchalik faylga yozish uchun (legacy API —
 // base64 yozishda eng ishonchli yo'l). expo-audio file URI'ni o'ynaydi.
 import * as FileSystem from 'expo-file-system/legacy';
-// expo-updates: Expo Go muhitida ishlatilmaydi (OTA faqat standalone APK uchun)
+// expo-updates: Expo Go muhitida ishlatilmaydi (OTA faqat standalone APK uchun).
+// isEnabled bilan himoyalanadi — Expo Go'da import xavfsiz (isEnabled=false).
+import * as Updates from 'expo-updates';
 import { WebView } from 'react-native-webview';
 import { io } from 'socket.io-client';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1626,6 +1628,7 @@ function AppInner({ onBootDone }) {
   const meIdRef = useRef(null); // chat echo guard — o'z sender_id'imni tanish uchun (stale closure)
   const watchRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
+  const lastOtaAtRef = useRef(0); // OTA tekshiruvi debounce (fon'dan qaytishda)
   // meIdRef'ni user bilan sinxron saqlaymiz (socket handler stale closure'da joriy id kerak)
   useEffect(() => { meIdRef.current = user?.id ?? null; }, [user]);
   const mapRef = useRef(null);
@@ -1778,6 +1781,25 @@ function AppInner({ onBootDone }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.id, order?.status]);
 
+  // ---- OTA: fon'dan qaytganda yangilanishni tekshiramiz va DARROV qo'llaymiz ----
+  // Sabab: ON_LOAD tekshiruvi faqat sovuq ishga tushishda ishlaydi; sekin internetда
+  // 3s ichida ulgurmasa yangilanish keyingi ochilishga qolib, "OTA ishlamayapti"
+  // taassuroti berardi. Endi har fon-qaytishда (debounce 60s) tekshiramiz; yangilanish
+  // bo'lsa yuklab, FAOL SAFAR bo'lmaganda reload qilamiz (safar o'rtasida buzmaydi).
+  async function maybeApplyOTA() {
+    if (__DEV__ || !Updates.isEnabled) return;
+    const now = Date.now();
+    if (now - lastOtaAtRef.current < 60000) return;
+    lastOtaAtRef.current = now;
+    try {
+      const res = await Updates.checkForUpdateAsync();
+      if (res && res.isAvailable) {
+        await Updates.fetchUpdateAsync();
+        if (!isOrderActive()) await Updates.reloadAsync(); // faqat bo'sh paytda
+      }
+    } catch (e) { /* Expo Go yoki tarmoq xatosi — jim */ }
+  }
+
   // ---- AppState + NetInfo: foreground'ga qaytganda yoki internet qaytganda
   // socket/buyurtma/navbatni sinxronlash (#40). NetInfo ixtiyoriy — bo'lmasa
   // reachability heartbeat baribir holatni tiklaydi. ----
@@ -1792,6 +1814,7 @@ function AppInner({ onBootDone }) {
         resumeActiveOrder();
         OfflineQueue.flush(token);
         if (online && !watchRef.current) startTracking();
+        maybeApplyOTA(); // OTA: fon'dan qaytganda yangilanishni tekshir/qo'lla (faol safarsiz)
         // T-08: fon'dan qaytganda faol safarda bo'lsa ekranни qayta uyg'oq qilamiz
         // (keep-awake tag ba'zi qurilmalarда fon'ga o'tganда bo'shashi mumkin).
         // M-03: onlayn kutish rejimida ham xuddi shunday qayta yoqamiz.
