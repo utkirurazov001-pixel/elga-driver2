@@ -315,6 +315,10 @@ const L = {
     your_trips: 'Sayohatlaringiz',
     history: 'Tarix',
     no_trips_yet: "Hali safar yo'q",
+    no_trips_sub: 'Birinchi buyurtmangizni bering — safarlaringiz shu yerda ko\'rinadi.',
+    order_now: 'Buyurtma berish',
+    no_fav_yet: "Sevimli manzillar yo'q",
+    no_fav_sub: 'Tez-tez boradigan joylaringizni saqlang — keyin bir bosishda tanlaysiz.',
     completed_lbl: 'Yakunlangan',
     cancelled_lbl: 'Bekor qilingan',
     repeat: '↻ Takrorlash',
@@ -590,6 +594,10 @@ const L = {
     your_trips: 'Ваши поездки',
     history: 'История',
     no_trips_yet: 'Поездок пока нет',
+    no_trips_sub: 'Сделайте первый заказ — поездки появятся здесь.',
+    order_now: 'Заказать',
+    no_fav_yet: 'Нет избранных адресов',
+    no_fav_sub: 'Сохраните часто посещаемые места — потом выберете в одно нажатие.',
     completed_lbl: 'Завершена',
     cancelled_lbl: 'Отменена',
     repeat: '↻ Повторить',
@@ -3777,7 +3785,9 @@ function AppInner({ onBootDone }) {
             ListEmptyComponent={
               <View style={s.emptyState}>
                 <Text style={{ fontSize: 48 }}>🚕</Text>
-                <Text style={{ color: GRAY1, fontSize: 15, marginTop: 12 }}>{t('no_trips_yet')}</Text>
+                <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700', marginTop: 12 }}>{t('no_trips_yet')}</Text>
+                <Text style={{ color: GRAY1, fontSize: 14, marginTop: 6, textAlign: 'center', lineHeight: 20, paddingHorizontal: 24 }}>{t('no_trips_sub')}</Text>
+                <Btn kind="primary" title={t('order_now')} icon="car" onPress={() => setTab('order')} style={{ marginTop: 20, paddingHorizontal: 28 }} />
               </View>
             }
             renderItem={({ item: row }) => {
@@ -4388,7 +4398,11 @@ function AppInner({ onBootDone }) {
               {!favAddMode ? (
                 <>
                   {favorites.length === 0 && (
-                    <Text style={{ color: GRAY1, fontSize: 14, textAlign: 'center', marginVertical: 20 }}>{t('none_yet')}</Text>
+                    <View style={{ alignItems: 'center', marginVertical: 22, paddingHorizontal: 20 }}>
+                      <Ionicons name="heart-outline" size={40} color={GRAY2} />
+                      <Text style={{ color: WHITE, fontSize: 15, fontWeight: '700', marginTop: 10 }}>{t('no_fav_yet')}</Text>
+                      <Text style={{ color: GRAY1, fontSize: 13, textAlign: 'center', marginTop: 6, lineHeight: 19 }}>{t('no_fav_sub')}</Text>
+                    </View>
                   )}
                   {favorites.map((f, i) => (
                     <View key={f.id ?? i}>

@@ -296,6 +296,7 @@ const L = {
     continue_btn: 'DAVOM ETISH',
     completed_trips: 'Yakunlangan safarlar',
     no_trips: "Hozircha safarlar yo'q",
+    no_trips_sub: "Onlayn bo'ling — buyurtmalarni qabul qilib boshlang, safarlar shu yerda ko'rinadi.",
     today: 'Bugun',
     yesterday: 'Kecha',
     cancelled_short: 'Bekor',
@@ -522,6 +523,7 @@ const L = {
     continue_btn: 'ПРОДОЛЖИТЬ',
     completed_trips: 'Завершённые поездки',
     no_trips: 'Пока нет поездок',
+    no_trips_sub: 'Выйдите онлайн — начните принимать заказы, поездки появятся здесь.',
     today: 'Сегодня',
     yesterday: 'Вчера',
     cancelled_short: 'Отмена',
@@ -3998,9 +4000,11 @@ const DriverHistory = React.memo(function DriverHistory({ trips, insets, lang })
       {trips === null ? (
         <ActivityIndicator color={YELLOW} style={{ marginTop: 30 }} />
       ) : trips.length === 0 ? (
-        <View style={{ alignItems: 'center', marginTop: 60 }}>
+        <View style={{ alignItems: 'center', marginTop: 60, paddingHorizontal: 24 }}>
           <Ionicons name="time-outline" size={48} color={GRAY2} />
-          <Text style={{ color: GRAY1, fontSize: 15, marginTop: 12 }}>{t('no_trips')}</Text>
+          <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700', marginTop: 12 }}>{t('no_trips')}</Text>
+          <Text style={{ color: GRAY1, fontSize: 14, marginTop: 6, textAlign: 'center', lineHeight: 20 }}>{t('no_trips_sub')}</Text>
+          <Btn kind="primary" title={t('go_online')} icon="flash" onPress={() => setTab('home')} style={{ marginTop: 20, paddingHorizontal: 28 }} />
         </View>
       ) : Object.keys(groups).map((day) => (
         <View key={day} style={{ marginTop: 18 }}>
