@@ -1562,10 +1562,12 @@ function AppInner({ onBootDone }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapReady, driverLoc, pickup, dest, order?.id, order?.status]);
   const tokenRef = useRef(null);
+  const meIdRef = useRef(null); // chat echo guard — o'z sender_id'imni tanish uchun (stale closure)
   const nearbyTimer = useRef(null);
   const appStateRef = useRef(AppState.currentState);
 
   useEffect(() => { tokenRef.current = token; }, [token]);
+  useEffect(() => { meIdRef.current = user?.id ?? null; }, [user]); // chat echo guard uchun sinxron
 
   // ---- Boot ----
   useEffect(() => {
@@ -2022,8 +2024,12 @@ function AppInner({ onBootDone }) {
       });
     });
     s.on('chat_message', (msg) => {
-      // A2: server xabarni ikkala tomonga yuboradi — o'z xabarimiz echo'si
-      // takrorlanmasin (lokal nusxa sendTripChat'da allaqachon qo'shilgan)
+      // A2/echo-fix: server xabarni IKKALA xonaga (customer:{id}+driver:{id}) yuboradi.
+      // O'z xabarim qaytib takrorlanmasin. Ilgari faqat sender_role bo'yicha
+      // tekshirilardi — lekin bitta akkaunt (masalan roli 'driver') mijoz ilovasida
+      // ishlatilsa rol ilovaga mos kelmay, o'z xabari qaytib ko'rinardi. Endi ASOSIY
+      // mezon — sender_id: o'zimning ID'im bo'lsa e'tiborsiz qoldiramiz (rol — zaxira).
+      if (meIdRef.current != null && msg?.sender_id === meIdRef.current) return;
       if (msg?.sender_role === 'customer') return;
       // Server sender_role beradi, ilova role ishlatadi — moslaymiz
       setTripChat((prev) => [...prev, { role: msg.sender_role || 'driver', text: msg.text }]);

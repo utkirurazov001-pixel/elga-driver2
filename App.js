@@ -1606,8 +1606,11 @@ function AppInner({ onBootDone }) {
   const [gpsStale, setGpsStale] = useState(false);          // GPS 30s+ yangilanmadi ("arvoh"/signal yo'q)
 
   const socketRef = useRef(null);
+  const meIdRef = useRef(null); // chat echo guard — o'z sender_id'imni tanish uchun (stale closure)
   const watchRef = useRef(null);
   const appStateRef = useRef(AppState.currentState);
+  // meIdRef'ni user bilan sinxron saqlaymiz (socket handler stale closure'da joriy id kerak)
+  useEffect(() => { meIdRef.current = user?.id ?? null; }, [user]);
   const mapRef = useRef(null);
   // Tarmoq qatlami reflari
   const lastLocRef = useRef(null);   // oxirgi GPS — qayta ulanganda darrov yuboramiz
@@ -2084,8 +2087,12 @@ function AppInner({ onBootDone }) {
       return { ...p, ...o };
     }));
     s.on('chat_message', (msg) => {
-      // A2: server xabarni ikkala tomonga yuboradi — o'z xabarimiz echo'si
-      // takrorlanmasin (lokal nusxa sendChat'da allaqachon qo'shilgan)
+      // A2/echo-fix: server xabarni IKKALA xonaga (customer:{id}+driver:{id}) yuboradi.
+      // O'z xabarim qaytib takrorlanmasin. Ilgari faqat sender_role bo'yicha
+      // tekshirilardi — lekin bitta akkaunt (masalan roli 'driver') mijoz ilovasida
+      // ishlatilsa rol ilovaga mos kelmay, o'z xabari qaytib ko'rinardi. Endi ASOSIY
+      // mezon — sender_id: o'zimning ID'im bo'lsa e'tiborsiz qoldiramiz (rol — zaxira).
+      if (meIdRef.current != null && msg?.sender_id === meIdRef.current) return;
       if (msg?.sender_role === 'driver') return;
       setChatMessages((prev) => [...prev, msg]);
       // A2: chatModal o'rniga chatModalRef — handler stale closure'da chatModal
