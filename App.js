@@ -305,6 +305,8 @@ const L = {
     car_info: "Avtomobil ma'lumotlari",
     documents: 'Hujjatlar',
     verified: 'Tasdiqlangan',
+    verify_pending: 'Tekshirilmoqda',
+    verify_rejected: 'Rad etilgan',
     payment_card: "To'lov va karta",
     help_center: 'Yordam markazi',
     settings: 'Sozlamalar',
@@ -533,6 +535,8 @@ const L = {
     car_info: 'Данные автомобиля',
     documents: 'Документы',
     verified: 'Подтверждено',
+    verify_pending: 'На проверке',
+    verify_rejected: 'Отклонено',
     payment_card: 'Оплата и карта',
     help_center: 'Центр поддержки',
     settings: 'Настройки',
@@ -3190,7 +3194,7 @@ function AppInner({ onBootDone }) {
       ) : tab === 'earnings' ? (
         <EarningsScreen earnings={earnings} onRefresh={loadEarnings} insets={insets} token={token} />
       ) : tab === 'history' ? (
-        <DriverHistory trips={trips} insets={insets} lang={lang} />
+        <DriverHistory trips={trips} insets={insets} lang={lang} onGoOnline={() => setTab('home')} />
       ) : (
         <DriverProfile user={user} earnings={earnings} onLogout={logout} insets={insets} token={token} lang={lang} onSetLang={setLang} />
       )}
@@ -3421,11 +3425,14 @@ function WaitTimer({ arrivedAt }) {
 }
 
 // ---- Yangi buyurtma countdown (15s) ----
-function CountdownBar() {
+function CountdownBar({ duration = 30000 }) {
   const anim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    Animated.timing(anim, { toValue: 0, duration: 15000, useNativeDriver: false }).start();
-  }, []);
+    // audit-fix: TTL serverdan keladi (offer_ttl_ms). Statik 15s progress
+    // real 30s taklif vaqtiga mos kelmay, chiziq yarim yo'lda to'xtardi.
+    anim.setValue(1);
+    Animated.timing(anim, { toValue: 0, duration, useNativeDriver: false }).start();
+  }, [duration]);
   return (
     <View style={{ height: 4, backgroundColor: BORDER, borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
       <Animated.View style={{ height: 4, backgroundColor: YELLOW, borderRadius: 4, width: anim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }} />
@@ -3471,7 +3478,7 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
       {/* Yangi buyurtma: header bilan narx + countdown */}
       {isNew ? (
         <>
-          <CountdownBar />
+          <CountdownBar key={order.id} duration={Number(order.offer_ttl_ms) > 0 ? Number(order.offer_ttl_ms) : 30000} />
           <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '600', letterSpacing: 0.4, marginBottom: 8 }}>{t('new_order').toUpperCase()}</Text>
           {/* P6 (T-4): haydovchi qarori IKKI raqamga bog'liq — mijozgacha masofa/vaqt
               va narx. Avval masofa 13px kulrang edi (narx 28px) — endi teng katta,
@@ -3764,7 +3771,7 @@ function WeekChart({ days }) {
   if (!days || days.length === 0) return null;
   const values = days.map((d) => Number(d.earned || 0));
   const maxVal = Math.max(...values, 1);
-  const DAY_NAMES = ['Ya', 'Du', 'Se', 'Ch', 'Pa', 'Sh', 'Ya'];
+  const DAY_NAMES = ['Ya', 'Du', 'Se', 'Ch', 'Pa', 'Ju', 'Sh']; // audit-fix: 0=Yak..6=Shan (Juma qaytdi, Yakshanba ikki marta emas)
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', height: 100, marginTop: 8, marginBottom: 4 }}>
       {days.map((d, i) => {
@@ -4020,7 +4027,7 @@ function TripComplete({ trip, insets, onRate, onDone }) {
 // React.memo: ota komponent (AppInner) GPS/meter yangilanishlarida har 5 sek
 // qayta render bo'lganda ham, bu ekran faqat trips/insets o'zgarsa render bo'ladi.
 // R1: `lang` prop — til almashganda memo qayta render bo'lishi uchun (matnlar t() dan)
-const DriverHistory = React.memo(function DriverHistory({ trips, insets, lang }) {
+const DriverHistory = React.memo(function DriverHistory({ trips, insets, lang, onGoOnline }) {
   const top = (insets?.top || 0) + 16;
   const bottom = TABBAR_H + (insets?.bottom || 0) + 20;
   // Guruhlash faqat trips o'zgarganda hisoblanadi.
@@ -4046,7 +4053,7 @@ const DriverHistory = React.memo(function DriverHistory({ trips, insets, lang })
           <Ionicons name="time-outline" size={48} color={GRAY2} />
           <Text style={{ color: WHITE, fontSize: 16, fontWeight: '700', marginTop: 12 }}>{t('no_trips')}</Text>
           <Text style={{ color: GRAY1, fontSize: 14, marginTop: 6, textAlign: 'center', lineHeight: 20 }}>{t('no_trips_sub')}</Text>
-          <Btn kind="primary" title={t('go_online')} icon="flash" onPress={() => setTab('home')} style={{ marginTop: 20, paddingHorizontal: 28 }} />
+          <Btn kind="primary" title={t('go_online')} icon="flash" onPress={() => onGoOnline && onGoOnline()} style={{ marginTop: 20, paddingHorizontal: 28 }} />
         </View>
       ) : Object.keys(groups).map((day) => (
         <View key={day} style={{ marginTop: 18 }}>
@@ -4125,6 +4132,22 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
 
   // Settings
   const [soundNotif, setSoundNotif] = useState(true);
+
+  // audit-fix: Hujjat holati serverdan (verify_status: approved/pending/rejected).
+  // Ilgari statik "Tasdiqlangan" ko'rsatilardi — tasdiqlanmagan haydovchini ham
+  // "Tasdiqlangan" deb aldab ko'rsatardi. Endi real holat.
+  const [verifyStatus, setVerifyStatus] = useState(user?.verify_status || null);
+  useEffect(() => {
+    api('/api/me/profile', 'GET', null, token, 8000)
+      .then((r) => { if (r && r.verify_status) setVerifyStatus(r.verify_status); })
+      .catch(() => {});
+  }, [token]);
+  const verifyLabel = verifyStatus === 'rejected' ? t('verify_rejected')
+    : verifyStatus === 'approved' ? t('verified')
+    : t('verify_pending');
+  const verifyColor = verifyStatus === 'approved' ? GREEN
+    : verifyStatus === 'rejected' ? RED
+    : GRAY1;
 
   // T-13: KetdikGo AI yordamchi (haydovchi) — backend /api/ai/chat allaqachon
   // 'driver' rolini biladi (murabbiy/maslahat), lekin ilovada UI YO'Q edi.
@@ -4261,7 +4284,7 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
           // M-04: joriy xizmat belgilarini serverdan olamiz (user prop eskirgan bo'lishi mumkin)
           api('/api/me/profile', 'GET', null, token, 8000).then((r) => { setEditAc(!!r.has_ac); setEditBaggage(!!r.has_baggage); }).catch(() => {});
         }} />
-        <ProfRow icon="document-text-outline" title={t('documents')} detail={t('verified')} />
+        <ProfRow icon="document-text-outline" title={t('documents')} detail={verifyLabel} detailColor={verifyColor} />
         <ProfRow icon="card-outline" title={t('payment_card')} detail={bankCard ? '●●●● ' + bankCard.slice(-4) : undefined} last onPress={() => { setEditCard(bankCard ? formatCardInput(bankCard) : ''); setCardModal(true); }} />
       </View>
       <View style={s.profMenu}>
@@ -4553,13 +4576,13 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
   );
 }
 
-function ProfRow({ icon, title, detail, last, onPress }) {
+function ProfRow({ icon, title, detail, detailColor, last, onPress }) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.75}
       style={[s.profRowItem, !last && { borderBottomWidth: 1, borderBottomColor: BORDER }]}>
       <Ionicons name={icon} size={20} color={GRAY1} />
       <Text style={{ flex: 1, color: WHITE, fontSize: 15, marginLeft: 14 }}>{title}</Text>
-      {detail && <Text style={{ color: GREEN, fontSize: 13, marginRight: 8 }}>{detail}</Text>}
+      {detail && <Text style={{ color: detailColor || GREEN, fontSize: 13, marginRight: 8 }}>{detail}</Text>}
       <Ionicons name="chevron-forward" size={18} color={GRAY2} />
     </TouchableOpacity>
   );
