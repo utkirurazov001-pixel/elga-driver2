@@ -615,7 +615,7 @@ const TABBAR_H = 60;
 const BG = '#0A0A0A';
 const CARD = '#141414';
 const CARD2 = '#1E1E1E';
-const BORDER = '#282828';
+const BORDER = '#262A31';
 const YELLOW = '#FFCC00'; // KetdikGo brend sarig'i (butun ilova — ko'k olib tashlandi)
 const GREEN = '#22C55E';
 const RED = '#FF453A';
@@ -2420,7 +2420,7 @@ function AppInner({ onBootDone }) {
     const fare = Math.round((5000 + (m.km || 0) * 2800) / 500) * 500;
     showConfirm({
       title: '🚕 ' + t('trip_done'),
-      message: `${t('distance')}: ${(m.km || 0).toFixed(2)} ${t('km')}\n${t('time')}: ${mins} ${t('min_full')}\n${t('price')}: ${fare.toLocaleString('ru-RU')} ${t('som')}`,
+      message: `${t('distance')}: ${(m.km || 0).toFixed(1)} ${t('km')}\n${t('time')}: ${mins} ${t('min_full')}\n${t('price')}: ${fare.toLocaleString('ru-RU')} ${t('som')}`,
       confirmText: t('close'),
       onConfirm: () => setSoloMeter(null),
       onCancel: () => setSoloMeter(null),
@@ -3062,7 +3062,7 @@ function AppInner({ onBootDone }) {
                           <Text style={{ color: WHITE, fontSize: 22, fontWeight: '800' }}>
                             {(Math.round((5000 + (soloMeter.km || 0) * 2800) / 500) * 500).toLocaleString('ru-RU')}
                           </Text>
-                          <Text style={{ color: GRAY1, fontSize: 12 }}>{t('som')} · {(soloMeter.km || 0).toFixed(2)} {t('km')}</Text>
+                          <Text style={{ color: GRAY1, fontSize: 12 }}>{t('som')} · {(soloMeter.km || 0).toFixed(1)} {t('km')}</Text>
                         </View>
                         <TouchableOpacity onPress={stopSoloMeter} style={{ backgroundColor: RED + '22', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 }}>
                           <Text style={{ color: RED, fontWeight: '700' }}>{t('finish')}</Text>
@@ -4150,6 +4150,7 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
 
   const detectBank = (num) => {
     const d = num.replace(/\s/g, '');
+    // Karta brend ranglari (logo) — UI palitrasi emas, o'z rangida qoladi
     if (d.startsWith('8600')) return { name: 'Uzcard', color: YELLOW };
     if (d.startsWith('9860')) return { name: 'Humo', color: '#3B82F6' };
     if (d.startsWith('4')) return { name: 'Visa', color: '#1A1F71' };
