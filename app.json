@@ -38,6 +38,7 @@
     "android": {
       "package": "uz.ketdik.driver",
       "versionCode": 4,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#15171c"

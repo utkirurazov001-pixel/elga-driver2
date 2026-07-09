@@ -1305,7 +1305,7 @@ function AiChatModal({ visible, onClose, token, insets }) {
   }
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: BG }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1, backgroundColor: BG }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={{ paddingTop: (insets?.top || 0) + 12, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: BORDER, flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity onPress={onClose} style={{ marginRight: 12 }}>
             <Ionicons name="arrow-back" size={24} color={WHITE} />
@@ -3274,7 +3274,9 @@ function AppInner({ onBootDone }) {
 
       {/* ===== CHAT MODALI ===== */}
       <Modal visible={chatModal} transparent animationType="slide" onRequestClose={() => setChatModal(false)}>
-        <KeyboardAvoidingView style={s.chatModalWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* FREEZE/KLAVIATURA: Modal ichida Android adjustResize ishlamaydi — chat input
+            klaviatura ostida qolib ketardi. behavior='height' bilan input tepaga suriladi. */}
+        <KeyboardAvoidingView style={s.chatModalWrap} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={s.chatModalSheet}>
             {/* X4: sarlavha — avatar (bosh harf) + mijoz ismi + holat */}
             <View style={s.chatModalHeader}>

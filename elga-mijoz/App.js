@@ -4119,7 +4119,7 @@ function AppInner({ onBootDone }) {
 
       {/* Trip Chat Modal */}
       <Modal visible={tripChatModal} transparent animationType="slide" onRequestClose={() => setTripChatModal(false)}>
-        <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={[s.modalSheet, { height: '72%', paddingBottom: insets.bottom + 8 }]}>
             {/* X4: sarlavha — avatar (bosh harf) + haydovchi ismi + mashina */}
             <View style={s.tcHeader}>
@@ -4393,7 +4393,7 @@ function AppInner({ onBootDone }) {
       </Modal>
 
       <Modal visible={cancelModal} transparent animationType="slide" onRequestClose={() => setCancelModal(false)}>
-        <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
             <Text style={s.modalTitle}>{t('cancel_reason_title')}</Text>
             <View style={s.helpTopicsCard}>
@@ -4430,7 +4430,7 @@ function AppInner({ onBootDone }) {
           (avval Alert.alert bilan o'lik ro'yxat edi). "Ketdik" bosilsa sheet yopilib,
           buyurtma tabida pickDest orqali oqim darrov boshlanadi. */}
       <Modal visible={favSheet} transparent animationType="slide" onRequestClose={() => setFavSheet(false)}>
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={{ backgroundColor: CARD, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: insets.bottom + 18, maxHeight: '80%' }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: GRAY2, alignSelf: 'center', marginBottom: 12 }} />
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
@@ -4576,7 +4576,9 @@ function AppInner({ onBootDone }) {
 
       {/* KetdikGo AI yordamchi Modal — suzuvchi tugma / Yordam kartasidan ochiladi */}
       <Modal visible={aiModal} animationType="slide" onRequestClose={() => setAiModal(false)}>
-        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: BG }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* KLAVIATURA: Modal ichida adjustResize ishlamaydi — behavior='height' bilan
+            chat input klaviatura ochilganda tepaga suriladi (Android). */}
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: BG }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: BORDER, flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity onPress={() => setAiModal(false)} style={{ marginRight: 12 }}>
               <Ionicons name="arrow-back" size={24} color={WHITE} />
