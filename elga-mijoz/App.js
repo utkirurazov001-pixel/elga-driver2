@@ -8,6 +8,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, ScrollView, Modal, Linking, FlatList, Share,
   Animated, Easing, Image, Dimensions, AppState, Platform, PanResponder,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -2751,7 +2752,7 @@ function AppInner({ onBootDone }) {
   if (pinStep === 'enter' || pinStep === 'setup') {
     const isSetup = pinStep === 'setup';
     return (
-      <View style={s.loginWrap}>
+      <KeyboardAvoidingView style={s.loginWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <StatusBar style="light" />
         <FadeInView delay={0} from={20}>
         <View style={{ alignItems: 'center' }}><ElgaLogo size={56} /></View>
@@ -2803,14 +2804,14 @@ function AppInner({ onBootDone }) {
             </TouchableOpacity>
         }
         </FadeInView>
-      </View>
+      </KeyboardAvoidingView>
     );
   }
 
   // LOGIN SCREEN
   if (!token) {
     return (
-      <View style={s.loginWrap}>
+      <KeyboardAvoidingView style={s.loginWrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <StatusBar style="light" />
         <FadeInView delay={0} from={24} duration={500}>
           <View style={{ alignItems: 'center' }}><ElgaLogo size={56} /></View>
@@ -2910,7 +2911,7 @@ function AppInner({ onBootDone }) {
             </PressableScale>
           </FadeInView>
         )}
-      </View>
+      </KeyboardAvoidingView>
     );
   }
 
@@ -4074,7 +4075,7 @@ function AppInner({ onBootDone }) {
 
       {/* Trip Chat Modal */}
       <Modal visible={tripChatModal} transparent animationType="slide" onRequestClose={() => setTripChatModal(false)}>
-        <View style={s.modalOverlay}>
+        <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[s.modalSheet, { height: '72%', paddingBottom: insets.bottom + 8 }]}>
             {/* X4: sarlavha — avatar (bosh harf) + haydovchi ismi + mashina */}
             <View style={s.tcHeader}>
@@ -4162,7 +4163,7 @@ function AppInner({ onBootDone }) {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* SOS Modal */}
@@ -4348,7 +4349,7 @@ function AppInner({ onBootDone }) {
       </Modal>
 
       <Modal visible={cancelModal} transparent animationType="slide" onRequestClose={() => setCancelModal(false)}>
-        <View style={s.modalOverlay}>
+        <KeyboardAvoidingView style={s.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={[s.modalSheet, { paddingBottom: insets.bottom + 16 }]}>
             <Text style={s.modalTitle}>{t('cancel_reason_title')}</Text>
             <View style={s.helpTopicsCard}>
@@ -4378,14 +4379,14 @@ function AppInner({ onBootDone }) {
               <Text style={{ color: GRAY1 }}>{t('back')}</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Y1: SEVIMLI MANZILLAR bottom-sheet — profil menyusidan ochiladi
           (avval Alert.alert bilan o'lik ro'yxat edi). "Ketdik" bosilsa sheet yopilib,
           buyurtma tabida pickDest orqali oqim darrov boshlanadi. */}
       <Modal visible={favSheet} transparent animationType="slide" onRequestClose={() => setFavSheet(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={{ backgroundColor: CARD, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 18, paddingBottom: insets.bottom + 18, maxHeight: '80%' }}>
             <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: GRAY2, alignSelf: 'center', marginBottom: 12 }} />
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
@@ -4473,7 +4474,7 @@ function AppInner({ onBootDone }) {
               )}
             </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Y1: TO'LOV USULI sheet — profil menyusidan ochiladi (avval Alert.alert edi).
@@ -4531,7 +4532,7 @@ function AppInner({ onBootDone }) {
 
       {/* KetdikGo AI yordamchi Modal — suzuvchi tugma / Yordam kartasidan ochiladi */}
       <Modal visible={aiModal} animationType="slide" onRequestClose={() => setAiModal(false)}>
-        <View style={{ flex: 1, backgroundColor: BG }}>
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: BG }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={{ paddingTop: insets.top + 12, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: BORDER, flexDirection: 'row', alignItems: 'center' }}>
             <TouchableOpacity onPress={() => setAiModal(false)} style={{ marginRight: 12 }}>
               <Ionicons name="arrow-back" size={24} color={WHITE} />
@@ -4563,7 +4564,7 @@ function AppInner({ onBootDone }) {
               <Ionicons name="send" size={18} color="#000" />
             </TouchableOpacity>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Rate Modal */}
