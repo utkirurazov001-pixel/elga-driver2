@@ -3348,9 +3348,9 @@ function AppInner({ onBootDone }) {
                       {t('where_to_title')}
                     </Text>
                   </View>
-                  {balance != null && balance > 0 && (
+                  {Number(balance?.balance) > 0 && (
                     <View style={{ backgroundColor: YELLOW + '20', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: YELLOW + '50' }}>
-                      <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '700' }}>💰 {fmt(balance)}</Text>
+                      <Text style={{ color: YELLOW, fontSize: 12, fontWeight: '700' }}>💰 {fmt(balance.balance)}</Text>
                     </View>
                   )}
                 </View>
@@ -3842,7 +3842,7 @@ function AppInner({ onBootDone }) {
                       <TouchableOpacity activeOpacity={0.85}
                         style={{ backgroundColor: YELLOW, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 }}
                         onPress={() => { setTab('order'); pickDest({ lat: Number(tr.to_lat), lng: Number(tr.to_lng), address: tr.to_address }); }}>
-                        <Text style={{ color: '#000', fontSize: 12, fontWeight: '800' }}>🔁 {t('repeat')}</Text>
+                        <Text style={{ color: '#000', fontSize: 12, fontWeight: '800' }}>{t('repeat')}</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -3863,7 +3863,7 @@ function AppInner({ onBootDone }) {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: TABBAR_H + insets.bottom + 16 }}>
-            <TouchableOpacity style={s.operatorHeroCard} onPress={() => Linking.openURL('tel:+998712345678')} activeOpacity={0.85}>
+            <TouchableOpacity style={s.operatorHeroCard} onPress={() => Linking.openURL('tel:+998770641226')} activeOpacity={0.85}>
               <View style={s.operatorIconWrap}>
                 <Ionicons name="call" size={28} color={YELLOW} />
               </View>
@@ -3887,7 +3887,7 @@ function AppInner({ onBootDone }) {
                 { icon: 'person', label: t('trip_issues'), sub: t('trip_issues_sub'),
                   answer: "🚕 Safar muammolari\n\n🔹 Haydovchi kelmayapti — /holat tugmasini bosing, haydovchi bilan bog'laning.\n\n🔹 Manzilni o'zgartirish — safar davomida 'Manzilni o'zgartirish' tugmasini bosing.\n\n🔹 Narx kutilgandan ko'p — narx km+kutish asosida hisoblanadi, app'dagi taxmin yo'l qisqaligiga bog'liq.\n\n🔹 Muammo davom etsa — operatorga murojaat qiling." },
                 { icon: 'flag', label: t('driver_complaint'), sub: t('driver_complaint_sub'),
-                  answer: "🚩 Haydovchi haqida shikoyat\n\nSafar yakunlangach yulduz bering va izoh qoldiring — bu bizga muhim.\n\nJiddiy muammo bo'lsa:\n• Operatorga chat orqali yozing\n• Yoki +998 XX XXX-XX-XX ga qo'ng'iroq qiling\n\nBarcha shikoyatlar 24 soat ichida ko'rib chiqiladi." },
+                  answer: "🚩 Haydovchi haqida shikoyat\n\nSafar yakunlangach yulduz bering va izoh qoldiring — bu bizga muhim.\n\nJiddiy muammo bo'lsa:\n• Operatorga chat orqali yozing\n• Yoki +998 77 064-12-26 ga qo'ng'iroq qiling\n\nBarcha shikoyatlar 24 soat ichida ko'rib chiqiladi." },
               ].map((item, idx, arr) => (
                 <View key={idx}>
                   <TouchableOpacity style={s.helpTopicRow} activeOpacity={0.7} onPress={() => Alert.alert(item.label, item.answer)}>
