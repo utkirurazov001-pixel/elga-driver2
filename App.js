@@ -228,6 +228,7 @@ const L = {
     reject: 'Rad etish',
     accept: 'Qabul qilish',
     to_customer_btn: "MIJOZGA YO'L",
+    open_navigator: 'NAVIGATORNI OCHISH',
     external_nav: 'Tashqi navigator (xarita ilovasi)',
     arrived_btn: 'YETIB KELDIM',
     cancel_trip: 'Safarni bekor qilish',
@@ -455,6 +456,7 @@ const L = {
     reject: 'Отклонить',
     accept: 'Принять',
     to_customer_btn: 'МАРШРУТ К КЛИЕНТУ',
+    open_navigator: 'ОТКРЫТЬ НАВИГАТОР',
     external_nav: 'Внешний навигатор (приложение карт)',
     arrived_btn: 'Я ПРИЕХАЛ',
     cancel_trip: 'Отменить поездку',
@@ -992,6 +994,17 @@ const OfflineQueue = {
 
 // speak, announce — ./src/voice dan import qilinadi
 // haversineKm, fmtPhone — ./src/utils dan import qilinadi
+
+// N1: yo'nalish burchagi (bearing) — oldingi va yangi GPS nuqta orasidagi kompas
+// burchagi (0..360, shimol=0). Haydovchi markerini shu tomonga burish uchun (navigator
+// hissi). Standart atan2 formulasi.
+function bearingDeg(lat1, lng1, lat2, lng2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const φ1 = toRad(lat1), φ2 = toRad(lat2), Δλ = toRad(lng2 - lng1);
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
 
 // ============================================================
 //  FON (BACKGROUND) GPS — ilova fonda/ekran o'chiq bo'lganda ham haydovchi
@@ -1612,6 +1625,7 @@ function AppInner({ onBootDone }) {
   // meIdRef'ni user bilan sinxron saqlaymiz (socket handler stale closure'da joriy id kerak)
   useEffect(() => { meIdRef.current = user?.id ?? null; }, [user]);
   const mapRef = useRef(null);
+  const prevLocRef = useRef(null); // N1: oldingi GPS nuqta — heading (bearing) hisobi uchun
   // Tarmoq qatlami reflari
   const lastLocRef = useRef(null);   // oxirgi GPS — qayta ulanganda darrov yuboramiz
   const lastEmitRef = useRef(0);     // GPS socket emit throttle (adaptiv interval)
@@ -1878,10 +1892,22 @@ function AppInner({ onBootDone }) {
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
+    // N1: harakat yo'nalishi (heading) — oldingi va yangi joylashuv orasidagi bearing.
+    // Marker shu tomonga buriladi (navigator hissi). Juda kichik siljishda (GPS shovqini)
+    // yo'nalish o'zgartirilmaydi — eski heading saqlanadi (mapHtml _lastHeading).
+    let heading = null;
+    if (myLoc?.lat != null && myLoc?.lng != null) {
+      const p = prevLocRef.current;
+      if (p && haversineKm(p.lat, p.lng, myLoc.lat, myLoc.lng) > 0.003) {
+        heading = Math.round(bearingDeg(p.lat, p.lng, myLoc.lat, myLoc.lng));
+      }
+      prevLocRef.current = { lat: myLoc.lat, lng: myLoc.lng };
+    }
     const d = {
       myLat: myLoc?.lat ?? null, myLng: myLoc?.lng ?? null,
       pickLat: order?.from_lat ?? null, pickLng: order?.from_lng ?? null,
       dropLat: order?.to_lat ?? null, dropLng: order?.to_lng ?? null,
+      heading,
     };
     mapRef.current.injectJavaScript(`window.updateMap(${JSON.stringify(d)});true;`);
   }, [mapReady, myLoc, order?.from_lat, order?.from_lng, order?.to_lat, order?.to_lng]);
@@ -2986,19 +3012,24 @@ function AppInner({ onBootDone }) {
             </TouchableOpacity>
           </View>
 
-          {/* W2: NAVIGATOR tugmasi — follow yoqish/o'chirish (faol buyurtmada) */}
+          {/* N1: RECENTER tugmasi — "meni xaritada ko'rsat va kuzat" (Yandex/Uber uslubi).
+              Uchburchak toggle O'RNIGA aniq nishon (locate) ikonkasi, O'NG-PASTDA (panel
+              ustida) — barmoq bilan qulay. Bosilganda: follow yoqiladi + panel yig'iladi
+              (xarita to'liq ko'rinsin). Faqat faol buyurtmada. follow YONIQ — sariq
+              to'ldirilgan (faol); follow PAUZA — to'q kontur + sariq halqa (e'tibor). */}
           {order && ['accepted', 'arrived', 'in_progress'].includes(order.status) && (
             <TouchableOpacity
-              onPress={() => setFollowMode(!follow)}
+              onPress={() => { setFollowMode(true); if (sheetOpenRef.current) snapSheet(false); }}
               activeOpacity={0.8}
               style={{
-                position: 'absolute', top: insets.top + 62, right: 12,
-                width: 44, height: 44, borderRadius: 22,
+                position: 'absolute', bottom: insets.bottom + 100, right: 12,
+                width: 48, height: 48, borderRadius: 24,
                 alignItems: 'center', justifyContent: 'center',
-                backgroundColor: follow ? YELLOW : 'rgba(10,10,10,0.82)',
-                borderWidth: 1, borderColor: follow ? YELLOW : YELLOW + '55',
+                backgroundColor: follow ? YELLOW : 'rgba(21,23,28,0.9)',
+                borderWidth: follow ? 1 : 2, borderColor: YELLOW,
+                shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
               }}>
-              <Ionicons name="navigate" size={20} color={follow ? '#15171c' : YELLOW} />
+              <Ionicons name="locate" size={22} color={follow ? '#15171c' : YELLOW} />
             </TouchableOpacity>
           )}
 
@@ -3147,6 +3178,7 @@ function AppInner({ onBootDone }) {
                 <OrderPanel
                   order={order} loading={loading} meter={meter} liveMeter={liveMeter} tripWait={tripWait}
                   onAction={orderAction} onNavigate={navigateTo} onFollow={() => setFollowMode(true)}
+                  onStartNav={() => { snapSheet(false); setFollowMode(true); }}
                   onCall={callCustomer} onChat={() => { loadChatHistory(order.id); setChatUnread(0); setChatModal(true); }}
                   chatUnread={chatUnread}
                   onPlayVoice={playVoiceOrder} voiceBusy={voiceStatus === 'loading'}
@@ -3417,7 +3449,7 @@ function MeterPulseBar() {
   return <Animated.View style={{ height: 3, backgroundColor: YELLOW, opacity: op }} />;
 }
 
-function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNavigate, onFollow, onCall, onChat, chatUnread, onPlayVoice, voiceBusy }) {
+function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNavigate, onFollow, onStartNav, onCall, onChat, chatUnread, onPlayVoice, voiceBusy }) {
   // F-04: faol safarni (accepted/arrived) bekor qilish — tasdiq bilan.
   // accepted'da backend buyurtmani boshqa haydovchiga qaytaradi (requeue),
   // arrived'da bekor qilinadi; ikkala holatda ham mijozga xabar boradi.
@@ -3561,10 +3593,12 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
           {/* Qabul qilingan — navigatsiya + yetib keldim */}
           {st === 'accepted' && (
             <View style={{ gap: 8, marginTop: 8 }}>
-              {/* W2: asosiy tugma ILOVA ICHIDA navigator (follow) — begona ilovaga chiqarmaydi */}
-              <TouchableOpacity style={s.btnNav} onPress={() => onFollow && onFollow()} activeOpacity={0.8}>
+              {/* W2/N1: asosiy tugma ILOVA ICHIDA navigatorni ochadi — panel yig'iladi
+                  (xarita+marshrut to'liq ko'rinadi) + follow yoqiladi. Ilgari faqat follow
+                  yoqilar, lekin panel xaritani to'sib turgani uchun natija ko'rinmasdi. */}
+              <TouchableOpacity style={s.btnNav} onPress={() => onStartNav && onStartNav()} activeOpacity={0.8}>
                 <Ionicons name="navigate" size={18} color="#15171c" style={{ marginRight: 8 }} />
-                <Text style={[s.btnTxtW, { color: '#15171c' }]}>{t('to_customer_btn')}</Text>
+                <Text style={[s.btnTxtW, { color: '#15171c' }]}>{t('open_navigator')}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => onNavigate(order.from_lat, order.from_lng)} activeOpacity={0.7}
                 style={{ alignItems: 'center', paddingVertical: 6 }}>
@@ -3704,10 +3738,11 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
                   </TouchableOpacity>
                 </View>
               )}
-              {/* W2: asosiy tugma ILOVA ICHIDA navigator (follow) — begona ilovaga chiqarmaydi */}
-              <TouchableOpacity style={s.btnNav} onPress={() => onFollow && onFollow()} activeOpacity={0.8}>
+              {/* W2/N1: asosiy tugma ILOVA ICHIDA navigatorni ochadi — panel yig'iladi
+                  (xarita+marshrut to'liq ko'rinadi) + follow yoqiladi. */}
+              <TouchableOpacity style={s.btnNav} onPress={() => onStartNav && onStartNav()} activeOpacity={0.8}>
                 <Ionicons name="navigate" size={18} color="#15171c" style={{ marginRight: 8 }} />
-                <Text style={[s.btnTxtW, { color: '#15171c' }]}>{t('to_dest_btn')}</Text>
+                <Text style={[s.btnTxtW, { color: '#15171c' }]}>{t('open_navigator')}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => onNavigate(order.to_lat, order.to_lng)} activeOpacity={0.7}
                 style={{ alignItems: 'center', paddingVertical: 6 }}>
