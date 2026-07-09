@@ -14,7 +14,9 @@ import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-// expo-updates: Expo Go muhitida ishlatilmaydi (OTA faqat standalone APK uchun)
+// expo-updates: Expo Go muhitida ishlatilmaydi (OTA faqat standalone APK uchun).
+// isEnabled bilan himoyalanadi — Expo Go'da import xavfsiz (isEnabled=false).
+import * as Updates from 'expo-updates';
 import { WebView } from 'react-native-webview';
 import { io } from 'socket.io-client';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1565,6 +1567,8 @@ function AppInner({ onBootDone }) {
   const meIdRef = useRef(null); // chat echo guard — o'z sender_id'imni tanish uchun (stale closure)
   const nearbyTimer = useRef(null);
   const appStateRef = useRef(AppState.currentState);
+  const lastOtaAtRef = useRef(0);       // OTA tekshiruvi debounce
+  const otaActiveOrderRef = useRef(false); // faol buyurtma bormi (OTA reload'ni to'sish uchun)
 
   useEffect(() => { tokenRef.current = token; }, [token]);
   useEffect(() => { meIdRef.current = user?.id ?? null; }, [user]); // chat echo guard uchun sinxron
@@ -1685,6 +1689,31 @@ function AppInner({ onBootDone }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.id, order?.status]);
 
+  // Faol buyurtma holatini ref'ga sinxronlaymiz (OTA reload'ni safar o'rtasida to'sish uchun).
+  useEffect(() => {
+    const st = order?.status;
+    otaActiveOrderRef.current = !!st && ['searching', 'assigned', 'accepted', 'arrived', 'in_progress'].includes(st);
+  }, [order?.status]);
+
+  // ---- OTA: fon'dan qaytganda yangilanishni tekshirib DARROV qo'llaymiz ----
+  // ON_LOAD tekshiruvi faqat sovuq startда ishlaydi; sekin internetда 3s'da ulgurmasa
+  // yangilanish keyingi ochilishga qolib "OTA ishlamayapti" taassuroti berardi. Endi
+  // har fon-qaytishда (debounce 60s) tekshiramiz; yangilanish bo'lsa yuklab, FAOL
+  // BUYURTMA bo'lmaganда reload qilamiz (safar/qidiruv o'rtasida buzmaydi).
+  async function maybeApplyOTA() {
+    if (__DEV__ || !Updates.isEnabled) return;
+    const now = Date.now();
+    if (now - lastOtaAtRef.current < 60000) return;
+    lastOtaAtRef.current = now;
+    try {
+      const res = await Updates.checkForUpdateAsync();
+      if (res && res.isAvailable) {
+        await Updates.fetchUpdateAsync();
+        if (!otaActiveOrderRef.current) await Updates.reloadAsync();
+      }
+    } catch (e) { /* Expo Go yoki tarmoq — jim */ }
+  }
+
   // ---- Foreground / internet qaytganda faol buyurtmani tiklash (#40) ----
   // Telefon bloklanib ochilsa, boshqa ilovadan qaytilsa, internet uzilib qaytsa ishlaydi.
   useEffect(() => {
@@ -1695,6 +1724,7 @@ function AppInner({ onBootDone }) {
       if (prev && /inactive|background/.test(prev) && next === 'active') {
         ensureSocketConnected();
         resumeActiveOrder();
+        maybeApplyOTA(); // OTA: fon'dan qaytganda yangilanishni tekshir/qo'lla (faol buyurtmasiz)
         // M-05: push token hali ro'yxatdan o'tmagan bo'lsa (permission endi berilgan
         // bo'lishi mumkin) — qayta urinamiz. Muvaffaqiyatda bayroq o'rnatiladi.
         if (!pushRegisteredRef.current && tokenRef.current) {
