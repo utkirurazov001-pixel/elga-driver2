@@ -929,7 +929,8 @@ async function api(path, method = 'GET', body = null, token = null, timeoutMs = 
 const PAY_ICONS = { cash: '💵', click: '🔵', payme: '🟢', card: '💳' };
 
 // Tab panelining tizim navigatsiyasidan tashqari balandligi (safe-area pastdan qo'shiladi)
-const TABBAR_H = 56;
+// UI-B2: 56 -> 60 (ikonka 24 + 4 oraliq + matn 11 + indikator sig'ishi uchun)
+const TABBAR_H = 60;
 // Ekran balandligi — pastdan ko'tariladigan sheet'larni cheklash uchun
 const SCREEN_H = Dimensions.get('window').height;
 
@@ -4032,14 +4033,20 @@ function AppInner({ onBootDone }) {
           { id: 'profile', icon: 'person', label: t('tab_profile'), onLoad: loadBalance },
         ].map(tb => {
           const active = tab === tb.id;
+          // UI-B2: faol buyurtma bo'lsa — "Buyurtma" tabida kichik sariq nuqta (badge)
+          const showDot = tb.id === 'order' && !!(order && ACTIVE_STATUSES.includes(order.status));
           return (
             <TouchableOpacity key={tb.id} style={s.tabItem} activeOpacity={0.7}
               onPress={() => { setTab(tb.id); tb.onLoad?.(); }}>
-              <Ionicons name={active ? tb.icon : tb.icon + '-outline'} size={24} color={active ? YELLOW : GRAY2} />
-              {/* Y1: faol label sariq va qalinroq */}
-              <Text style={{ fontSize: 10, color: active ? YELLOW : GRAY2, marginTop: 3, fontWeight: active ? '700' : '400' }}>{tb.label}</Text>
+              {/* UI-B2: ikonka 24px, nofaol #8A8F98; badge uchun o'ram */}
+              <View>
+                <Ionicons name={active ? tb.icon : tb.icon + '-outline'} size={24} color={active ? YELLOW : '#8A8F98'} />
+                {showDot && <View style={s.tabDot} />}
+              </View>
+              {/* Y1/UI-B2: faol label sariq va qalin (Manrope), 11px, ikonkadan 4px pastda */}
+              <Text style={[s.tabTxt, active && s.tabActive, mfont(active ? '700' : '600')]}>{tb.label}</Text>
               {/* Y1: faol tab ostida kichik sariq indikator chiziq (nofaolda joy saqlanadi — sakramaydi) */}
-              <View style={{ width: 18, height: 3, borderRadius: 2, marginTop: 3, backgroundColor: active ? YELLOW : 'transparent' }} />
+              <View style={[s.tabDash, active && { backgroundColor: YELLOW }]} />
             </TouchableOpacity>
           );
         })}
@@ -5325,18 +5332,26 @@ const s = StyleSheet.create({
     marginTop: 16,
   },
 
-  // Tab bar
+  // Tab bar — UI-B2: fon #15171c, yuqorida 1px chegara #262A31 (haydovchi ilovasi bilan bir xil)
   tabBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+    paddingTop: 6,
     flexDirection: 'row',
-    backgroundColor: '#0A0A0A',
-    borderTopWidth: 0.5,
-    borderTopColor: BORDER,
+    backgroundColor: '#15171c',
+    borderTopWidth: 1,
+    borderTopColor: '#262A31',
   },
-  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 8 },
+  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  // UI-B2: tab matni 11px, nofaol #8A8F98; faolda sariq
+  tabTxt: { fontSize: 11, color: '#8A8F98', marginTop: 4, fontWeight: '600' },
+  tabActive: { color: YELLOW, fontWeight: '700' },
+  // UI-B2: faol buyurtma badge'i — ikonka yuqori-o'ngida 6px sariq nuqta
+  tabDot: { position: 'absolute', top: -1, right: -4, width: 6, height: 6, borderRadius: 3, backgroundColor: YELLOW },
+  // Y1/UI-B2: faol tab indikator chizig'i (nofaolda shaffof — joy sakramaydi)
+  tabDash: { width: 18, height: 3, borderRadius: 2, marginTop: 3, backgroundColor: 'transparent' },
 
   // Modals
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },

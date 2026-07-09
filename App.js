@@ -606,7 +606,8 @@ let NetInfo = null;
 try { NetInfo = require('@react-native-community/netinfo').default; } catch (e) { NetInfo = null; }
 
 // Tab panelining tizim navigatsiyasidan tashqari balandligi (safe-area pastdan qo'shiladi)
-const TABBAR_H = 56;
+// UI-B2: 56 -> 60 (ikonka 24 + 4 oraliq + matn 11 + indikator sig'ishi uchun)
+const TABBAR_H = 60;
 
 // ---- Dizayn tokenlari (mijoz ilovasi bilan bir xil premium palitra) ----
 const BG = '#0A0A0A';
@@ -3200,7 +3201,7 @@ function AppInner({ onBootDone }) {
 
       {/* Tab bar — vektor ikonalar (faol: to'ldirilgan, nofaol: chiziqli) */}
       {!order && (
-        <View style={[s.tabBar, { height: TABBAR_H + insets.bottom, paddingBottom: insets.bottom + 6 }]}>
+        <View style={[s.tabBar, { height: TABBAR_H + insets.bottom, paddingBottom: insets.bottom }]}>
           {[
             { id: 'home', label: t('tab_orders'), icon: 'navigate' },
             { id: 'earnings', label: t('tab_earnings'), icon: 'wallet' },
@@ -3208,6 +3209,9 @@ function AppInner({ onBootDone }) {
             { id: 'profile', label: t('tab_profile'), icon: 'person' },
           ].map((tb) => {
             const on = tab === tb.id;
+            // UI-B2: faol buyurtma bo'lsa — "Buyurtmalar" tabida kichik sariq nuqta
+            // (hozircha tab bar faol buyurtmada yashirin — bu himoya sifatida qoladi)
+            const showDot = tb.id === 'home' && !!(order && ACTIVE_STATUSES.includes(order.status));
             return (
               <TouchableOpacity key={tb.id} style={s.tabItem} activeOpacity={0.7}
                 onPress={() => {
@@ -3215,8 +3219,14 @@ function AppInner({ onBootDone }) {
                   if (tb.id === 'earnings') loadEarnings();
                   if (tb.id === 'history') loadTrips();
                 }}>
-                <Ionicons name={on ? tb.icon : `${tb.icon}-outline`} size={23} color={on ? YELLOW : GRAY2} />
-                <Text style={[s.tabTxt, on && s.tabActive]}>{tb.label}</Text>
+                {/* UI-B2: ikonka 24px, nofaol #8A8F98; badge uchun o'ram */}
+                <View>
+                  <Ionicons name={on ? tb.icon : `${tb.icon}-outline`} size={24} color={on ? YELLOW : '#8A8F98'} />
+                  {showDot && <View style={s.tabDot} />}
+                </View>
+                <Text style={[s.tabTxt, on && s.tabActive, mfont(on ? '700' : '600')]}>{tb.label}</Text>
+                {/* UI-B2: faol tab ostida sariq indikator chiziq (mijoz ilovasi bilan bir xil) */}
+                <View style={[s.tabDash, on && { backgroundColor: YELLOW }]} />
               </TouchableOpacity>
             );
           })}
@@ -4476,14 +4486,20 @@ const s = StyleSheet.create({
   waitLabel: { color: '#fff', fontSize: 16, fontWeight: '600' },
   waitFree: { color: GREEN, fontSize: 14, marginTop: 3 },
   waitPaid: { color: YELLOW, fontSize: 14, fontWeight: '600', marginTop: 3 },
+  // UI-B2: fon #15171c, yuqorida 1px chegara #262A31 (mijoz ilovasi bilan bir xil)
   tabBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingTop: 8,
-    flexDirection: 'row', backgroundColor: BG, borderTopWidth: 1, borderTopColor: BORDER,
+    paddingTop: 6,
+    flexDirection: 'row', backgroundColor: '#15171c', borderTopWidth: 1, borderTopColor: '#262A31',
   },
-  tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 3 },
-  tabTxt: { color: GRAY1, fontSize: 12, fontWeight: '600' }, // P5 (K-3): kontrast 2.2:1 -> 6.9:1
-  tabActive: { color: YELLOW, fontWeight: '600' },
+  tabItem: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  // P5 (K-3) kontrast saqlangan; UI-B2: 11px, nofaol #8A8F98, ikonkadan 4px pastda
+  tabTxt: { color: '#8A8F98', fontSize: 11, fontWeight: '600', marginTop: 4 },
+  tabActive: { color: YELLOW, fontWeight: '700' },
+  // UI-B2: faol buyurtma badge'i — ikonka yuqori-o'ngida 6px sariq nuqta
+  tabDot: { position: 'absolute', top: -1, right: -4, width: 6, height: 6, borderRadius: 3, backgroundColor: YELLOW },
+  // UI-B2: faol tab indikator chizig'i (nofaolda shaffof — joy sakramaydi)
+  tabDash: { width: 18, height: 3, borderRadius: 2, marginTop: 3, backgroundColor: 'transparent' },
 
   // Tarix / Profil ekranlari
   screenWrap: { flex: 1, backgroundColor: BG },
