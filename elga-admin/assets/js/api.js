@@ -247,7 +247,17 @@
       pending_bonus: bal ? bal.pending_bonus : undefined
     };
   }
-  function mapClient(c){ var name=c.name||c.full_name||''; return { id:c.id, full_name:name, name:name, ini:ini(name), phone:c.phone, orders:c.orders, spent:c.spent, tier:c.tier }; }
+  // audit-fix: backend /customers { id,name,phone,balance,created_at,trips,spent } beradi —
+  // people.js jadvali orders_count/total_spent/tier/points/registered_at/is_blocked kutadi.
+  // Ayniqsa tier undefined bo'lsa people.js:129 c.tier.slice() TypeError → sahifa quladi.
+  function mapClient(c){ var name=c.name||c.full_name||''; return {
+    id:c.id, full_name:name, name:name, ini:ini(name), phone:c.phone,
+    orders_count:(c.orders_count!=null?c.orders_count:(c.trips!=null?c.trips:(c.orders||0))),
+    total_spent:(c.total_spent!=null?c.total_spent:(c.spent||0)),
+    tier:(c.tier||'bronze'), points:(c.points!=null?c.points:0),
+    registered_at:(c.registered_at||c.created_at||''), is_blocked:!!c.is_blocked,
+    // eski nomlar ham qolsin (moslik uchun)
+    orders:c.orders, spent:c.spent }; }
   function mapOrder(o){
     var name = o.customer_name || o.client || '';
     return {
@@ -263,7 +273,16 @@
     };
   }
   function mapWithdrawal(w){ var name=w.driver||w.name||''; return { id:w.id, driver:name, driver_ini:ini(name), amount:w.amount, provider:cap(w.provider||w.method), status:w.status, created_at:w.created_at }; }
-  function mapComplaint(c){ return { id:c.id, user:c.name||'', phone:c.phone, role:c.role, order_id:c.order_id, text:c.text, status:c.status, created_at:c.created_at }; }
+  // audit-fix: backend /complaints { text,status('open'/'resolved'),role,name,phone,order_id }
+  // beradi; people.js jadvali category/order/who/city/source va status='new' kutadi. Ilgari
+  // badge/filtr 'new' bo'yicha sanardi, backend 'open' berardi → yangi shikoyatlar 0 ko'rinardi.
+  function mapComplaint(c){
+    var st = c.status==='resolved' ? 'resolved'
+      : (c.status==='in_review'||c.status==='reviewing') ? 'in_review' : 'new';
+    return { id:c.id, user:c.name||'', who:c.name||'', phone:c.phone,
+      role:c.role, source:c.role, order_id:c.order_id, order:(c.order_id!=null?('#'+c.order_id):'—'),
+      category:(c.category || (c.text ? String(c.text).slice(0,40) : 'Shikoyat')), city:(c.city||''),
+      text:c.text, description:c.text, status:st, created_at:c.created_at }; }
   function mapPromo(p){ return { id:p.id, code:p.code, type:p.type||'percent', value:(p.percent!=null?p.percent:p.value), min_order:p.min_order, limit:(p.max_uses!=null?p.max_uses:p.usage_limit), used:(p.used_count||p.used||0), valid_to:p.valid_to, active:!!(p.active!=null?p.active:p.is_active) }; }
   // B2: jonli audit_log'da role yo'q — bo'sh qoldiramiz (sahifa o'zi yashiradi).
   function mapAudit(a){ return { id:a.id, user:(a.actor||a.user||a.staff||''), role:(a.role||''), action:a.action, entity:(a.entity||a.target||''), entity_id:(a.entity_id||a.target||''), detail:(a.detail||''), ip:(a.ip||''), created_at:(a.created_at||a.at) }; }

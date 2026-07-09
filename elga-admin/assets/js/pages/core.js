@@ -24,7 +24,7 @@
       return [
         U.mini({icon:'clock', bg:'var(--info-soft)', color:'#84a9f5', label:'O\'rtacha kutish vaqti', val:L.avg_wait, unit:'daqiqa'}),
         U.mini({icon:'xcircle', bg:'var(--danger-soft)', color:'var(--danger)', label:'Bekor qilish foizi', val:L.cancel_rate, unit:'%'}),
-        U.mini({icon:'trend', bg:'var(--gold-soft)', color:'var(--gold)', label:'Bugungi komissiya (15%)', val:L.commission, unit:'mln so\'m'})
+        U.mini({icon:'trend', bg:'var(--gold-soft)', color:'var(--gold)', label:'Umumiy komissiya', val:L.commission, unit:'mln so\'m'})
       ].join('');
     }
     var kpis = kpiHTML();

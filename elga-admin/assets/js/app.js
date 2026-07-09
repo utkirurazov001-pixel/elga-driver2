@@ -486,15 +486,17 @@
         window.rerenderPage(); }
     }
     else if(t=e.target.closest('[data-kyc-ok]')){
-      var d=window.DB.drivers.find(function(x){return x.id===t.getAttribute('data-kyc-ok');});
+      // audit-fix: String() taqqoslash (live'da id raqam, getAttribute satr) + to'g'ri endpoint
+      // (backend: POST /api/admin/verify-driver {user_id, approve}).
+      var d=window.DB.drivers.find(function(x){return String(x.id)===t.getAttribute('data-kyc-ok');});
       if(d){ d.kyc_status='approved'; window.UI.toast('Tasdiqlandi', d.full_name+' KYC tasdiqlandi');
-        window.apiAction('POST','/drivers/'+d.id+'/kyc',{decision:'approved'}).then(function(x){ if(!x.ok&&!x.demo) window.UI.toast('Backend xatosi', x.message,'error'); });
+        window.apiAction('POST','/api/admin/verify-driver',{user_id:d.id, approve:true}).then(function(x){ if(!x.ok&&!x.demo) window.UI.toast('Backend xatosi', x.message,'error'); });
         window.rerenderPage(); }
     }
     else if(t=e.target.closest('[data-kyc-no]')){
-      var d2=window.DB.drivers.find(function(x){return x.id===t.getAttribute('data-kyc-no');});
+      var d2=window.DB.drivers.find(function(x){return String(x.id)===t.getAttribute('data-kyc-no');});
       if(d2){ d2.kyc_status='rejected'; window.UI.toast('Rad etildi', d2.full_name+' KYC rad etildi','error');
-        window.apiAction('POST','/drivers/'+d2.id+'/kyc',{decision:'rejected'}).then(function(x){ if(!x.ok&&!x.demo) window.UI.toast('Backend xatosi', x.message,'error'); });
+        window.apiAction('POST','/api/admin/verify-driver',{user_id:d2.id, approve:false}).then(function(x){ if(!x.ok&&!x.demo) window.UI.toast('Backend xatosi', x.message,'error'); });
         window.rerenderPage(); }
     }
     else if(t=e.target.closest('[data-fulfill]')){
