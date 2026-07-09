@@ -36,6 +36,17 @@ var greenIcon=ic('green'),redIcon=ic('red');
 var map=L.map('map').setView([37.48,67.16],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
 var myMarker=null,pickMarker=null,dropMarker=null,centeredOnce=false;
+// N1: haydovchi markeri yo'nalishga qarab buriladi (navigator hissi). RN har GPS'da
+// heading (0..360) yuboradi; marker sariq strelka bo'lib shu burchakka buriladi.
+// heading hech kelmasa — marker oddiy (default pin) qoladi. FAQAT Leaflet'da (Google
+// marker rotatsiyasi qiyin — u yerda oddiy qoladi).
+var _lastHeading=null,_appliedHeading=null;
+function arrowIcon(deg){
+  return L.divIcon({className:'drvArrow',iconSize:[36,36],iconAnchor:[18,18],
+    html:'<div style="transform:rotate('+deg+'deg);width:36px;height:36px;display:flex;align-items:center;justify-content:center">'
+      +'<div style="width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;border-bottom:26px solid #FFCC00;filter:drop-shadow(0 1px 2px rgba(21,23,28,0.9))"></div>'
+      +'</div>'});
+}
 // ── W2: NAVIGATOR (follow) rejimi — kamera haydovchini yaqin zoomda kuzatadi.
 // Ilgari xarita BIR marta markazlashib qotib qolardi: haydovchi uzoqlashgani sari
 // marshrut "uzoqda" ko'rinardi. Qo'lda surilsa follow pauza (RN'ga followOff).
@@ -52,7 +63,10 @@ function centerNow(){
 window.setFollow=function(on){ _follow=!!on; if(_follow)centerNow(); };
 function leafletUpdate(d){
   try{
-    if(d.myLat!=null){ if(myMarker){myMarker.setLatLng([d.myLat,d.myLng]);} else {myMarker=L.marker([d.myLat,d.myLng]).addTo(map).bindPopup('Siz');} }
+    if(d.myLat!=null){
+      if(!myMarker){ myMarker=(_lastHeading!=null?L.marker([d.myLat,d.myLng],{icon:arrowIcon(_lastHeading)}):L.marker([d.myLat,d.myLng])).addTo(map).bindPopup('Siz'); _appliedHeading=_lastHeading; }
+      else { myMarker.setLatLng([d.myLat,d.myLng]); if(_lastHeading!=null&&_lastHeading!==_appliedHeading){ try{myMarker.setIcon(arrowIcon(_lastHeading));}catch(e){} _appliedHeading=_lastHeading; } }
+    }
     if(d.pickLat!=null){ if(pickMarker){pickMarker.setLatLng([d.pickLat,d.pickLng]);} else {pickMarker=L.marker([d.pickLat,d.pickLng],{icon:greenIcon}).addTo(map).bindPopup('Mijoz');} } else if(pickMarker){map.removeLayer(pickMarker);pickMarker=null;}
     if(d.dropLat!=null){ if(dropMarker){dropMarker.setLatLng([d.dropLat,d.dropLng]);} else {dropMarker=L.marker([d.dropLat,d.dropLng],{icon:redIcon}).addTo(map).bindPopup('Manzil');} } else if(dropMarker){map.removeLayer(dropMarker);dropMarker=null;}
     var c=d.myLat!=null?[d.myLat,d.myLng]:(d.pickLat!=null?[d.pickLat,d.pickLng]:null);
@@ -125,7 +139,7 @@ function googleRoute(pts){
 window.drawRoute=function(pts){ _lastRoute=pts; if(_eng==='google')googleRoute(pts); else leafletRoute(pts); };
 window.clearRoute=function(){ _lastRoute=null; leafletRoute(null); googleRoute(null); };
 // ── Dispatcher: RN injectJavaScript(updateMap) ──
-window.updateMap=function(d){ _last=d; if(_eng==='google')googleUpdate(d); else leafletUpdate(d); };
+window.updateMap=function(d){ _last=d; if(d&&d.heading!=null)_lastHeading=d.heading; if(_eng==='google')googleUpdate(d); else leafletUpdate(d); };
 window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'mapReady'}));
 </script></body></html>`;
 }
