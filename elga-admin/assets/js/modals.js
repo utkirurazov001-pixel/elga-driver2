@@ -14,16 +14,16 @@
       wide:true,
       body:'<div class="grid g-half" style="align-items:start;gap:20px">'+
         '<div>'+dl([
-          ['Mijoz', o.client],['Telefon','<span class="mono">'+o.client_phone+'</span>'],
+          ['Mijoz', U.esc(o.client||'')],['Telefon','<span class="mono">'+U.esc(o.client_phone||'')+'</span>'],
           ['Olish','<b>'+U.esc(o.from||'')+'</b>'],['Tushirish','<b>'+U.esc(o.to||'')+'</b>'],
           ['Safar turi', o.route_type==='inter'?'<span class="tg gold">Shaharlararo</span>':'<span class="tg neutral">Shahar ichi</span>'],
           ['Tarif', U.tariff(o.tariff)],
           ['Masofa', o.distance+' km'],['Davomiyligi', o.duration+' daq'],
-          ['Haydovchi', o.driver||'—'],['Park', o.park?o.park:'—'],
+          ['Haydovchi', U.esc(o.driver||'—')],['Park', o.park?U.esc(String(o.park)):'—'],
           ['To\'lov', pay],['Summa','<b class="mono">'+window.money(o.price)+' so\'m</b>'],
           ['Komissiya (15%)','<span class="mono">'+window.money(o.commission)+' so\'m</span>'],
           ['Holat', U.orderTag(o.status)]
-        ].concat(o.cancel_reason?[['Bekor sababi','<span style="color:var(--danger)">'+o.cancel_reason+'</span>']]:[]))+'</div>'+
+        ].concat(o.cancel_reason?[['Bekor sababi','<span style="color:var(--danger)">'+U.esc(o.cancel_reason)+'</span>']]:[]))+'</div>'+
         '<div><div class="card-head" style="padding:0 0 12px;border:none"><h3 style="font-size:14px">Holat tarixi</h3></div>'+hist+'</div>'+
       '</div>',
       foot: (function(){
@@ -68,13 +68,13 @@
   /* ---- HAYDOVCHI DETALI ---- */
   window.driverDetail = function(d, rerender){
     U.modal({
-      title:d.full_name, sub:'Park '+d.park_number+' · '+d.car_make+' '+d.car_model,
+      title:U.esc(d.full_name||''), sub:'Park '+U.esc(String(d.park_number||''))+' · '+U.esc((d.car_make||'')+' '+(d.car_model||'')),
       wide:true,
       body:'<div class="grid g-half" style="align-items:start;gap:20px">'+
         '<div>'+dl([
-          ['Telefon','<span class="mono">'+d.phone+'</span>'],['Shahar', d.city],
-          ['Avtomobil', d.car_make+' '+d.car_model],['Davlat raqami','<span class="mono">'+d.car_plate+'</span>'],
-          ['Rang', d.car_color],['Tarif', U.tariff(d.tariff)],['Park raqami', U.park(d.park_number)]
+          ['Telefon','<span class="mono">'+U.esc(d.phone||'')+'</span>'],['Shahar', U.esc(d.city||'')],
+          ['Avtomobil', U.esc((d.car_make||'')+' '+(d.car_model||''))],['Davlat raqami','<span class="mono">'+U.esc(d.car_plate||'')+'</span>'],
+          ['Rang', U.esc(d.car_color||'')],['Tarif', U.tariff(d.tariff)],['Park raqami', U.park(d.park_number)]
         ])+'</div>'+
         '<div>'+dl([
           ['Reyting','★ '+d.rating],['Buyurtmalar', d.orders_count],
@@ -125,9 +125,9 @@
           '<div class="tm">'+window.money(o.price)+'</div></div>';
       }).join('')+'</div></div>' : '';
     U.modal({
-      title:c.full_name, sub:'Mijoz · '+c.tier.toUpperCase()+' daraja',
+      title:U.esc(c.full_name||''), sub:'Mijoz · '+U.esc(String(c.tier||'bronze').toUpperCase())+' daraja',
       body:dl([
-        ['Telefon','<span class="mono">'+c.phone+'</span>'],['Buyurtmalar', c.orders_count],
+        ['Telefon','<span class="mono">'+U.esc(c.phone||'')+'</span>'],['Buyurtmalar', c.orders_count],
         ['Jami sarflagan','<b class="mono">'+window.money(c.total_spent)+' so\'m</b>'],
         ['Sadoqat balli','<span class="mono gold">'+c.points+' ball</span>'],
         ['Daraja', c.tier.toUpperCase()],['Ro\'yxatdan', c.registered_at],
@@ -170,7 +170,8 @@
         });
         if(rs) rs.addEventListener('click',function(){
           c.status='resolved'; U.toast('Hal qilindi','Shikoyat yopildi'); close();
-          window.apiAction('POST','/complaints/'+c.id+'/resolve').then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          // audit-fix: backend POST /api/admin/complaints/resolve {id}
+          window.apiAction('POST','/api/admin/complaints/resolve',{id:c.id}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
           rerender&&rerender(); window.refreshBadges&&window.refreshBadges();
         });
       }
@@ -341,7 +342,8 @@
           var c=back.querySelector('[data-code]').value.trim();
           if(c.length<4){ U.toast('Xato','Tasdiq kodini kiriting','error'); return; }
           w.status='paid'; close(); U.toast('To\'landi', w.driver+' · '+window.money(w.amount)+' so\'m '+w.provider);
-          window.apiAction('POST','/finance/withdrawals/'+w.id+'/approve',{confirm:true,code:c}).then(function(r){ if(!r.ok&&!r.demo) U.toast('Backend xatosi', r.message,'error'); });
+          // audit-fix: backend POST /api/admin/payouts/:id/process {action:'paid'}
+          window.apiAction('POST','/api/admin/payouts/'+w.id+'/process',{action:'paid'}).then(function(r){ if(!r.ok&&!r.demo) U.toast('Backend xatosi', r.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });
       }
@@ -360,7 +362,8 @@
           var reason=back.querySelector('[data-reason]').value.trim();
           if(!reason){ U.toast('Xato','Sabab kiriting','error'); return; }
           w.status='rejected'; close(); U.toast('Rad etildi', w.driver+' so\'rovi rad etildi','error');
-          window.apiAction('POST','/finance/withdrawals/'+w.id+'/reject',{reason:reason}).then(function(r){ if(!r.ok&&!r.demo) U.toast('Backend xatosi', r.message,'error'); });
+          // audit-fix: backend POST /api/admin/payouts/:id/process {action:'reject', note}
+          window.apiAction('POST','/api/admin/payouts/'+w.id+'/process',{action:'reject',note:reason}).then(function(r){ if(!r.ok&&!r.demo) U.toast('Backend xatosi', r.message,'error'); });
           var pg=document.querySelector('#page>div'); if(pg&&pg._render)pg._render();
         });
       }
