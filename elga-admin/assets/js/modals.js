@@ -575,7 +575,8 @@
       title:'Yangi kampaniya', sub:'Segmentlangan push / SMS e\'lon',
       body:'<div class="form-grid">'+
         '<div class="field full"><label>Sarlavha</label><input class="input" data-t placeholder="Masalan: Hafta oxiri aksiyasi"></div>'+
-        '<div class="field"><label>Kanal</label><select class="input" data-ch><option value="push">Push</option><option value="sms">SMS</option><option value="inapp">Ilova ichida</option></select></div>'+
+        '<div class="field"><label>Kanal</label><select class="input" data-ch><option value="push">Push (ilova)</option><option value="sms">SMS</option></select></div>'+
+        '<div class="field"><label>Auditoriya</label><select class="input" data-aud><option value="all">Hammasi</option><option value="customer">Mijozlar</option><option value="driver">Haydovchilar</option></select></div>'+
         '<div class="field"><label>Segment (daraja)</label><select class="input" data-seg>'+tiers.map(function(t){return '<option>'+t+'</option>';}).join('')+'</select></div>'+
         '<div class="field full"><label>Shahar (ixtiyoriy)</label><select class="input" data-city><option value="">Barcha shaharlar</option>'+cities.map(function(c){return '<option>'+c+'</option>';}).join('')+'</select></div>'+
         '<div class="field full"><label>Matn</label><textarea class="input" data-body placeholder="Xabar matni..."></textarea></div>'+
@@ -589,9 +590,19 @@
           var seg=back.querySelector('[data-seg]').value, city=back.querySelector('[data-city]').value;
           var tier = seg.indexOf('Gold')>=0?'gold':seg.indexOf('Silver')>=0?'silver':seg.indexOf('Bronze')>=0?'bronze':'';
           var recip = window.DB.clients.filter(function(c){return (!tier||c.tier===tier);}).length;
-          window.DB.campaigns.unshift({id:'CP'+(window.DB.campaigns.length+1), title:title, channel:back.querySelector('[data-ch]').value,
-            segment:(city?city+' · ':'')+seg, body:back.querySelector('[data-body]').value, status:send?'sent':'scheduled', recipients:send?recip:0, created_at:'hozir'});
-          window.apiAction('POST','/campaigns',{title:title, channel:back.querySelector('[data-ch]').value, body:back.querySelector('[data-body]').value||'-', segment:(tier?{tier:tier}:{}), send_now:send}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+          var ch=back.querySelector('[data-ch]').value, bodyTxt=back.querySelector('[data-body]').value||'';
+          var aud=(back.querySelector('[data-aud]')||{}).value||'all';
+          window.DB.campaigns.unshift({id:'CP'+(window.DB.campaigns.length+1), title:title, channel:ch,
+            segment:(city?city+' · ':'')+seg, body:bodyTxt, status:send?'sent':'scheduled', recipients:send?recip:0, created_at:'hozir'});
+          // send_now bo'lsa HAQIQIY yuborish: push -> mobil ilovalarga (Expo, ilova yopiq
+          // bo'lsa ham ovoz bilan), sms -> Eskiz. (Rejalashtirish backendда yo'q — lokal.)
+          if(send){
+            if(ch==='sms'){
+              window.apiAction('POST','/api/admin/broadcast',{title:title, text:bodyTxt||'-', channel:'sms'}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+            } else {
+              window.apiAction('POST','/api/admin/push-broadcast',{title:title, body:bodyTxt||'-', audience:aud}).then(function(x){ if(!x.ok&&!x.demo) U.toast('Backend xatosi', x.message,'error'); });
+            }
+          }
           close(); U.toast(send?'Yuborildi':'Rejalashtirildi', title+(send?' · '+recip+' qabul':'')); rerender&&rerender();
         }
         back.querySelector('[data-send]').addEventListener('click',function(){create(true);});
