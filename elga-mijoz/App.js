@@ -43,6 +43,39 @@ function mfont(weight) { // '600' | '700' | '800'
   return { fontFamily: fam, fontWeight: undefined };
 }
 
+// UI-B1: yagona tugma tizimi — 5 tur. Bitta ekranda faqat bitta 'primary'.
+// kind: 'primary' | 'secondary' | 'danger' | 'ghost' | 'icon'
+function Btn({ kind = 'primary', title, icon, onPress, loading, disabled, style, textStyle, children }) {
+  const dis = disabled || loading;
+  const base = {
+    primary:   { backgroundColor: '#FFCC00', borderWidth: 0 },
+    secondary: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: '#FFCC00' },
+    danger:    { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: '#EF4444' },
+    ghost:     { backgroundColor: 'transparent', borderWidth: 0 },
+    icon:      { backgroundColor: '#FFCC00', borderWidth: 0, width: 48, height: 48, borderRadius: 24, paddingHorizontal: 0 },
+  }[kind];
+  const txtColor = kind === 'primary' || kind === 'icon' ? '#15171c' : kind === 'danger' ? '#EF4444' : kind === 'ghost' ? '#8A8F98' : '#FFCC00';
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      disabled={dis}
+      onPress={onPress}
+      style={[{
+        minHeight: kind === 'icon' ? 48 : 52, borderRadius: kind === 'icon' ? 24 : 14,
+        alignItems: 'center', justifyContent: 'center', flexDirection: 'row',
+        paddingHorizontal: kind === 'icon' ? 0 : 18, opacity: dis && !loading ? 0.4 : 1,
+      }, base, style]}>
+      {loading ? <ActivityIndicator color={txtColor} /> : (
+        <>
+          {icon ? <Ionicons name={icon} size={kind === 'icon' ? 22 : 18} color={txtColor} style={title ? { marginRight: 8 } : null} /> : null}
+          {title ? <Text style={[{ color: txtColor, fontSize: 15.5, fontWeight: '800', letterSpacing: 0.3 }, mfont('800'), textStyle]}>{title}</Text> : null}
+          {children}
+        </>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 // Faol (tugamagan) buyurtma holatlari — bularda buyurtma "tirik" hisoblanadi.
 // completed/cancelled/paid — yakuniy holatlar (faol emas).
 const ACTIVE_STATUSES = ['searching', 'assigned', 'accepted', 'arrived', 'in_progress'];
@@ -3201,12 +3234,10 @@ function AppInner({ onBootDone }) {
               )}
 
               {['searching', 'assigned', 'accepted', 'arrived'].includes(order.status) && (
-                <TouchableOpacity
-                  style={[s.outlineBtn, { borderColor: RED, marginTop: 12, marginHorizontal: 16, justifyContent: 'center' }]}
-                  onPress={() => setCancelModal(true)}
-                  disabled={loading}>
-                  <Text style={{ color: RED, fontSize: 14, fontWeight: '600' }}>{t('cancel_order_btn')}</Text>
-                </TouchableOpacity>
+                /* UI-B1: yagona Btn tizimi — danger */
+                <Btn kind="danger" title={t('cancel_order_btn')}
+                  onPress={() => setCancelModal(true)} disabled={loading}
+                  style={{ marginTop: 12, marginHorizontal: 16 }} />
               )}
             </ScrollView>
             </Animated.View>
@@ -3688,15 +3719,13 @@ function AppInner({ onBootDone }) {
                   </Text>
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={[s.orderCta, { marginHorizontal: 0 }, (!estimates[carClass] || loading) && { opacity: 0.5 }]}
-                activeOpacity={0.85}
+              {/* UI-B1: yagona Btn tizimi — primary. Matn: "Ketdik · [narx] so'm" (avvalgidek) */}
+              <Btn kind="primary"
+                title={`${t('lets_go')}${estimates[carClass] ? ` · ${fmt(estimates[carClass].price)} ${t('som')}` : ''}`}
                 onPress={createOrder}
-                disabled={loading || !estimates[carClass]}>
-                {loading
-                  ? <ActivityIndicator color="#000" />
-                  : <Text style={[s.orderCtaTxt, mfont('800')]}>{t('lets_go')}{estimates[carClass] ? ` · ${fmt(estimates[carClass].price)} ${t('som')}` : ''}</Text>}
-              </TouchableOpacity>
+                loading={loading}
+                disabled={!estimates[carClass]}
+                style={{ minHeight: 56, borderRadius: 16, marginTop: 4 }} />
             </View>
             </AnimatedSheet>
           </View>
@@ -3988,10 +4017,8 @@ function AppInner({ onBootDone }) {
               })}
             </View>
 
-            <TouchableOpacity style={s.logoutBtn} onPress={confirmLogout} activeOpacity={0.8}>
-              <Ionicons name="log-out" size={18} color={RED} style={{ marginRight: 8 }} />
-              <Text style={{ color: RED, fontSize: 15, fontWeight: '600' }}>{t('logout')}</Text>
-            </TouchableOpacity>
+            {/* UI-B1: yagona Btn tizimi — danger */}
+            <Btn kind="danger" icon="log-out" title={t('logout')} onPress={confirmLogout} style={{ marginTop: 16 }} />
           </View>
         </ScrollView>
       )}
@@ -4275,12 +4302,10 @@ function AppInner({ onBootDone }) {
                 </TouchableOpacity>
               ))}
             </View>
+            {/* UI-B1: yagona Btn tizimi — tasdiq primary, bekor ghost */}
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TouchableOpacity style={{ flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: BORDER }}
-                onPress={() => setSchedModal(false)}>
-                <Text style={{ color: GRAY1, fontSize: 14, fontWeight: '600' }}>{t('cancel_short')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={{ flex: 1.5, paddingVertical: 13, borderRadius: 12, alignItems: 'center', backgroundColor: YELLOW }}
+              <Btn kind="ghost" title={t('cancel_short')} onPress={() => setSchedModal(false)} style={{ flex: 1 }} />
+              <Btn kind="primary" title={t('confirm_btn')} style={{ flex: 1.5 }}
                 onPress={() => {
                   const now = new Date();
                   const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + schedDay, schedHour, schedMin, 0);
@@ -4291,9 +4316,7 @@ function AppInner({ onBootDone }) {
                   }
                   setSchedAt(d);
                   setSchedModal(false);
-                }}>
-                <Text style={{ color: '#000', fontSize: 14, fontWeight: '800' }}>{t('confirm_btn')}</Text>
-              </TouchableOpacity>
+                }} />
             </View>
           </View>
         </View>
@@ -4363,11 +4386,11 @@ function AppInner({ onBootDone }) {
                           )}
                         </View>
                         {f.lat != null && f.lng != null && (
-                          <TouchableOpacity activeOpacity={0.85}
-                            style={{ backgroundColor: YELLOW, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 }}
-                            onPress={() => { setFavSheet(false); setTab('order'); pickDest({ lat: Number(f.lat), lng: Number(f.lng), address: f.address || f.name }); }}>
-                            <Text style={{ color: '#000', fontSize: 13, fontWeight: '800' }}>{t('fav_go')} →</Text>
-                          </TouchableOpacity>
+                          /* UI-B1: primary kichik variant */
+                          <Btn kind="primary" title={`${t('fav_go')} →`}
+                            onPress={() => { setFavSheet(false); setTab('order'); pickDest({ lat: Number(f.lat), lng: Number(f.lng), address: f.address || f.name }); }}
+                            style={{ minHeight: 36, paddingHorizontal: 12, borderRadius: 10 }}
+                            textStyle={{ fontSize: 12 }} />
                         )}
                         <TouchableOpacity onPress={() => removeFavorite(f.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={{ marginLeft: 10 }}>
                           <Ionicons name="close-circle" size={20} color={GRAY2} />
@@ -4583,9 +4606,11 @@ function AppInner({ onBootDone }) {
                 </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity style={s.ctaBtn} onPress={submitRating} disabled={loading}>
-              {loading ? <ActivityIndicator color="#000" /> : <Text style={s.ctaBtnTxt}>{t('rate_up')}</Text>}
-            </TouchableOpacity>
+            {/* UI-B1: primary + baho tanlanmaguncha vizual disabled (submitRating'dagi
+                stars guard saqlanadi — bu faqat qo'shimcha vizual holat) */}
+            <Btn kind="primary" title={t('rate_up')} onPress={submitRating}
+              loading={loading} disabled={stars === 0}
+              style={{ minHeight: 56, borderRadius: 16, marginTop: 16 }} />
           </View>
         </View>
       </Modal>

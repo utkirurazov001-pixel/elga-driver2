@@ -51,6 +51,39 @@ function mfont(weight) { // '600' | '700' | '800'
   return { fontFamily: fam, fontWeight: undefined };
 }
 
+// UI-B1: yagona tugma tizimi — 5 tur. Bitta ekranda faqat bitta 'primary'.
+// kind: 'primary' | 'secondary' | 'danger' | 'ghost' | 'icon'
+function Btn({ kind = 'primary', title, icon, onPress, loading, disabled, style, textStyle, children }) {
+  const dis = disabled || loading;
+  const base = {
+    primary:   { backgroundColor: '#FFCC00', borderWidth: 0 },
+    secondary: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: '#FFCC00' },
+    danger:    { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: '#EF4444' },
+    ghost:     { backgroundColor: 'transparent', borderWidth: 0 },
+    icon:      { backgroundColor: '#FFCC00', borderWidth: 0, width: 48, height: 48, borderRadius: 24, paddingHorizontal: 0 },
+  }[kind];
+  const txtColor = kind === 'primary' || kind === 'icon' ? '#15171c' : kind === 'danger' ? '#EF4444' : kind === 'ghost' ? '#8A8F98' : '#FFCC00';
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      disabled={dis}
+      onPress={onPress}
+      style={[{
+        minHeight: kind === 'icon' ? 48 : 52, borderRadius: kind === 'icon' ? 24 : 14,
+        alignItems: 'center', justifyContent: 'center', flexDirection: 'row',
+        paddingHorizontal: kind === 'icon' ? 0 : 18, opacity: dis && !loading ? 0.4 : 1,
+      }, base, style]}>
+      {loading ? <ActivityIndicator color={txtColor} /> : (
+        <>
+          {icon ? <Ionicons name={icon} size={kind === 'icon' ? 22 : 18} color={txtColor} style={title ? { marginRight: 8 } : null} /> : null}
+          {title ? <Text style={[{ color: txtColor, fontSize: 15.5, fontWeight: '800', letterSpacing: 0.3 }, mfont('800'), textStyle]}>{title}</Text> : null}
+          {children}
+        </>
+      )}
+    </TouchableOpacity>
+  );
+}
+
 // T-07: ilova ichidagi ZAXIRA buyurtma ovozi — admin ovoz yuklamagan yoki oflayn
 // bo'lsa ham DOIM ishlaydi. Admin ovoz bergan bo'lsa (/api/config/sounds) o'sha
 // ustun turadi; bu — kafolatlangan zaxira (baland, e'tibor tortuvchi ohang).
@@ -1215,7 +1248,7 @@ function TripKeepAwake() { useKeepAwake('trip-meter'); return null; }
 
 function ElgaLogo({ size = 56, tagline = false }) {
   // T-05: KetdikGo brendi. Oldingi "ELGA TAXI" qoldig'i ("TAXI" so'zi) olib tashlandi —
-  // brend endi faqat "KetdikGo" + slogan "Belgila. Ko'r. Ketdik.".
+  // brend endi faqat "KetdikGo" + slogan "Belgila. Tanla. Ketdik.".
   return (
     <View style={{ alignItems: 'center' }}>
       <Text style={{ fontSize: size, fontWeight: '800', letterSpacing: -size * 0.02, lineHeight: size * 1.05 }}>
@@ -1225,7 +1258,7 @@ function ElgaLogo({ size = 56, tagline = false }) {
       </Text>
       {tagline && (
         <Text style={{ color: GRAY1, fontSize: Math.max(10, size * 0.18), fontWeight: '600', letterSpacing: 1, marginTop: 8 }}>
-          Belgila. Ko'r. Ketdik.
+          Belgila. Tanla. Ketdik.
         </Text>
       )}
     </View>
@@ -2954,11 +2987,8 @@ function AppInner({ onBootDone }) {
                       <Text style={{ color: GRAY1, fontSize: 12, marginTop: 2 }}>{t('solo_meter_sub')}</Text>
                     </TouchableOpacity>
                   )}
-                  <TouchableOpacity style={s.offlineBtn} onPress={toggleOnline} disabled={loading} activeOpacity={0.8}>
-                    {loading
-                      ? <ActivityIndicator color={GRAY1} />
-                      : <Text style={{ color: GRAY1, fontSize: 15, fontWeight: '600' }}>{t('go_offline')}</Text>}
-                  </TouchableOpacity>
+                  {/* UI-B1: yagona Btn tizimi — secondary */}
+                  <Btn kind="secondary" title={t('go_offline')} onPress={toggleOnline} loading={loading} style={{ marginTop: 12 }} />
                 </>
               ) : (
                 <>
@@ -2980,14 +3010,8 @@ function AppInner({ onBootDone }) {
                       </View>
                     </View>
                   )}
-                  <TouchableOpacity style={s.btn} onPress={toggleOnline} disabled={loading} activeOpacity={0.85}>
-                    {loading
-                      ? <ActivityIndicator color="#000" />
-                      : <>
-                          <Ionicons name="power" size={20} color="#1A1500" style={{ marginRight: 8 }} />
-                          <Text style={[s.btnTxt, mfont('800')]}>{t('go_online')}</Text>
-                        </>}
-                  </TouchableOpacity>
+                  {/* UI-B1: yagona Btn tizimi — primary */}
+                  <Btn kind="primary" icon="power" title={t('go_online')} onPress={toggleOnline} loading={loading} style={{ marginTop: 6 }} />
                 </>
               )}
             </View>
@@ -3377,15 +3401,10 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
               </TouchableOpacity>
             </View>
           ) : null}
-          <View style={s.row}>
-            <TouchableOpacity style={[s.btnHalf, { backgroundColor: CARD2, borderWidth: 1, borderColor: BORDER }]}
-              onPress={() => onAction('reject')} disabled={loading}>
-              <Text style={{ color: GRAY1, fontSize: 15, fontWeight: '600' }}>{t('reject')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[s.btnHalf, { backgroundColor: YELLOW }]}
-              onPress={() => onAction('accept')} disabled={loading}>
-              {loading ? <ActivityIndicator color="#000" /> : <Text style={{ color: '#000', fontSize: 15, fontWeight: '700' }}>{t('accept')}</Text>}
-            </TouchableOpacity>
+          {/* UI-B1: yagona Btn tizimi — faqat 'Qabul qilish' primary (katta), 'Rad etish' ghost */}
+          <View style={[s.row, { gap: 8 }]}>
+            <Btn kind="ghost" title={t('reject')} onPress={() => onAction('reject')} disabled={loading} style={{ flex: 1 }} />
+            <Btn kind="primary" title={t('accept')} onPress={() => onAction('accept')} loading={loading} style={{ flex: 1.8 }} />
           </View>
         </>
       ) : (
@@ -3445,27 +3464,21 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
                 style={{ alignItems: 'center', paddingVertical: 6 }}>
                 <Text style={{ color: GRAY1, fontSize: 12, textDecorationLine: 'underline' }}>{t('external_nav')}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={s.btn} onPress={() => onAction('arrived')} disabled={loading} activeOpacity={0.85}>
-                {loading ? <ActivityIndicator color="#000" /> : <Text style={s.btnTxt}>{t('arrived_btn')}</Text>}
-              </TouchableOpacity>
+              {/* UI-B1: yagona Btn tizimi — primary */}
+              <Btn kind="primary" title={t('arrived_btn')} onPress={() => onAction('arrived')} loading={loading} />
               {/* F-04: haydovchi safardan oldin voz kechishi mumkin — backend buyurtmani
-                  boshqa haydovchiga qaytaradi (requeue), mijoz xabar oladi. */}
-              <TouchableOpacity style={{ alignItems: 'center', paddingVertical: 8 }} onPress={confirmCancelTrip} disabled={loading}>
-                <Text style={{ color: RED, fontSize: 13, fontWeight: '600' }}>{t('cancel_trip')}</Text>
-              </TouchableOpacity>
+                  boshqa haydovchiga qaytaradi (requeue), mijoz xabar oladi. UI-B1: danger */}
+              <Btn kind="danger" title={t('cancel_trip')} onPress={confirmCancelTrip} disabled={loading} />
             </View>
           )}
 
           {/* Yetib keldi — safarni boshlash */}
           {st === 'arrived' && (
             <View style={{ gap: 8, marginTop: 12 }}>
-              <TouchableOpacity style={s.btn} onPress={() => onAction('start')} disabled={loading} activeOpacity={0.85}>
-                {loading ? <ActivityIndicator color="#000" /> : <Text style={[s.btnTxt, mfont('800')]}>{t('start_trip')}</Text>}
-              </TouchableOpacity>
-              {/* F-04: mijoz chiqmadi va h.k. — haydovchi bekor qila oladi, mijoz xabar oladi */}
-              <TouchableOpacity style={{ alignItems: 'center', paddingVertical: 8 }} onPress={confirmCancelTrip} disabled={loading}>
-                <Text style={{ color: RED, fontSize: 13, fontWeight: '600' }}>{t('cancel_trip')}</Text>
-              </TouchableOpacity>
+              {/* UI-B1: yagona Btn tizimi — primary */}
+              <Btn kind="primary" title={t('start_trip')} onPress={() => onAction('start')} loading={loading} />
+              {/* F-04: mijoz chiqmadi va h.k. — haydovchi bekor qila oladi, mijoz xabar oladi. UI-B1: danger */}
+              <Btn kind="danger" title={t('cancel_trip')} onPress={confirmCancelTrip} disabled={loading} />
             </View>
           )}
 
@@ -3594,11 +3607,8 @@ function OrderPanel({ order, loading, meter, liveMeter, tripWait, onAction, onNa
                 style={{ alignItems: 'center', paddingVertical: 6 }}>
                 <Text style={{ color: GRAY1, fontSize: 12, textDecorationLine: 'underline' }}>{t('external_nav')}</Text>
               </TouchableOpacity>
-              {/* Katta yakunlash tugmasi (mavjud onAction('complete')) */}
-              <TouchableOpacity style={{ backgroundColor: YELLOW, borderRadius: 14, paddingVertical: 15, alignItems: 'center' }}
-                onPress={() => onAction('complete')} disabled={loading} activeOpacity={0.85}>
-                {loading ? <ActivityIndicator color="#000" /> : <Text style={[s.btnTxt, mfont('800')]}>{t('complete_trip')}</Text>}
-              </TouchableOpacity>
+              {/* Katta yakunlash tugmasi (mavjud onAction('complete')) — UI-B1: primary */}
+              <Btn kind="primary" title={t('complete_trip')} onPress={() => onAction('complete')} loading={loading} />
             </View>
             );
           })()}
@@ -3691,13 +3701,10 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: GREEN }} />
               <Text style={{ color: GRAY1, fontSize: 13 }}>{t('this_week')}: {fmt(weekEarned)} {t('som')}</Text>
             </View>
-            <TouchableOpacity
-              style={s.withdrawBtn}
+            {/* UI-B1: yagona Btn tizimi — primary (ekrandagi yagona primary) */}
+            <Btn kind="primary" icon="arrow-up-circle" title={t('withdraw')}
               onPress={() => Alert.alert(t('withdraw_title'), t('withdraw_soon'))}
-              activeOpacity={0.8}>
-              <Ionicons name="arrow-up-circle" size={18} color="#000" style={{ marginRight: 6 }} />
-              <Text style={{ color: '#000', fontSize: 14, fontWeight: '700' }}>{t('withdraw')}</Text>
-            </TouchableOpacity>
+              style={{ marginTop: 16 }} />
           </View>
 
           {/* Hisob to'ldirish (Click) */}
@@ -3713,12 +3720,8 @@ function EarningsScreen({ earnings, onRefresh, insets, token }) {
                 <Ionicons name="wallet" size={24} color={YELLOW} />
               </View>
             </View>
-            <TouchableOpacity
-              style={{ backgroundColor: YELLOW, borderRadius: 12, height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-              onPress={() => setTopupModal(true)}
-              activeOpacity={0.85}>
-              <Text style={{ color: '#15171c', fontSize: 16, fontWeight: '700' }}>{t('topup_click')}</Text>
-            </TouchableOpacity>
+            {/* UI-B1: ekranda faqat bitta primary (YECHIB OLISH) — bu secondary bo'ldi */}
+            <Btn kind="secondary" title={t('topup_click')} onPress={() => setTopupModal(true)} />
           </View>
 
           {/* Click topup modal */}
@@ -3866,9 +3869,8 @@ function TripComplete({ trip, insets, onRate, onDone }) {
         </View>
       </View>
 
-      <TouchableOpacity style={[s.btn, { marginTop: 'auto' }]} onPress={finish} activeOpacity={0.85}>
-        <Text style={s.btnTxt}>{t('continue_btn')}</Text>
-      </TouchableOpacity>
+      {/* UI-B1: yagona Btn tizimi — primary */}
+      <Btn kind="primary" title={t('continue_btn')} onPress={finish} style={{ marginTop: 'auto' }} />
     </View>
   );
 }
@@ -4123,10 +4125,8 @@ function DriverProfile({ user, earnings, onLogout, insets, token, lang, onSetLan
         <ProfRow icon="settings-outline" title={t('settings')} last onPress={() => setSettingsModal(true)} />
       </View>
 
-      <TouchableOpacity style={s.logoutBtn} onPress={onLogout} activeOpacity={0.8}>
-        <Ionicons name="log-out-outline" size={18} color={RED} style={{ marginRight: 8 }} />
-        <Text style={{ color: RED, fontSize: 15, fontWeight: '600' }}>{t('logout')}</Text>
-      </TouchableOpacity>
+      {/* UI-B1: yagona Btn tizimi — danger */}
+      <Btn kind="danger" icon="log-out-outline" title={t('logout')} onPress={onLogout} style={{ marginTop: 6 }} />
 
       {/* ===== A. Avtomobil ma'lumotlari Modal ===== */}
       <Modal visible={carModal} animationType="slide" onRequestClose={() => setCarModal(false)}>
