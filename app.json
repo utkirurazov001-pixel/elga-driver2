@@ -37,6 +37,7 @@
     },
     "android": {
       "package": "uz.ketdik.driver",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 4,
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
