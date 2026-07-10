@@ -1742,10 +1742,20 @@ function AppInner({ onBootDone }) {
           const last = await Location.getLastKnownPositionAsync({ maxAge: 5 * 60 * 1000 });
           if (last) setMyLoc((cur) => cur || { lat: last.coords.latitude, lng: last.coords.longitude });
         } catch (e) {}
-        const pos = await withTimeout(
+        let pos = await withTimeout(
           Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
           10000
         ).catch(() => null);
+        // Yangi/qishloq hududda GPS "sovuq" bo'lsa (kesh yo'q), Balanced 10s'da fix
+        // bermasligi mumkin → "joylashuv aniqlanmadi". Aniqroq (High) rejim + uzunroq
+        // timeout bilan qayta urinamiz — Termiz/Denov/Qumqo'rg'on kabi yangi hududlarda
+        // ham joylashuv aniqlanadi.
+        if (!pos) {
+          pos = await withTimeout(
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+            20000
+          ).catch(() => null);
+        }
         if (pos) {
           const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           lastLocRef.current = loc;
