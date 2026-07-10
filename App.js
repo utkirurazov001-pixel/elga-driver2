@@ -3130,12 +3130,13 @@ function AppInner({ onBootDone }) {
               }}
               activeOpacity={0.8}
               style={{
-                position: 'absolute', bottom: insets.bottom + 100, right: 12,
+                position: 'absolute', top: insets.top + 64, right: 12,
                 width: 48, height: 48, borderRadius: 24,
                 alignItems: 'center', justifyContent: 'center',
-                backgroundColor: 'rgba(21,23,28,0.9)',
+                backgroundColor: 'rgba(21,23,28,0.92)',
                 borderWidth: 2, borderColor: YELLOW,
-                shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+                zIndex: 90, elevation: 10,
+                shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 5, shadowOffset: { width: 0, height: 2 },
               }}>
               <Ionicons name="locate" size={22} color={YELLOW} />
             </TouchableOpacity>

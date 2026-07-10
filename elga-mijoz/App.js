@@ -3366,9 +3366,10 @@ function AppInner({ onBootDone }) {
               <View style={s.pinDot} />
             </View>
 
-            {/* Recenter button */}
+            {/* Recenter button — xaritaning yuqori-o'ng burchagida (avatar ostida), doim
+                ko'rinadi (pastki panel ortida qolmaydi). Yandex/Uber uslubi. */}
             <TouchableOpacity
-              style={[s.recenterBtn, { bottom: TABBAR_H + insets.bottom + 180 }]}
+              style={[s.recenterBtn, { top: insets.top + 64, right: 16 }]}
               onPress={async () => {
                 // G2: kesh darrov (xarita sakraydi), aniq fix timeout bilan — tugma qotmaydi
                 try {
@@ -5085,14 +5086,16 @@ const s = StyleSheet.create({
   recenterBtn: {
     position: 'absolute',
     right: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: CARD2,
-    borderWidth: 1,
-    borderColor: BORDER,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(21,23,28,0.92)',
+    borderWidth: 2,
+    borderColor: YELLOW,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 90, elevation: 10,
+    shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 5, shadowOffset: { width: 0, height: 2 },
   },
 
   // Home sheet
