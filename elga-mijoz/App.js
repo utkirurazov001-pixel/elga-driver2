@@ -805,6 +805,17 @@ if (Platform.OS === 'android') {
     vibrationPattern: [0, 250, 250, 250],
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   }).catch(() => {});
+  // MARKETING / SODIQLIK / aksiya push'lari channelId:'default' bilan keladi.
+  // Bu kanal yaratilmasa, ilova YOPIQ/FONда Android push'ni tashlab yuborardi
+  // (faqat ochiqда ko'rinardi). HIGH importance + ovoz bilan yaratamiz — endi
+  // ilova ishlamay turganда ham heads-up bildirishnoma bo'lib ko'rinadi.
+  Notifications.setNotificationChannelAsync('default', {
+    name: 'Xabarlar va aksiyalar',
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: 'default',
+    vibrationPattern: [0, 250, 150, 250],
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  }).catch(() => {});
 }
 
 // ============================================================
