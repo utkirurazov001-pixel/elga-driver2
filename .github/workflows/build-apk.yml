@@ -81,4 +81,5 @@ jobs:
 
       - name: Natija
         if: steps.token.outputs.ok == 'true'
-        run: echo "✅ Build topshirildi. Tayyor APK: https://expo.dev -> loyiha -> Builds"
+        run: |
+          echo "Build topshirildi. Tayyor APK: expo.dev -> loyiha -> Builds"
