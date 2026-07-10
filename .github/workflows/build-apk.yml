@@ -1,0 +1,84 @@
+# ============================================================
+#  APK BUILD — GitHub'dan bir tugma bilan (terminal kerak emas).
+#  Ishga tushirish: GitHub repo -> Actions -> "APK build (eas build)"
+#    -> "Run workflow" tugmasi. Qaysi ilova (driver/mijoz/ikkalasi) tanlanadi.
+#
+#  eas build BULUTDA (Expo serverida) bajariladi — bu runner faqat topshiradi.
+#  Tayyor APK: expo.dev -> loyiha -> Builds (yoki emailга havola keladi).
+#
+#  SHART (bir martalik):
+#   1) EXPO_TOKEN secret qo'shilgan bo'lsin (eas-update.yml bilan bir xil).
+#   2) FCM V1 kaliti Expo'ga yuklangan bo'lsin: expo.dev -> loyiha -> Credentials
+#      -> Android -> FCM V1 -> service account JSON. (Push shu bilan ishlaydi.)
+#   3) Android keystore — avvalgi build'lardan Expo'da bor (avtomatik ishlatiladi).
+# ============================================================
+name: APK build (eas build)
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Qaysi ilova build qilinsin?"
+        type: choice
+        default: "both"
+        options:
+          - both
+          - driver
+          - mijoz
+      profile:
+        description: "EAS profil (preview=APK, production=AAB)"
+        type: choice
+        default: "preview"
+        options:
+          - preview
+          - production
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: EXPO_TOKEN bormi?
+        id: token
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -n "$EXPO_TOKEN" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::error::EXPO_TOKEN secret qo'shilmagan — Settings -> Secrets -> Actions -> EXPO_TOKEN"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.token.outputs.ok == 'true'
+
+      - uses: actions/setup-node@v4
+        if: steps.token.outputs.ok == 'true'
+        with:
+          node-version: 22
+
+      - name: EAS CLI
+        if: steps.token.outputs.ok == 'true'
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Haydovchi ilovasi (app == driver yoki both)
+      - name: Haydovchi build
+        if: steps.token.outputs.ok == 'true' && (inputs.app == 'driver' || inputs.app == 'both')
+        run: |
+          npm ci
+          eas build --platform android --profile ${{ inputs.profile }} --non-interactive --no-wait
+
+      # Mijoz ilovasi (app == mijoz yoki both)
+      - name: Mijoz build
+        if: steps.token.outputs.ok == 'true' && (inputs.app == 'mijoz' || inputs.app == 'both')
+        working-directory: elga-mijoz
+        run: |
+          npm ci
+          eas build --platform android --profile ${{ inputs.profile }} --non-interactive --no-wait
+
+      - name: Natija
+        if: steps.token.outputs.ok == 'true'
+        run: echo "✅ Build topshirildi. Tayyor APK: https://expo.dev -> loyiha -> Builds"
