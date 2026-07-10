@@ -1742,10 +1742,20 @@ function AppInner({ onBootDone }) {
           const last = await Location.getLastKnownPositionAsync({ maxAge: 5 * 60 * 1000 });
           if (last) setMyLoc((cur) => cur || { lat: last.coords.latitude, lng: last.coords.longitude });
         } catch (e) {}
-        const pos = await withTimeout(
+        let pos = await withTimeout(
           Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
           10000
         ).catch(() => null);
+        // Yangi/qishloq hududda GPS "sovuq" bo'lsa (kesh yo'q), Balanced 10s'da fix
+        // bermasligi mumkin → "joylashuv aniqlanmadi". Aniqroq (High) rejim + uzunroq
+        // timeout bilan qayta urinamiz — Termiz/Denov/Qumqo'rg'on kabi yangi hududlarda
+        // ham joylashuv aniqlanadi.
+        if (!pos) {
+          pos = await withTimeout(
+            Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+            20000
+          ).catch(() => null);
+        }
         if (pos) {
           const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
           lastLocRef.current = loc;
@@ -3090,6 +3100,44 @@ function AppInner({ onBootDone }) {
                 shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
               }}>
               <Ionicons name="locate" size={22} color={follow ? '#15171c' : YELLOW} />
+            </TouchableOpacity>
+          )}
+
+          {/* IDLE recenter — faol buyurtma YO'Q holatda "meni xaritada ko'rsat" (Yandex/Uber
+              uslubi). Kutish/online holatida haydovchi o'zini topa oladi. Bir martalik
+              markazlashtirish (follow yoqilmaydi). */}
+          {(!order || !['accepted', 'arrived', 'in_progress'].includes(order.status)) && (
+            <TouchableOpacity
+              onPress={async () => {
+                // Kesh joylashuvi bo'lsa — darrov markazlashtiramiz (tugma javob bersin)
+                try { if (lastLocRef.current) mapRef.current?.injectJavaScript(`window.recenter&&window.recenter(${lastLocRef.current.lat},${lastLocRef.current.lng});true;`); } catch (e) {}
+                let pos = await withTimeout(
+                  Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+                  8000
+                ).catch(() => null);
+                if (!pos) {
+                  pos = await withTimeout(
+                    Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+                    15000
+                  ).catch(() => null);
+                }
+                if (!pos) return;
+                const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                lastLocRef.current = loc;
+                setMyLoc(loc);
+                AsyncStorage.setItem('last_loc', JSON.stringify(loc)).catch(() => {});
+                try { mapRef.current?.injectJavaScript(`window.recenter&&window.recenter(${loc.lat},${loc.lng});true;`); } catch (e) {}
+              }}
+              activeOpacity={0.8}
+              style={{
+                position: 'absolute', bottom: insets.bottom + 100, right: 12,
+                width: 48, height: 48, borderRadius: 24,
+                alignItems: 'center', justifyContent: 'center',
+                backgroundColor: 'rgba(21,23,28,0.9)',
+                borderWidth: 2, borderColor: YELLOW,
+                shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+              }}>
+              <Ionicons name="locate" size={22} color={YELLOW} />
             </TouchableOpacity>
           )}
 

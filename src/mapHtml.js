@@ -61,6 +61,16 @@ function centerNow(){
   }catch(e){}
 }
 window.setFollow=function(on){ _follow=!!on; if(_follow)centerNow(); };
+// "Meni xaritada ko'rsat" (recenter) — locate tugmasi shuni chaqiradi. Bir martalik
+// markazlashtirish (follow'ni yoqmaydi) — haydovchi kutish holatida o'zini topadi.
+window.recenter=function(lat,lng){
+  try{
+    var la=(lat!=null)?lat:(_last&&_last.myLat), ln=(lng!=null)?lng:(_last&&_last.myLng);
+    if(la==null||ln==null)return;
+    if(_eng==='google'){ if(gReady&&gmap){ gmap.setCenter({lat:la,lng:ln}); if((gmap.getZoom()||0)<16)gmap.setZoom(16); } }
+    else { map.setView([la,ln],Math.max(map.getZoom(),16)); }
+  }catch(e){}
+};
 function leafletUpdate(d){
   try{
     if(d.myLat!=null){

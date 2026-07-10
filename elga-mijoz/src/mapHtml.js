@@ -141,6 +141,16 @@ window.drawRoute=function(pts){ _lastRoute=pts; if(_eng==='google')googleRoute(p
 window.clearRoute=function(){ _lastRoute=null; leafletRoute(null); googleRoute(null); };
 // ── Dispatcher: RN injectJavaScript(updateMap) ──
 window.updateMap=function(d){ _last=d; if(_eng==='google')googleUpdate(d); else leafletUpdate(d); };
+// "Meni xaritada ko'rsat" (recenter) — locate tugmasi shuni chaqiradi (Yandex/Uber uslubi).
+// centeredOnce'ga bog'liq emas: har bosilganda joriy joylashuvga MAJBURAN markazlashtiradi.
+window.recenter=function(lat,lng){
+  try{
+    var la=(lat!=null)?lat:(_last&&_last.lat), ln=(lng!=null)?lng:(_last&&_last.lng);
+    if(la==null||ln==null)return;
+    if(_eng==='google'){ if(gReady&&gmap){ gmap.setCenter({lat:la,lng:ln}); if((gmap.getZoom()||0)<16)gmap.setZoom(16); } }
+    else { map.setView([la,ln],Math.max(map.getZoom(),16)); }
+  }catch(e){}
+};
 window.ReactNativeWebView&&window.ReactNativeWebView.postMessage(JSON.stringify({type:'mapReady'}));
 </script></body></html>`;
 }
