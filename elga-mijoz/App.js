@@ -3375,15 +3375,30 @@ function AppInner({ onBootDone }) {
                   const last = await Location.getLastKnownPositionAsync({ maxAge: 60 * 1000 });
                   if (last) setMyLoc({ lat: last.coords.latitude, lng: last.coords.longitude });
                 } catch (e) {}
-                const pos = await withTimeout(
+                // Kesh joylashuvi bo'lsa — xaritani DARHOL o'sha yerga markazlashtiramiz
+                // (tugma bosilishi bilan javob bersin), keyin aniq fix bilan yangilaymiz.
+                try {
+                  const c = myLoc;
+                  if (c) webviewRef.current?.injectJavaScript(`window.recenter&&window.recenter(${c.lat},${c.lng});true;`);
+                } catch (e) {}
+                let pos = await withTimeout(
                   Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
                   8000
                 ).catch(() => null);
+                // Yangi/qishloq hududda sovuq GPS — aniqroq rejim + uzunroq timeout bilan qayta urinamiz.
+                if (!pos) {
+                  pos = await withTimeout(
+                    Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+                    15000
+                  ).catch(() => null);
+                }
                 if (!pos) return;
                 const lat = pos.coords.latitude, lng = pos.coords.longitude;
                 setMyLoc({ lat, lng });
                 AsyncStorage.setItem(LAST_LOC_KEY, JSON.stringify({ lat, lng })).catch(() => {});
                 setPickup({ lat, lng, address: `${lat.toFixed(5)}, ${lng.toFixed(5)}` });
+                // Xaritani joriy joylashuvga MAJBURAN markazlashtiramiz (centeredOnce'ga bog'liq emas).
+                try { webviewRef.current?.injectJavaScript(`window.recenter&&window.recenter(${lat},${lng});true;`); } catch (e) {}
                 reverseGeocode(lat, lng).then((addr) => {
                   setPickup((p) => (p && p.lat === lat && p.lng === lng) ? { ...p, address: addr } : p);
                 });

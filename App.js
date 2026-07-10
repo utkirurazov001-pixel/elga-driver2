@@ -3103,6 +3103,44 @@ function AppInner({ onBootDone }) {
             </TouchableOpacity>
           )}
 
+          {/* IDLE recenter — faol buyurtma YO'Q holatda "meni xaritada ko'rsat" (Yandex/Uber
+              uslubi). Kutish/online holatida haydovchi o'zini topa oladi. Bir martalik
+              markazlashtirish (follow yoqilmaydi). */}
+          {(!order || !['accepted', 'arrived', 'in_progress'].includes(order.status)) && (
+            <TouchableOpacity
+              onPress={async () => {
+                // Kesh joylashuvi bo'lsa — darrov markazlashtiramiz (tugma javob bersin)
+                try { if (lastLocRef.current) mapRef.current?.injectJavaScript(`window.recenter&&window.recenter(${lastLocRef.current.lat},${lastLocRef.current.lng});true;`); } catch (e) {}
+                let pos = await withTimeout(
+                  Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+                  8000
+                ).catch(() => null);
+                if (!pos) {
+                  pos = await withTimeout(
+                    Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+                    15000
+                  ).catch(() => null);
+                }
+                if (!pos) return;
+                const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                lastLocRef.current = loc;
+                setMyLoc(loc);
+                AsyncStorage.setItem('last_loc', JSON.stringify(loc)).catch(() => {});
+                try { mapRef.current?.injectJavaScript(`window.recenter&&window.recenter(${loc.lat},${loc.lng});true;`); } catch (e) {}
+              }}
+              activeOpacity={0.8}
+              style={{
+                position: 'absolute', bottom: insets.bottom + 100, right: 12,
+                width: 48, height: 48, borderRadius: 24,
+                alignItems: 'center', justifyContent: 'center',
+                backgroundColor: 'rgba(21,23,28,0.9)',
+                borderWidth: 2, borderColor: YELLOW,
+                shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
+              }}>
+              <Ionicons name="locate" size={22} color={YELLOW} />
+            </TouchableOpacity>
+          )}
+
           {/* ── M-07: yo'nalish chipi — mijozgacha/manzilgacha km + ETA (ilova ichida) ── */}
           {order && routeInfo && (
             <View style={{
