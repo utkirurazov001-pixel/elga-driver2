@@ -763,6 +763,18 @@ if (Platform.OS === 'android') {
     enableVibrate: true,
     bypassDnd: true,
   }).catch(() => {});
+  // MARKETING / KVEST / SODIQLIK push'lari channelId:'default' bilan keladi.
+  // Bu kanal YARATILMAGAN bo'lsa, ilova YOPIQ/FONда Android push'ni tashlab
+  // yuborardi (faqat ilova ochiqда Expo handler ko'rsatardi — "push faqat ishlab
+  // turganда keladi" shikoyatining sababi). HIGH importance + ovoz bilan yaratamiz
+  // — endi fon/yopiq holatда ham heads-up bildirishnoma sifatida ko'rinadi.
+  Notifications.setNotificationChannelAsync('default', {
+    name: 'Xabarlar va aksiyalar',
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: 'default',
+    vibrationPattern: [0, 250, 150, 250],
+    enableVibrate: true,
+  }).catch(() => {});
 }
 
 const PERSISTENT_ID = 'elga-driver-active';
