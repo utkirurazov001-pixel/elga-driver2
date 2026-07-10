@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1076779625223",
+    "project_id": "ketdikgo",
+    "storage_bucket": "ketdikgo.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1076779625223:android:36c0a8933b04a24e0873a2",
+        "android_client_info": {
+          "package_name": "uz.ketdik.driver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCpUsQJ02InvvaB0eC27khycZXx-xQe0QI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1076779625223:android:460af7ce9228df410873a2",
+        "android_client_info": {
+          "package_name": "uz.ketdik.mijoz"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCpUsQJ02InvvaB0eC27khycZXx-xQe0QI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
