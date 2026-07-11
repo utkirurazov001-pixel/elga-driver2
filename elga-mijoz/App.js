@@ -1020,6 +1020,50 @@ async function reverseGeocode(lat, lng) {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
 
+// Matn -> manzil ro'yxati (forward geocode) — TELEFONDA bajariladi (Nominatim/OSM).
+// MUHIM: server (Render datacenter IP) Nominatim'ni ura olmaydi (bloklanadi), shuning
+// uchun geokodni QURILMADA qilamiz (reverse geocode kabi ishlaydi). Endi mijoz istalgan
+// manzilni topadi — nafaqat bazada saqlangan Angor/Muzrabot manzillarini (Termiz, Denov,
+// yangi ko'cha, do'kon...). O'zbekiston + Surxondaryo viewbox bilan cheklangan.
+async function forwardGeocode(q, lat, lng) {
+  const query = String(q || '').trim();
+  if (query.length < 2) return [];
+  try {
+    const ctrl = new AbortController();
+    const tmr = setTimeout(() => ctrl.abort(), 6000);
+    let vb = '66.30,38.75,68.25,37.05'; // Surxondaryo: minLon,maxLat,maxLon,minLat
+    if (lat != null && lng != null && !isNaN(lat) && !isNaN(lng)) {
+      const d = 0.6;
+      vb = `${(lng - d).toFixed(3)},${(lat + d).toFixed(3)},${(lng + d).toFixed(3)},${(lat - d).toFixed(3)}`;
+    }
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}` +
+      `&format=json&addressdetails=1&limit=6&accept-language=uz&countrycodes=uz&viewbox=${vb}&bounded=1`;
+    const r = await fetch(url, { headers: { 'User-Agent': 'KetdikGo-Taxi/1.0' }, signal: ctrl.signal })
+      .finally(() => clearTimeout(tmr));
+    const arr = await r.json().catch(() => []);
+    if (!Array.isArray(arr)) return [];
+    return arr.map((it) => {
+      const a = it.address || {};
+      const la = parseFloat(it.lat), ln = parseFloat(it.lon);
+      const main = it.name || a.road || a.neighbourhood || a.suburb || a.village || a.town || a.city || (it.display_name || '').split(',')[0];
+      const place = a.city || a.town || a.village || a.county;
+      const name = [main, place && place !== main ? place : null].filter(Boolean).join(', ') || it.display_name;
+      return { name, address: name, lat: la, lng: ln, source: 'geo' };
+    }).filter((x) => Number.isFinite(x.lat) && Number.isFinite(x.lng));
+  } catch (_) { return []; }
+}
+
+// Lokal (baza) + geokod natijalarini birlashtirish, foydalanuvchiga masofa bo'yicha saralab.
+function mergeSearch(local, geo, loc) {
+  const out = (local || []).slice();
+  for (const g of geo) {
+    const dup = out.some((p) => p.lat != null && Math.abs(p.lat - g.lat) < 0.0025 && Math.abs(p.lng - g.lng) < 0.0025);
+    if (!dup) out.push(g);
+  }
+  if (loc) out.sort((a, b) => (((a.lat - loc.lat) ** 2 + (a.lng - loc.lng) ** 2) - ((b.lat - loc.lat) ** 2 + (b.lng - loc.lng) ** 2)));
+  return out.slice(0, 12);
+}
+
 
 // ---- Crash / xato monitoringi ----
 // reportCrash: backendga (mavjud bo'lsa) + Sentry'ga (DSN berilgan bo'lsa) yuboradi.
@@ -1293,6 +1337,7 @@ function AppInner({ onBootDone }) {
   const [estimates, setEstimates] = useState({});
   const [estLoading, setEstLoading] = useState(false);
   const estCacheKey = useRef(null);
+  const searchQRef = useRef('');   // qidiruv eskirgan natijaga qarshi (async merge)
   const [promoCode, setPromoCode] = useState(''); // Q3: promo-kod (ixtiyoriy)
   // W1: pullik qo'shimcha xizmatlar — A/C va bagaj (backend #134: need_ac/need_baggage,
   // narx estimate/buyurtmaga extras_fee sifatida kiritiladi)
@@ -2331,13 +2376,17 @@ function AppInner({ onBootDone }) {
   // ---- Manzil qidirish ----
   async function searchPlaces(q) {
     setSearchQ(q);
+    searchQRef.current = q;
     if (q.trim().length < 2) { setSearchResults([]); return; }
-    try {
-      const loc = pickup || myLoc;
-      const ll = loc ? `&lat=${loc.lat}&lng=${loc.lng}` : '';
-      const r = await api(`/api/places/search?q=${encodeURIComponent(q)}${ll}`, 'GET');
-      setSearchResults(r.places || []);
-    } catch (e) {}
+    const loc = pickup || myLoc;
+    const ll = loc ? `&lat=${loc.lat}&lng=${loc.lng}` : '';
+    // Baza (tanish manzillar) va geokod (istalgan manzil, TELEFONDA) — parallel.
+    let local = [];
+    try { const r = await api(`/api/places/search?q=${encodeURIComponent(q)}${ll}`, 'GET'); local = r.places || []; } catch (e) {}
+    const geo = await forwardGeocode(q, loc?.lat, loc?.lng);
+    // Eskirgan natija himoyasi: foydalanuvchi boshqa so'z yozgan bo'lsa — o'rnatmaymiz.
+    if (searchQRef.current !== q) return;
+    setSearchResults(mergeSearch(local, geo, loc));
   }
 
   function pickDest(place) {
@@ -2350,13 +2399,15 @@ function AppInner({ onBootDone }) {
   // ---- Safar davomida manzilni o'zgartirish ----
   async function cdSearch(q) {
     setCdQ(q);
+    searchQRef.current = 'cd:' + q;
     if (q.trim().length < 2) { setCdResults([]); return; }
-    try {
-      const loc = pickup || myLoc;
-      const ll = loc ? `&lat=${loc.lat}&lng=${loc.lng}` : '';
-      const r = await api(`/api/places/search?q=${encodeURIComponent(q)}${ll}`, 'GET');
-      setCdResults(r.places || []);
-    } catch (e) {}
+    const loc = pickup || myLoc;
+    const ll = loc ? `&lat=${loc.lat}&lng=${loc.lng}` : '';
+    let local = [];
+    try { const r = await api(`/api/places/search?q=${encodeURIComponent(q)}${ll}`, 'GET'); local = r.places || []; } catch (e) {}
+    const geo = await forwardGeocode(q, loc?.lat, loc?.lng);
+    if (searchQRef.current !== 'cd:' + q) return;
+    setCdResults(mergeSearch(local, geo, loc));
   }
 
   async function applyChangeDest(place) {
@@ -2616,6 +2667,11 @@ function AppInner({ onBootDone }) {
       if (top && top.lat != null && top.lng != null) {
         return { lat: Number(top.lat), lng: Number(top.lng), address: top.address || top.name || q };
       }
+    } catch (_) {}
+    // Bazada topilmasa — telefondan geokod (istalgan manzil: Termiz, Denov, yangi ko'cha...)
+    try {
+      const g = await forwardGeocode(q, near?.lat, near?.lng);
+      if (g[0]) return { lat: g[0].lat, lng: g[0].lng, address: g[0].name || q };
     } catch (_) {}
     return null;
   }
